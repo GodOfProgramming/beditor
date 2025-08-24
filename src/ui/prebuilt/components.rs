@@ -6,7 +6,6 @@ use crate::{
   util::vfs::{VfsDir, VfsNode, VfsPath},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::egui::{self};
 use itertools::Itertools;
 use std::{any::TypeId, marker::PhantomData};
 use uuid::uuid;
@@ -96,11 +95,12 @@ impl Ui for Components {
     ui.horizontal(|ui| {
       ui.text_edit_singleline(&mut *params.filter);
       let text = egui::RichText::new(egui_phosphor::regular::ARROW_U_UP_LEFT);
-      if params.current_path.has_parent() && ui.button(text).clicked() {
-        if let Some(parent) = params.current_path.parent() {
-          *params.current_path = parent;
-          *params.current_dir = None;
-        }
+      if params.current_path.has_parent()
+        && ui.button(text).clicked()
+        && let Some(parent) = params.current_path.parent()
+      {
+        *params.current_path = parent;
+        *params.current_dir = None;
       }
     });
 

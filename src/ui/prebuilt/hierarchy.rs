@@ -1,9 +1,6 @@
-use crate::ui::{EditorUi, InspectorSelection, RawUi, SelectedEntities, components};
-use async_std::path::PathBuf;
-use bevy::{prelude::*, reflect::TypeRegistry, tasks::IoTaskPool};
-use bevy_egui::egui::{self, TextBuffer};
+use crate::ui::{InspectorSelection, RawUi, SelectedEntities};
+use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector;
-use bui::PrimaryType;
 use uuid::{Uuid, uuid};
 
 #[derive(Default, Component, Reflect)]
@@ -17,12 +14,10 @@ impl RawUi for Hierarchy {
     app
       .add_event::<SelectEntityEvent>()
       .add_event::<ReparentEvent>()
-      .add_event::<SerializeUiEvent>()
       .add_systems(
         FixedUpdate,
         (SelectEntityEvent::handle, ReparentEvent::handle),
-      )
-      .add_systems(Update, SerializeUiEvent::handle.after(EditorUi));
+      );
   }
 
   fn spawn(_entity: Entity, _world: &mut World) -> Self {
@@ -53,24 +48,19 @@ impl Hierarchy {
     let type_registry = type_registry.read();
 
     let ctx_menu = &mut Self::context_menu;
-    let mut hierarchy = bevy_inspector::hierarchy::Hierarchy::<&TypeRegistry> {
+    let mut hierarchy = bevy_inspector::hierarchy::Hierarchy {
       world,
       type_registry: &type_registry,
       selected,
       context_menu: Some(ctx_menu),
       shortcircuit_entity: None,
-      extra_state: &mut &*type_registry,
+      extra_state: &mut (),
     };
 
     hierarchy.show_with_default_filter::<()>(ui)
   }
 
-  fn context_menu(
-    ui: &mut egui::Ui,
-    entity: Entity,
-    world: &mut World,
-    type_registry: &mut &TypeRegistry,
-  ) {
+  fn context_menu(ui: &mut egui::Ui, entity: Entity, world: &mut World, _: &mut ()) {
     if ui.button("Select This").clicked() {
       world.send_event(SelectEntityEvent(entity));
     }
@@ -83,12 +73,6 @@ impl Hierarchy {
 
     if entity_ref.get::<ChildOf>().is_some() && ui.button("Remove Parent").clicked() {
       entity_ref.remove::<ChildOf>();
-    }
-
-    if let Some(pt) = entity_ref.get::<PrimaryType>() {
-      if type_registry.contains(pt.type_id()) && ui.button("Export UI").clicked() {
-        world.send_event(SerializeUiEvent(entity));
-      }
     }
   }
 }
@@ -118,87 +102,6 @@ impl ReparentEvent {
         commands.entity(event.0).add_children(selected.as_slice());
         select_entity(&mut selection, event.0);
       }
-    }
-  }
-}
-
-#[derive(Event)]
-struct SerializeUiEvent(Entity);
-
-impl SerializeUiEvent {
-  fn handle(
-    commands: Commands,
-    mut ctx: Single<&mut bevy_egui::EguiContext>,
-    mut events: EventReader<Self>,
-    mut save_name_text: Local<String>,
-    mut last_entity: Local<Option<Entity>>,
-  ) {
-    let entity = events.read().last().map(|event| event.0);
-
-    if entity.is_some() {
-      *last_entity = entity;
-    }
-
-    Self::show_dialog(
-      commands,
-      ctx.get_mut(),
-      &mut last_entity,
-      &mut save_name_text,
-    );
-  }
-
-  fn show_dialog(
-    mut commands: Commands,
-    ctx: &egui::Context,
-    last_entity: &mut Option<Entity>,
-    save_name_text: &mut String,
-  ) {
-    let open = components::Dialog::new("Save UI").open(ctx, last_entity.is_some(), |ui| {
-      ui.horizontal(|ui| {
-        ui.label("Name");
-        ui.text_edit_singleline(save_name_text);
-      });
-      ui.horizontal(|ui| {
-        if ui.button("Save").clicked() {
-          if let Some(entity) = last_entity.take() {
-            let save_file = save_name_text.take();
-            commands.queue(move |world: &mut World| -> Result {
-              let tp = IoTaskPool::get();
-
-              let bui = bui::Bui::serialize(entity, world)?;
-
-              tp.spawn(async move {
-                let path = PathBuf::from("assets").join("ui");
-                if let Err(err) = async_std::fs::create_dir_all(&path).await {
-                  error!("Failed to create assets ui directory: {err}");
-                  return;
-                }
-
-                let path = path.join(save_file);
-                let data = match bui.try_into_string() {
-                  Ok(data) => data,
-                  Err(err) => {
-                    error!("Failed to serialize ui to {}: {err}", path.display());
-                    return;
-                  }
-                };
-
-                let res = async_std::fs::write(&path, data).await;
-                if let Err(err) = res {
-                  error!("Failed to save ui to {}: {err}", path.display());
-                }
-              })
-              .detach();
-
-              Ok(())
-            });
-          }
-        }
-      });
-    });
-
-    if !open {
-      *last_entity = None;
     }
   }
 }

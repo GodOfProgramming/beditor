@@ -5,12 +5,10 @@ use crate::{
   ui::{InspectorSelection, RawUi},
 };
 use bevy::prelude::*;
-use bevy_egui::egui;
 use bevy_inspector_egui::bevy_inspector::{
   by_type_id::{ui_for_asset, ui_for_resource},
   ui_for_entities_shared_components, ui_for_entity,
 };
-use bui::PrimaryType;
 use uuid::{Uuid, uuid};
 
 use super::InspectorDnd;
@@ -29,24 +27,24 @@ impl Inspector {
   {
     // makes the whole pane droppable
     let frame = egui::Frame::default();
-    let available_rect = ui.available_rect_before_wrap();
+    let available_size = ui.available_size();
 
     // fixes weird highlighting on background
     let bg_fill = ui.style().visuals.window_fill();
     ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
 
     let (_, component_id) = ui.dnd_drop_zone::<InspectorDnd, ()>(frame, |ui| {
-      ui.set_min_size(available_rect.size());
+      ui.set_min_size(available_size);
       render_fn(world, ui);
     });
 
     if let Some(dnd) = component_id {
-      match *dnd {
+      match &*dnd {
         InspectorDnd::AddComponent(type_id) => {
-          Self::spawn_components_on(&type_id, entities.as_ref(), world);
+          Self::spawn_components_on(type_id, entities.as_ref(), world);
         }
-        InspectorDnd::SetPrimaryType(type_id) => {
-          Self::set_primary_type(type_id, entities.as_ref(), world);
+        InspectorDnd::Custom(f) => {
+          (f)(world, entities.as_ref());
         }
       }
     }
@@ -68,12 +66,6 @@ impl Inspector {
       if world.get_by_id(*entity, component_id).is_none() {
         component.spawn(*entity, world);
       }
-    }
-  }
-
-  fn set_primary_type(type_id: TypeId, entities: &[Entity], world: &mut World) {
-    for entity in entities {
-      world.entity_mut(*entity).insert(PrimaryType::from(type_id));
     }
   }
 }

@@ -1,6 +1,5 @@
 use bevy::platform::collections::{Equivalent, HashMap};
 use bevy::prelude::*;
-use bevy_inspector_egui::egui_utils::easymark::parser::Item;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::Debug;

@@ -12,10 +12,9 @@ use bevy::{
   window::CursorGrabMode,
   winit::cursor::CursorIcon,
 };
-use derive_more::derive::{Deref, DerefMut};
 use profiling::tracing::level_filters::LevelFilter;
 use serde::{Deserialize, Serialize, Serializer};
-use std::{collections::BTreeMap, hint::unreachable_unchecked, ops::Deref};
+use std::collections::BTreeMap;
 
 #[macro_export]
 macro_rules! here {

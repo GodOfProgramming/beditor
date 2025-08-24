@@ -1,3 +1,4 @@
+use bevy::prelude::*;
 use std::any::TypeId;
 
 pub mod assets;
@@ -9,10 +10,9 @@ pub mod hierarchy;
 pub mod inspector;
 pub mod menu_bar;
 pub mod prefabs;
-pub mod primary_type_browser;
 pub mod resources;
 
 pub enum InspectorDnd {
   AddComponent(TypeId),
-  SetPrimaryType(TypeId),
+  Custom(Box<dyn Fn(&mut World, &[Entity]) + Send + Sync>),
 }

@@ -1,6 +1,5 @@
 use crate::ui::{Ui, misc::UiInfo};
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Viewport, window::PrimaryWindow};
-use bevy_egui::egui;
 use persistent_id::Identifiable;
 use std::marker::PhantomData;
 

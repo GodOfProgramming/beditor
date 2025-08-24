@@ -3,7 +3,6 @@ use crate::{
   view::EditorCamera,
 };
 use bevy::{ecs::system::SystemParam, prelude::*, render::camera::Viewport, window::PrimaryWindow};
-use bevy_egui::egui;
 use uuid::uuid;
 
 #[derive(Default, Component, Reflect)]

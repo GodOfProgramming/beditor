@@ -15,7 +15,7 @@ use bevy::{
   prelude::*,
   reflect::GetTypeRegistration,
 };
-use bevy_egui::{EguiPlugin, egui};
+use bevy_egui::{EguiPlugin, EguiPrimaryContextPass, egui};
 use bevy_inspector_egui::bevy_inspector;
 use egui_dock::{DockState, NodeIndex, SurfaceIndex};
 use events::{AddUiEvent, RemoveUiEvent};
@@ -37,9 +37,7 @@ impl Plugin for UiPlugin {
     debug!("Building UI Plugin");
 
     app
-      .add_plugins(EguiPlugin {
-        enable_multipass_for_primary_context: false,
-      })
+      .add_plugins(EguiPlugin::default())
       .add_event::<AddUiEvent>()
       .add_event::<RemoveUiEvent>()
       .init_resource::<InspectorSelection>()
@@ -48,7 +46,7 @@ impl Plugin for UiPlugin {
       .configure_sets(Update, EditorUi)
       .add_systems(Startup, (Self::init_resources, Self::setup_ctx))
       .add_systems(
-        Update,
+        EguiPrimaryContextPass,
         (
           KeyboardFocus::set_state,
           (
@@ -526,7 +524,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
           let mut world = self.world.borrow_mut();
           let entity = (vtable.spawn)(&mut world);
           world.send_event(AddUiEvent::new(surface, node, entity));
-          ui.memory_mut(|mem| mem.close_popup());
         }
       }
     }
@@ -553,10 +550,10 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     (vtable.closeable)(*tab, &mut self.world.borrow_mut())
   }
 
-  fn on_close(&mut self, tab: &mut Self::Tab) -> bool {
+  fn on_close(&mut self, tab: &mut Self::Tab) -> egui_dock::tab_viewer::OnCloseResponse {
     let vtable = self.vtable_of(*tab);
     (vtable.despawn)(*tab, &mut self.world.borrow_mut());
-    true
+    egui_dock::tab_viewer::OnCloseResponse::Close
   }
 
   fn clear_background(&self, tab: &Self::Tab) -> bool {

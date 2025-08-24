@@ -1,6 +1,5 @@
 use crate::ui::{InspectorSelection, Ui};
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::egui;
 use std::marker::PhantomData;
 use uuid::uuid;
 

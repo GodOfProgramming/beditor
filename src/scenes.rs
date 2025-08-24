@@ -66,11 +66,14 @@ impl SaveEvent {
             let asset_handle = ref_handle
               .downcast_handle_untyped(dyn_ref.as_any())
               .unwrap();
-            match asset_handle.path() { Some(path) => {
-              info!("asset path => {:?}", path);
-            } _ => {
-              continue;
-            }}
+            match asset_handle.path() {
+              Some(path) => {
+                info!("asset path => {:?}", path);
+              }
+              _ => {
+                continue;
+              }
+            }
           } else {
             ref_comp.copy(
               world,
@@ -93,10 +96,10 @@ impl SaveEvent {
         let printable_filename = filename.display().to_string();
 
         info!("saving scene to {}...", printable_filename);
-        if let Some(parent) = filename.parent() {
-          if let Err(err) = async_std::fs::create_dir_all(parent).await {
-            error!("failed to create directory '{}': {err}", parent.display());
-          }
+        if let Some(parent) = filename.parent()
+          && let Err(err) = async_std::fs::create_dir_all(parent).await
+        {
+          error!("failed to create directory '{}': {err}", parent.display());
         }
 
         if let Err(err) = async_std::fs::write(filename, serialization).await {

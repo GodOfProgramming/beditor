@@ -9,8 +9,8 @@ use bevy::{
   platform::collections::HashMap,
   prelude::*,
 };
-use bevy_egui::egui::{self, text::LayoutJob};
 use derive_more::derive::Deref;
+use egui::text::LayoutJob;
 use egui_dock::DockState;
 use persistent_id::PersistentId;
 use uuid::{Uuid, uuid};

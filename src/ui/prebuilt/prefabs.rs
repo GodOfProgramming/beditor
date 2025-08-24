@@ -1,7 +1,6 @@
 use crate::{assets, ui::RawUi};
 use bevy::prelude::*;
-use bevy_egui::egui;
-use uuid::{uuid, Uuid};
+use uuid::{Uuid, uuid};
 
 #[derive(Default, Component, Reflect)]
 pub struct Prefabs;

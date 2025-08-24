@@ -5,7 +5,7 @@ use crate::{
   view::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::egui::{self, TextBuffer};
+use egui::TextBuffer;
 use egui_dock::DockState;
 use persistent_id::PersistentId;
 use uuid::{Uuid, uuid};
@@ -62,7 +62,7 @@ impl Ui for MenuBar {
   }
 
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
-    egui::menu::bar(ui, |ui| {
+    egui::MenuBar::new().ui(ui, |ui| {
       self.tools_menu(ui, &mut params);
       self.view_menu(ui, &mut params);
       self.game_control(ui, &mut params);
@@ -235,7 +235,7 @@ impl SaveLayoutEvent {
     mut ctx: Single<&mut bevy_egui::EguiContext>,
     mut should_show: Local<bool>,
     mut save_name_text: Local<String>,
-    ui_manager: Res<UiManager>,
+    ui_manager: Option<Res<UiManager>>,
     mut layout_manager: ResMut<LayoutManager>,
     q_uuids: Query<&PersistentId, Without<MissingUi>>,
     q_missing: Query<&MissingUi>,
@@ -245,15 +245,17 @@ impl SaveLayoutEvent {
       save_name_text.clear();
     }
 
-    *should_show = Self::show_dialog(
-      ctx.get_mut(),
-      *should_show,
-      &mut save_name_text,
-      &ui_manager,
-      &mut layout_manager,
-      &q_uuids,
-      &q_missing,
-    );
+    if let Some(ui_manager) = &ui_manager {
+      *should_show = Self::show_dialog(
+        ctx.get_mut(),
+        *should_show,
+        &mut save_name_text,
+        ui_manager,
+        &mut layout_manager,
+        &q_uuids,
+        &q_missing,
+      );
+    }
   }
 
   fn show_dialog(

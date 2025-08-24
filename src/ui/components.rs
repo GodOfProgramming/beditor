@@ -1,4 +1,3 @@
-use bevy_egui::egui::{self, UiBuilder};
 use derive_new::new;
 use itertools::Itertools;
 

@@ -4,12 +4,11 @@ use super::{
   prebuilt::{
     assets::Assets, components::Components, debug::DebugMenu, editor_view::EditorView,
     hierarchy::Hierarchy, inspector::Inspector, menu_bar::MenuBar, prefabs::Prefabs,
-    primary_type_browser::PrimaryTypeBrowser, resources::Resources,
+    resources::Resources,
   },
 };
 use crate::cache::Cache;
 use bevy::{platform::collections::HashMap, prelude::*};
-use bevy_egui::egui::{self};
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, Surface, SurfaceIndex};
 use persistent_id::PersistentId;
@@ -43,7 +42,6 @@ impl UiManager {
     this.register::<MenuBar>(app);
     this.register::<Prefabs>(app);
     this.register::<Resources>(app);
-    this.register::<PrimaryTypeBrowser>(app);
 
     this
   }

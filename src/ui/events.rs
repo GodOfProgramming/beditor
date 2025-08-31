@@ -1,31 +1,7 @@
-use super::{
-  managers::UiManager,
-  misc::{DockExtensions, MissingUi},
-};
+use super::managers::UiManager;
 use bevy::prelude::*;
 use derive_new::new;
-use egui_dock::{DockState, NodeIndex, SurfaceIndex};
-use persistent_id::PersistentId;
-
-#[derive(Event, new)]
-pub struct SaveLayoutEvent {
-  name: String,
-  dock: DockState<Entity>,
-}
-
-impl SaveLayoutEvent {
-  pub fn on_event(
-    mut events: EventReader<Self>,
-    mut ui_manager: ResMut<UiManager>,
-    q_uuids: Query<&PersistentId, Without<MissingUi>>,
-    q_missing: Query<&MissingUi>,
-  ) {
-    for save_event in events.read() {
-      let dock = save_event.dock.decouple(&ui_manager, &q_uuids, &q_missing);
-      ui_manager.save_layout(&save_event.name, dock);
-    }
-  }
-}
+use egui_dock::{NodeIndex, SurfaceIndex};
 
 #[derive(Event, new, Clone, Copy)]
 pub struct AddUiEvent(SurfaceIndex, NodeIndex, Entity);

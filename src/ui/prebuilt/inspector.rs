@@ -5,12 +5,13 @@ use crate::{
   ui::{InspectorSelection, RawUi},
 };
 use bevy::prelude::*;
-use bevy_egui::egui;
 use bevy_inspector_egui::bevy_inspector::{
   by_type_id::{ui_for_asset, ui_for_resource},
-  ui_for_entities_shared_components, ui_for_entity_with_children,
+  ui_for_entities_shared_components, ui_for_entity,
 };
 use uuid::{Uuid, uuid};
+
+use super::InspectorDnd;
 
 #[derive(Default, Component, Reflect)]
 pub struct Inspector;
@@ -26,19 +27,26 @@ impl Inspector {
   {
     // makes the whole pane droppable
     let frame = egui::Frame::default();
-    let available_rect = ui.available_rect_before_wrap();
+    let available_size = ui.available_size();
 
     // fixes weird highlighting on background
     let bg_fill = ui.style().visuals.window_fill();
     ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
 
-    let (_, component_id) = ui.dnd_drop_zone::<TypeId, ()>(frame, |ui| {
-      ui.set_min_size(available_rect.size());
+    let (_, component_id) = ui.dnd_drop_zone::<InspectorDnd, ()>(frame, |ui| {
+      ui.set_min_size(available_size);
       render_fn(world, ui);
     });
 
-    if let Some(component_id) = component_id {
-      Self::spawn_components_on(&component_id, entities.as_ref(), world);
+    if let Some(dnd) = component_id {
+      match &*dnd {
+        InspectorDnd::AddComponent(type_id) => {
+          Self::spawn_components_on(type_id, entities.as_ref(), world);
+        }
+        InspectorDnd::Custom(f) => {
+          (f)(world, entities.as_ref());
+        }
+      }
     }
   }
 
@@ -83,7 +91,7 @@ impl RawUi for Inspector {
         InspectorSelection::Entities(selected_entities) => match selected_entities.as_slice() {
           &[entity] => {
             Self::dnd_drop_ui([entity], world, ui, |world, ui| {
-              ui_for_entity_with_children(world, entity, ui);
+              ui_for_entity(world, entity, ui);
             });
           }
           entities => {

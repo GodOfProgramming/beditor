@@ -4,12 +4,14 @@ pub mod view3d;
 use crate::{
   Editing,
   cache::{Cache, Saveable},
+  input,
   ui::{
     misc::UiInfo,
     prebuilt::{editor_view::EditorView, game_view::GameView},
   },
 };
 use bevy::{color::palettes::tailwind, prelude::*};
+use derive_new::new;
 use serde::{Deserialize, Serialize};
 use view2d::View2d;
 use view3d::View3d;
@@ -33,7 +35,6 @@ impl Plugin for EditorViewPlugin {
       .configure_sets(
         Update,
         (
-          CameraInput::Keyboard.in_set(Editing),
           CameraInput::Mouse
             .run_if(CameraInput::mouse_hovered)
             .in_set(Editing),
@@ -46,11 +47,16 @@ impl Plugin for EditorViewPlugin {
           OrbitSet.run_if(in_state(OrbitState::Active)),
           PanSet.run_if(in_state(PanState::Active)),
           ZoomSet.in_set(CameraInput::Mouse),
+          CameraInput::Keyboard
+            .in_set(input::Unfocused)
+            .run_if(mouse_movement_active),
         ),
       )
       .register_type::<ActiveEditorCamera>()
       .register_type::<view2d::CameraSettings>()
       .register_type::<view2d::CameraState>()
+      .add_event::<MoveCameraEvent>()
+      .add_event::<PointCameraEvent>()
       .insert_state(ActiveEditorCamera::None)
       .insert_state(OrbitState::Inactive)
       .insert_state(PanState::Inactive)
@@ -94,6 +100,10 @@ impl Plugin for EditorViewPlugin {
         )
           .chain()
           .in_set(View3d),
+      )
+      .add_systems(
+        FixedUpdate,
+        (MoveCameraEvent::handle, PointCameraEvent::handle),
       );
   }
 }
@@ -219,6 +229,10 @@ fn show_camera(transform: Transform, scaler: f32, gizmos: &mut Gizmos) {
   }
 }
 
+fn mouse_movement_active(orbit: Res<State<OrbitState>>, pan: Res<State<PanState>>) -> bool {
+  *orbit == OrbitState::Active || *pan == PanState::Active
+}
+
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 struct OrbitSet;
 
@@ -239,3 +253,35 @@ enum PanState {
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 struct ZoomSet;
+
+#[derive(new, Event)]
+pub struct MoveCameraEvent(Vec3);
+
+impl MoveCameraEvent {
+  fn handle(
+    mut event_reader: EventReader<Self>,
+    mut q_cam_transforms: Query<&mut Transform, With<EditorCamera>>,
+  ) {
+    for event in event_reader.read() {
+      for mut cam in &mut q_cam_transforms {
+        cam.translation = event.0;
+      }
+    }
+  }
+}
+
+#[derive(new, Event)]
+pub struct PointCameraEvent(Vec3);
+
+impl PointCameraEvent {
+  fn handle(
+    mut event_reader: EventReader<Self>,
+    mut q_cam_transforms: Query<&mut Transform, With<EditorCamera>>,
+  ) {
+    for event in event_reader.read() {
+      for mut cam in &mut q_cam_transforms {
+        cam.look_at(event.0, UP);
+      }
+    }
+  }
+}

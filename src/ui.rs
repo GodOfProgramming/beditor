@@ -14,22 +14,42 @@ use bevy::{
   platform::collections::HashMap,
   prelude::*,
   reflect::GetTypeRegistration,
+  render::view::RenderLayers,
 };
-use bevy_egui::{EguiPlugin, egui};
-use bevy_inspector_egui::bevy_inspector;
+use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_inspector_egui::{DefaultInspectorConfigPlugin, bevy_inspector};
 use egui_dock::{DockState, NodeIndex, SurfaceIndex};
-use events::{AddUiEvent, RemoveUiEvent, SaveLayoutEvent};
+use events::{AddUiEvent, RemoveUiEvent};
 use itertools::{Either, Itertools};
-use managers::UiManager;
+use managers::{LayoutManager, UiManager};
 use misc::{MissingUi, UiExtensions, UiInfo};
 use persistent_id::PersistentId;
-use prebuilt::{
-  assets::Assets, components::Components, debug::DebugMenu, editor_view::EditorView,
-  hierarchy::Hierarchy, inspector::Inspector, prefabs::Prefabs, resources::Resources,
-};
 use serde::{Deserialize, Serialize};
 use std::{any::TypeId, cell::RefCell, collections::BTreeMap};
 use uuid::Uuid;
+
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+struct EditorUi;
+
+#[derive(Default, Component, Reflect)]
+#[require(
+  PrimaryEguiContext = default_primary_context(),
+  Camera = editor_camera(),
+  Camera2d,
+  MeshPickingCamera,
+  RenderLayers = RenderLayers::none())]
+pub struct EditorUiCamera;
+
+fn default_primary_context() -> PrimaryEguiContext {
+  PrimaryEguiContext
+}
+
+fn editor_camera() -> Camera {
+  Camera {
+    order: 1,
+    ..default()
+  }
+}
 
 pub(crate) struct UiPlugin;
 
@@ -38,53 +58,53 @@ impl Plugin for UiPlugin {
     debug!("Building UI Plugin");
 
     app
-      .register_type::<MissingUi>()
-      .register_type::<EditorView>()
-      .register_type::<Hierarchy>()
-      .register_type::<DebugMenu>()
-      .register_type::<Inspector>()
-      .register_type::<Prefabs>()
-      .register_type::<Resources>()
-      .register_type::<Assets>()
-      .register_type::<Components>()
+      .add_plugins((EguiPlugin::default(), DefaultInspectorConfigPlugin))
       .add_event::<AddUiEvent>()
       .add_event::<RemoveUiEvent>()
-      .add_event::<SaveLayoutEvent>()
       .init_resource::<InspectorSelection>()
-      .add_plugins(EguiPlugin {
-        enable_multipass_for_primary_context: false,
-      })
+      .init_resource::<LayoutManager>()
+      .init_state::<KeyboardFocus>()
+      .configure_sets(Update, EditorUi)
       .add_systems(Startup, (Self::init_resources, Self::setup_ctx))
       .add_systems(
-        Update,
+        EguiPrimaryContextPass,
         (
-          RemoveUiEvent::on_event,
+          KeyboardFocus::set_state,
           (
+            RemoveUiEvent::on_event,
             (
-              Self::dispatch_render_events,
-              Self::reset_ui_info,
-              Self::render,
-            )
-              .chain(),
-            AddUiEvent::on_event,
-          ),
+              (
+                Self::dispatch_render_events,
+                Self::reset_ui_info,
+                Self::render,
+              )
+                .chain(),
+              AddUiEvent::on_event,
+            ),
+          )
+            .chain()
+            .run_if(|editor_settings: Res<EditorSettings>| editor_settings.render_ui),
         )
-          .chain()
-          .run_if(|editor_settings: Res<EditorSettings>| editor_settings.render_ui),
-      )
-      .add_systems(FixedUpdate, SaveLayoutEvent::on_event);
+          .in_set(EditorUi),
+      );
   }
 }
 
 impl UiPlugin {
   fn init_resources(world: &mut World) {
+    world.spawn((Name::new("Editor UI Camera"), EditorUiCamera));
     world.spawn((Name::new("Editor Ui Panels"), UiPanels));
-    world.resource_scope(|world, mut layout: Mut<UiManager>| {
-      layout.restore_or_init(world);
+    world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
+      ui_manager.restore_or_init(world);
     });
   }
 
-  fn setup_ctx(mut q_ctx: Query<&mut bevy_egui::EguiContext>) {
+  fn setup_ctx(
+    mut q_ctx: Query<&mut bevy_egui::EguiContext>,
+    mut egui_global_settings: ResMut<EguiGlobalSettings>,
+  ) {
+    egui_global_settings.auto_create_primary_context = false;
+
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 
@@ -119,12 +139,16 @@ impl UiPlugin {
 
     world.resource_scope(|world, ui_manager: Mut<UiManager>| {
       for entity in rendered {
-        let vtable = ui_manager.vtable_of(entity, world);
+        let Some(vtable) = ui_manager.vtable_of(entity, world) else {
+          continue;
+        };
         (vtable.when_rendered)(entity, world);
       }
 
       for entity in unrendered {
-        let vtable = ui_manager.vtable_of(entity, world);
+        let Some(vtable) = ui_manager.vtable_of(entity, world) else {
+          continue;
+        };
         (vtable.when_not_rendered)(entity, world);
       }
     });
@@ -133,13 +157,14 @@ impl UiPlugin {
   pub fn on_app_exit(
     mut cache: ResMut<Cache>,
     ui_manager: Res<UiManager>,
+    layout_manager: Res<LayoutManager>,
     q_uuids: Query<&PersistentId, Without<MissingUi>>,
     q_missing: Query<&MissingUi>,
   ) {
     let new_state = ui_manager.save_current_layout(&q_uuids, &q_missing);
     cache.store(&LayoutState {
       dock: new_state,
-      layouts: ui_manager.saved_layouts().clone(),
+      layouts: layout_manager.clone(),
     });
   }
 }
@@ -371,7 +396,7 @@ where
 }
 
 #[derive(Clone)]
-struct VTable {
+pub(crate) struct VTable {
   name: &'static str,
   spawn: fn(&mut World) -> Entity,
   despawn: fn(Entity, &mut World),
@@ -526,7 +551,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
           let mut world = self.world.borrow_mut();
           let entity = (vtable.spawn)(&mut world);
           world.send_event(AddUiEvent::new(surface, node, entity));
-          ui.memory_mut(|mem| mem.close_popup());
         }
       }
     }
@@ -553,10 +577,10 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     (vtable.closeable)(*tab, &mut self.world.borrow_mut())
   }
 
-  fn on_close(&mut self, tab: &mut Self::Tab) -> bool {
+  fn on_close(&mut self, tab: &mut Self::Tab) -> egui_dock::tab_viewer::OnCloseResponse {
     let vtable = self.vtable_of(*tab);
     (vtable.despawn)(*tab, &mut self.world.borrow_mut());
-    true
+    egui_dock::tab_viewer::OnCloseResponse::Close
   }
 
   fn clear_background(&self, tab: &Self::Tab) -> bool {
@@ -626,3 +650,23 @@ pub struct SelectedEntities(bevy_inspector::hierarchy::SelectedEntities);
 /// Component that stores all ui components as children for organization
 #[derive(Component)]
 pub struct UiPanels;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States, Default)]
+pub enum KeyboardFocus {
+  #[default]
+  Unfocused,
+  Focused(egui::Id),
+}
+
+impl KeyboardFocus {
+  fn set_state(
+    mut q_contexts: Query<&mut bevy_egui::EguiContext>,
+    mut keyboard_focus: ResMut<NextState<Self>>,
+  ) {
+    let focus = q_contexts
+      .iter_mut()
+      .find_map(|mut ctx| ctx.get_mut().memory(|memory| memory.focused()));
+
+    keyboard_focus.set(focus.map(Self::Focused).unwrap_or(Self::Unfocused))
+  }
+}

@@ -1,8 +1,6 @@
-use std::{
-  collections::BTreeMap,
-  hash::{DefaultHasher, Hash, Hasher},
-};
+pub mod vfs;
 
+use crate::cache::{Cache, Saveable};
 use bevy::{
   log::{
     BoxedLayer, Level,
@@ -11,14 +9,12 @@ use bevy::{
   platform::collections::HashMap,
   prelude::*,
   reflect::GetTypeRegistration,
-  state::state::FreelyMutableState,
-  window::{CursorGrabMode, PrimaryWindow},
+  window::CursorGrabMode,
   winit::cursor::CursorIcon,
 };
 use profiling::tracing::level_filters::LevelFilter;
 use serde::{Deserialize, Serialize, Serializer};
-
-use crate::cache::{Cache, Saveable};
+use std::collections::BTreeMap;
 
 #[macro_export]
 macro_rules! here {
@@ -51,54 +47,6 @@ pub fn hide_cursor(window: &mut Window) {
 
 pub fn set_cursor_icon(commands: &mut Commands, entity: Entity, cursor: impl Into<CursorIcon>) {
   commands.entity(entity).insert(cursor.into());
-}
-
-pub trait HashValue {
-  fn hash_value(&self) -> u64;
-}
-
-impl<T> HashValue for T
-where
-  T: Hash,
-{
-  fn hash_value(&self) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    self.hash(&mut hasher);
-    hasher.finish()
-  }
-}
-
-pub trait WorldExtensions {
-  fn primary_window_mut(&mut self) -> Mut<Window>;
-
-  fn get_state<T>(&self) -> T
-  where
-    T: FreelyMutableState + Copy;
-
-  fn set_state<T>(&mut self, state: T)
-  where
-    T: FreelyMutableState + Copy;
-}
-
-impl WorldExtensions for World {
-  fn primary_window_mut(&mut self) -> Mut<Window> {
-    let mut q_window = self.query_filtered::<&mut Window, With<PrimaryWindow>>();
-    q_window.single_mut(self).unwrap() // TODO leverage the result
-  }
-
-  fn get_state<T>(&self) -> T
-  where
-    T: FreelyMutableState + Copy,
-  {
-    **self.resource::<State<T>>()
-  }
-
-  fn set_state<T>(&mut self, state: T)
-  where
-    T: FreelyMutableState + Copy,
-  {
-    self.resource_mut::<NextState<T>>().set(state);
-  }
 }
 
 pub fn sorted_keys<S, K: Ord + Serialize, V: Serialize>(

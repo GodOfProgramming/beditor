@@ -1,10 +1,12 @@
+use super::InspectorDnd;
 use crate::{
   Ui,
   registry::components::{ComponentRegistry, RegisteredComponent},
-  ui::components::BorderedBox,
+  ui::components::{Card, horizontal_list},
+  util::vfs::{VfsDir, VfsNode, VfsPath},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::egui::{self};
+use itertools::Itertools;
 use std::{any::TypeId, marker::PhantomData};
 use uuid::uuid;
 
@@ -14,52 +16,47 @@ pub struct Components {
 }
 
 impl Components {
-  fn draw_card(
-    &self,
+  fn ui_for_dir(
+    current_path: &mut VfsPath,
     ui: &mut egui::Ui,
-    id: TypeId,
-    comp: &RegisteredComponent,
-    card_size: impl Into<egui::Vec2>,
-  ) {
-    let card_size = card_size.into();
-    let border_thickness = card_size.x / 25.0;
-    let cell_content_size = card_size.x - border_thickness;
-    let icon_thickness = cell_content_size / 3.0;
+    size: impl Into<egui::Vec2>,
+    label: &str,
+    i: usize,
+  ) -> bool {
+    let size = size.into();
+    let response = Card::new(size)
+      .with_label(label)
+      .show(ui, |ui| {
+        let text = egui::RichText::new(egui_phosphor::regular::FOLDER).size(size.x / 3.0);
+        ui.label(text);
 
-    ui.dnd_drag_source(egui::Id::new(id), id, |ui| {
-      ui.vertical_centered(|ui| {
-        ui.set_width(card_size.x);
-        ui.set_height(card_size.y);
+        ui.interact(ui.min_rect(), ui.id().with(i), egui::Sense::click())
+      })
+      .inner
+      .on_hover_cursor(egui::CursorIcon::PointingHand);
 
-        self.draw_card_contents(
-          ui,
-          comp,
-          cell_content_size,
-          border_thickness,
-          icon_thickness,
-        );
-      });
-    });
+    if response.double_clicked() {
+      current_path.push(String::from(label));
+      true
+    } else {
+      false
+    }
   }
 
-  fn draw_card_contents(
-    &self,
+  fn ui_for_item(
     ui: &mut egui::Ui,
-    comp: &RegisteredComponent,
-    cell_content_size: f32,
-    border_thickness: f32,
-    icon_thickness: f32,
+    size: impl Into<egui::Vec2>,
+    label: &str,
+    component: &RegisteredComponent,
   ) {
-    BorderedBox::new((0.0, 0.0), (cell_content_size, cell_content_size))
-      .with_thickness(border_thickness)
-      .draw(ui, |ui| {
-        ui.centered_and_justified(|ui| {
-          let text = egui::RichText::new(egui_phosphor::regular::PUZZLE_PIECE).size(icon_thickness);
-          ui.label(text);
-        });
+    let size = size.into();
+    let id = component.type_id();
+    ui.dnd_drag_source(egui::Id::new(id), InspectorDnd::AddComponent(id), |ui| {
+      Card::new(size).with_label(label).show(ui, |ui| {
+        let text = egui::RichText::new(egui_phosphor::regular::PUZZLE_PIECE).size(size.x / 3.0);
+        ui.label(text);
       });
-
-    ui.label(comp.name());
+    });
   }
 }
 
@@ -74,7 +71,12 @@ impl Default for Components {
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
   component_registry: Res<'w, ComponentRegistry>,
+
+  current_dir: Local<'s, Option<VfsDir<TypeId>>>,
+  current_path: Local<'s, VfsPath>,
+
   filter: Local<'s, String>,
+
   _pd: PhantomData<&'s ()>,
 }
 
@@ -90,30 +92,74 @@ impl Ui for Components {
   }
 
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
-    ui.text_edit_singleline(&mut *params.filter);
+    ui.horizontal(|ui| {
+      ui.text_edit_singleline(&mut *params.filter);
+      let text = egui::RichText::new(egui_phosphor::regular::ARROW_U_UP_LEFT);
+      if params.current_path.has_parent()
+        && ui.button(text).clicked()
+        && let Some(parent) = params.current_path.parent()
+      {
+        *params.current_path = parent;
+        *params.current_dir = None;
+      }
+    });
+
+    let full_path = params.current_path.iter().join("/");
+    ui.label(full_path);
 
     let num_columns = self.components_per_row.max(1);
 
-    let components = params
-      .component_registry
-      .iter()
-      .filter(|(_id, comp)| {
-        params.filter.is_empty()
-          || comp
-            .name()
-            .to_lowercase()
-            .contains(params.filter.to_lowercase().as_str())
-      })
-      .collect::<Vec<_>>();
+    if params.current_dir.is_none() {
+      *params.current_dir = params
+        .component_registry
+        .vfs()
+        .get_dir(&*params.current_path)
+        .cloned();
+    }
 
-    for chunk in components.chunks(num_columns) {
-      ui.columns(num_columns, |uis| {
-        for (ui, (id, comp)) in uis.iter_mut().zip(chunk.iter()) {
-          let card_width = ui.available_width();
-          let card_height = card_width;
-          self.draw_card(ui, **id, comp, (card_width, card_height));
+    let Some(current_dir) = &*params.current_dir else {
+      return;
+    };
+
+    let components = current_dir.iter().filter(|node| {
+      params.filter.is_empty() || {
+        node
+          .name()
+          .to_lowercase()
+          .contains(params.filter.to_lowercase().as_str())
+      }
+    });
+
+    let mut clicked = false;
+
+    horizontal_list(ui, num_columns, components, |ui, i, node| {
+      let card_width = ui.available_width();
+      let card_height = card_width;
+
+      match node {
+        VfsNode::Dir(dir) => {
+          clicked = Self::ui_for_dir(
+            &mut params.current_path,
+            ui,
+            (card_width, card_height),
+            dir,
+            i,
+          );
         }
-      });
+        VfsNode::Item { name, value } => {
+          if let Some(component) = params.component_registry.get(value) {
+            Self::ui_for_item(ui, (card_width, card_height), name, component);
+          }
+        }
+      }
+    });
+
+    if clicked {
+      *params.current_dir = params
+        .component_registry
+        .vfs()
+        .get_dir(&*params.current_path)
+        .cloned();
     }
   }
 

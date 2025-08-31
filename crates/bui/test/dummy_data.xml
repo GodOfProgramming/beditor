@@ -1,6 +1,0 @@
-<Pane>
-  Example Text 1
-  <Button OnClick="SomeEvent">Button Example</Button>
-  <RichText>Some Unicode = &#xE596;</RichText>
-  Example Text 2
-</Pane>

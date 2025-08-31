@@ -1,25 +1,21 @@
 [package]
 name = "beditor"
-version = "0.15.1"
+version = "0.16.1"
 edition = "2024"
-rust-version = "1.87.0"
+rust-version = "1.89.0"
 publish = false
 
 [workspace]
-members = [
-  ".",
-  "crates/bui",
-  "crates/macros",
-  "crates/persistent-id",
-  "crates/type_extractor",
-]
+members = [".", "crates/macros", "crates/persistent-id"]
 
 [workspace.dependencies]
 anyhow = "1.0.98"
 async-std = "1.13.0"
-bevy = "0.16.0"
-bevy-inspector-egui = "0.31.0"
-bevy_egui = "0.34.1"
+bevy = "0.16.1"
+bevy-inspector-egui = { git = "https://github.com/GodOfProgramming/bevy-inspector-egui", rev = "3cf81436b82504a6e8d9aecb881ae85ba7d47cee" }
+bevy_egui = "0.36.0"
+bimap = "0.6.3"
+bui = { path = "./crates/bui" }
 cargo_metadata = "0.19.2"
 const-str = "0.6.2"
 const_format = "0.2.34"
@@ -27,10 +23,14 @@ derive-ctor = "1.0.6"
 derive-getters = "0.5.0"
 derive-new = "0.7.0"
 derive_more = "1.0.0"
-egui-file-dialog = "0.9.0"
-egui-phosphor = "0.9.0"
-egui_demo_lib = "0.31.1"
-egui_dock = "0.16.0"
+egui = "0.32.1"
+egui-file-dialog = "0.11.0"
+egui-phosphor = "0.10.0"
+egui_demo_lib = "0.32.0"
+egui_dock = "0.17.0"
+egui-snarl = "0.8.0"
+fuzzy-matcher = "0.3.7"
+inventory = "0.3.20"
 itertools = "0.14.0"
 lazy_static = "1.5.0"
 leafwing-input-manager = "0.17.0"
@@ -39,6 +39,7 @@ merge = "0.2.0"
 nucleo = "0.5.0"
 parking_lot = "0.12.3"
 persistent-id = { path = "./crates/persistent-id" }
+petgraph = "0.8.2"
 platform-dirs = "0.3.0"
 proc-macro2 = "1.0.95"
 profiling = "1.0.16"
@@ -60,23 +61,26 @@ xml-rs = "0.8.26"
 [dependencies]
 
 # exports
-uuid = { workspace = true, features = ["serde"] }
 bevy_egui = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 macros = { workspace = true }
 persistent-id = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["serde"] }
 
 # internal
 async-std = { workspace = true }
 bevy = { workspace = true, features = ["default", "serialize"] }
-bevy-inspector-egui = { workspace = true }
+bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
+bimap = { workspace = true }
 const-str = { workspace = true }
 const_format = { workspace = true }
 derive-new = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
+egui = { workspace = true }
 egui-file-dialog = { workspace = true }
 egui-phosphor = { workspace = true }
 egui_dock = { workspace = true, features = ["serde"] }
+fuzzy-matcher = { workspace = true }
 itertools = { workspace = true }
 leafwing-input-manager = { workspace = true }
 nucleo = { workspace = true }
@@ -94,9 +98,13 @@ egui_demo_lib = { workspace = true }
 
 [features]
 profiling = ["bevy/trace_tracy"]
+watch = ["bevy/file_watcher"]
 
 [profile.dev]
 opt-level = 0
 
 [profile.dev.package."*"]
 opt-level = 3
+
+[lints.clippy]
+too_many_arguments = "allow"

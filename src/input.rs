@@ -1,4 +1,4 @@
-use crate::{EditorSettings, EditorState};
+use crate::{Editing, EditorSettings, EditorState, ui::KeyboardFocus};
 use bevy::prelude::*;
 use leafwing_input_manager::{
   Actionlike,
@@ -19,6 +19,9 @@ pub enum EditorActions {
   MoveEast,
   ToggleUi,
 }
+
+#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
+pub struct Unfocused;
 
 pub struct InputPlugin;
 
@@ -43,7 +46,14 @@ impl Plugin for InputPlugin {
   fn build(&self, app: &mut App) {
     app
       .add_plugins(InputManagerPlugin::<EditorActions>::default())
-      .add_systems(Startup, Self::init_input);
+      .configure_sets(
+        Update,
+        Unfocused
+          .in_set(Editing)
+          .run_if(in_state(KeyboardFocus::Unfocused)),
+      )
+      .add_systems(Startup, Self::init_input)
+      .add_systems(Update, global_input_actions.in_set(Unfocused));
   }
 }
 

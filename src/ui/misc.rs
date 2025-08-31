@@ -63,8 +63,11 @@ pub unsafe trait UiExtensions: Ui {
     let Ok((this, mut params)) = q.get_mut(unsafe { world_cell.world_mut() }, entity) else {
       panic!("Failed to query {}", <Self as Ui>::NAME);
     };
-    let params = params.get_mut(unsafe { world_cell.world_mut() });
-    f(this, params)
+
+    let items = params.get_mut(unsafe { world_cell.world_mut() });
+    let result = f(this, items);
+    unsafe { params.apply(world_cell.world_mut()) };
+    result
   }
 
   fn get_entity_mut<T>(

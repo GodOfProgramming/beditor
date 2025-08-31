@@ -6,14 +6,6 @@ mod ui;
 mod util;
 mod view;
 
-pub use bevy_egui;
-use persistent_id::Identifiable;
-use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
-pub use serde;
-pub use ui::{RawUi, Ui, misc};
-use util::{LogInfo, LogLevel, LoggingSettings};
-pub use uuid;
-
 use assets::{Prefab, PrefabPlugin, PrefabRegistrar, Prefabs, StaticPrefab};
 use bevy::{
   diagnostic::{
@@ -28,8 +20,21 @@ use bevy::{
 use bevy_egui::EguiContext;
 use cache::Cache;
 use input::InputPlugin;
+pub use prelude::*;
+use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
+use util::{LogInfo, LogLevel, LoggingSettings};
 use view::EditorViewPlugin;
+
+pub mod prelude {
+  pub use super::Editor;
+  pub use crate::ui::{RawUi, Ui, misc};
+  pub use bevy_egui;
+  pub use macros::{self, Identifiable};
+  pub use persistent_id::{self, Identifiable};
+  pub use serde;
+  pub use uuid;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States)]
 pub enum EditorState {

@@ -2,7 +2,6 @@ pub mod assets;
 mod cache;
 mod input;
 mod registry;
-mod scenes;
 mod ui;
 mod util;
 mod view;
@@ -17,12 +16,11 @@ pub use uuid;
 
 use assets::{Prefab, PrefabPlugin, PrefabRegistrar, Prefabs, StaticPrefab};
 use bevy::{
-  color::palettes::tailwind::{PINK_100, RED_500},
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
   log::{DEFAULT_FILTER, LogPlugin},
-  picking::pointer::PointerInteraction,
+  picking::hover::PickingInteraction,
   prelude::*,
   reflect::GetTypeRegistration,
   window::{WindowCloseRequested, WindowMode},
@@ -30,7 +28,6 @@ use bevy::{
 use bevy_egui::EguiContext;
 use cache::Cache;
 use input::InputPlugin;
-use scenes::{LoadEvent, SaveEvent, SceneTypeRegistry};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
 use view::EditorViewPlugin;
 
@@ -46,7 +43,6 @@ pub struct Editor {
   #[deref]
   app: App,
   cache: Cache,
-  scene_type_registry: SceneTypeRegistry,
   prefab_registrar: PrefabRegistrar,
   ui_manager: UiManager,
   component_registry: ComponentRegistry,
@@ -67,7 +63,6 @@ impl Editor {
     Self {
       app,
       cache: Cache::load_or_default(),
-      scene_type_registry: default(),
       prefab_registrar: default(),
       component_registry: default(),
       ui_manager,
@@ -124,14 +119,12 @@ impl Editor {
   where
     T: GetTypeRegistration,
   {
-    self.scene_type_registry.write().register::<T>();
     self.app.register_type::<T>();
   }
 
   pub fn run(self) -> AppExit {
     let Self {
       mut app,
-      scene_type_registry,
       prefab_registrar,
       ui_manager,
       cache,
@@ -140,7 +133,6 @@ impl Editor {
 
     app
       .insert_resource(cache)
-      .insert_resource(scene_type_registry)
       .insert_resource(prefab_registrar)
       .insert_resource(component_registry)
       .insert_resource(ui_manager)
@@ -171,6 +163,7 @@ impl Editor {
   ) {
     for target in q_targets.iter() {
       commands.entity(target).remove::<Pickable>();
+      debug!("Removed Pickable from {target}");
     }
   }
 
@@ -202,42 +195,52 @@ impl Editor {
         debug!("Registered picking on entity: {entity}");
       }
 
-      commands.entity(entity).insert(Pickable {
-        is_hoverable: true,
-        should_block_lower: false,
-      });
+      commands
+        .entity(entity)
+        .insert(Pickable {
+          is_hoverable: true,
+          should_block_lower: true,
+        })
+        .observe(Self::handle_click_event);
     }
   }
 
-  fn handle_pick_events(
+  fn handle_click_event(
+    trigger: Trigger<Pointer<Click>>,
     mut selection: ResMut<ui::InspectorSelection>,
-    mut click_events: EventReader<Pointer<Click>>,
     mut q_egui: Single<&mut EguiContext>,
     q_pickables: Query<&Pickable>,
   ) {
     let egui_context = q_egui.get_mut();
     let modifiers = egui_context.input(|i| i.modifiers);
 
-    for click in click_events
-      .read()
-      .filter(|evt| evt.button == PointerButton::Primary)
-    {
-      let target = click.target;
+    let target = trigger.target;
 
-      if q_pickables.get(target).is_ok() {
-        selection.add_selected(target, modifiers.ctrl);
-      }
+    debug!("Received pick for {target}");
+
+    if q_pickables.get(target).is_ok() {
+      debug!("{target} is not pickable");
+      selection.add_selected(target, modifiers.ctrl);
     }
   }
 
-  fn draw_mesh_intersections(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
-    for (point, normal) in pointers
-      .iter()
-      .filter_map(|interaction| interaction.get_nearest_hit())
-      .filter_map(|(_entity, hit)| hit.position.zip(hit.normal))
-    {
-      gizmos.sphere(point, 0.05, RED_500);
-      gizmos.arrow(point, point + normal.normalize() * 0.5, PINK_100);
+  // TODO this is inefficient, but picking seems to be weird, use the above when it is eventually reliable
+  fn pick_all(
+    mut selection: ResMut<ui::InspectorSelection>,
+    mut q_egui: Single<&mut EguiContext>,
+    q_pickables: Query<(Entity, &PickingInteraction), With<Pickable>>,
+  ) {
+    let egui_context = q_egui.get_mut();
+    let modifiers = egui_context.input(|i| i.modifiers);
+
+    for (entity, interaction) in &q_pickables {
+      if *interaction != PickingInteraction::Pressed {
+        continue;
+      }
+
+      debug!("Received pick for {entity}");
+
+      selection.add_selected(entity, modifiers.ctrl);
     }
   }
 
@@ -284,8 +287,6 @@ impl Editor {
       ))
       .init_resource::<EditorSettings>()
       .insert_state(EditorState::Editing)
-      .add_event::<SaveEvent>()
-      .add_event::<LoadEvent>()
       .configure_sets(
         Update,
         (
@@ -312,12 +313,9 @@ impl Editor {
       .add_systems(
         Update,
         (
-          scenes::check_for_saves,
-          scenes::check_for_loads,
           Self::on_close_requested,
-          Self::draw_mesh_intersections,
           Self::auto_register_picking_targets,
-          Self::handle_pick_events,
+          Self::pick_all,
         )
           .in_set(Editing),
       )

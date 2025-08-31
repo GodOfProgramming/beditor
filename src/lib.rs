@@ -28,7 +28,6 @@ use bevy::{
   window::{WindowCloseRequested, WindowMode},
 };
 use bevy_egui::EguiContext;
-use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use cache::Cache;
 use input::InputPlugin;
 use scenes::{LoadEvent, SaveEvent, SceneTypeRegistry};
@@ -277,7 +276,6 @@ impl Editor {
           }),
         EditorViewPlugin,
         MeshPickingPlugin,
-        DefaultInspectorConfigPlugin,
         InputPlugin,
         UiPlugin,
         FrameTimeDiagnosticsPlugin::default(),

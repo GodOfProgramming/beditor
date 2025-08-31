@@ -14,9 +14,10 @@ use bevy::{
   platform::collections::HashMap,
   prelude::*,
   reflect::GetTypeRegistration,
+  render::view::RenderLayers,
 };
-use bevy_egui::{EguiPlugin, EguiPrimaryContextPass, egui};
-use bevy_inspector_egui::bevy_inspector;
+use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_inspector_egui::{DefaultInspectorConfigPlugin, bevy_inspector};
 use egui_dock::{DockState, NodeIndex, SurfaceIndex};
 use events::{AddUiEvent, RemoveUiEvent};
 use itertools::{Either, Itertools};
@@ -30,6 +31,26 @@ use uuid::Uuid;
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 struct EditorUi;
 
+#[derive(Default, Component, Reflect)]
+#[require(
+  PrimaryEguiContext = default_primary_context(),
+  Camera = editor_camera(),
+  Camera2d,
+  MeshPickingCamera,
+  RenderLayers = RenderLayers::none())]
+pub struct EditorUiCamera;
+
+fn default_primary_context() -> PrimaryEguiContext {
+  PrimaryEguiContext
+}
+
+fn editor_camera() -> Camera {
+  Camera {
+    order: 1,
+    ..default()
+  }
+}
+
 pub(crate) struct UiPlugin;
 
 impl Plugin for UiPlugin {
@@ -37,7 +58,7 @@ impl Plugin for UiPlugin {
     debug!("Building UI Plugin");
 
     app
-      .add_plugins(EguiPlugin::default())
+      .add_plugins((EguiPlugin::default(), DefaultInspectorConfigPlugin))
       .add_event::<AddUiEvent>()
       .add_event::<RemoveUiEvent>()
       .init_resource::<InspectorSelection>()
@@ -71,13 +92,19 @@ impl Plugin for UiPlugin {
 
 impl UiPlugin {
   fn init_resources(world: &mut World) {
+    world.spawn((Name::new("Editor UI Camera"), EditorUiCamera));
     world.spawn((Name::new("Editor Ui Panels"), UiPanels));
     world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
       ui_manager.restore_or_init(world);
     });
   }
 
-  fn setup_ctx(mut q_ctx: Query<&mut bevy_egui::EguiContext>) {
+  fn setup_ctx(
+    mut q_ctx: Query<&mut bevy_egui::EguiContext>,
+    mut egui_global_settings: ResMut<EguiGlobalSettings>,
+  ) {
+    egui_global_settings.auto_create_primary_context = false;
+
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 

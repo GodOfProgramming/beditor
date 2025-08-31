@@ -8,6 +8,8 @@ use bevy::{
   },
   platform::collections::HashMap,
   prelude::*,
+  render::camera::Viewport,
+  window::PrimaryWindow,
 };
 use derive_more::derive::Deref;
 use egui::text::LayoutJob;
@@ -226,5 +228,54 @@ impl DockExtensions for DockState<Entity> {
             .id()
         })
     })
+  }
+}
+
+pub trait ShrinkableViewport: Component + Sized {
+  type Marker: Component;
+
+  fn viewport(&self) -> egui::Rect;
+
+  fn set_viewport(
+    window: Single<&Window, With<PrimaryWindow>>,
+    egui_settings: Single<&bevy_egui::EguiContextSettings>,
+    q_views: Query<(&Self, &UiInfo)>,
+    mut q_cameras: Query<&mut Camera, With<<Self as ShrinkableViewport>::Marker>>,
+  ) {
+    for (view, ui_info) in &q_views {
+      if ui_info.rendered() {
+        for mut camera in &mut q_cameras {
+          let scale_factor = window.scale_factor() * egui_settings.scale_factor;
+
+          let viewport = view.viewport();
+          let viewport_pos = viewport.left_top().to_vec2() * scale_factor;
+          let viewport_size = viewport.size() * scale_factor;
+
+          let physical_position = UVec2::new(viewport_pos.x as u32, viewport_pos.y as u32);
+          let physical_size = UVec2::new(viewport_size.x as u32, viewport_size.y as u32);
+
+          // The desired viewport rectangle at its offset in "physical pixel space"
+          let rect = physical_position + physical_size;
+
+          let window_size = window.physical_size();
+          // wgpu will panic if trying to set a viewport rect which has coordinates extending
+          // past the size of the render target, i.e. the physical window in our case.
+          // Typically this shouldn't happen- but during init and resizing etc. edge cases might occur.
+          // Simply do nothing in those cases.
+          if rect.x <= window_size.x && rect.y <= window_size.y {
+            let depth = camera
+              .viewport
+              .as_ref()
+              .map(|vp| vp.depth.clone())
+              .unwrap_or(0.0..1.0);
+            camera.viewport = Some(Viewport {
+              physical_position,
+              physical_size,
+              depth,
+            });
+          }
+        }
+      }
+    }
   }
 }

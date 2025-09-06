@@ -1,4 +1,4 @@
-use crate::UiManager;
+use crate::{EditorSettings, UiManager};
 
 use super::{LayoutInfo, RawUi, Ui, VTable};
 use bevy::{
@@ -234,7 +234,7 @@ impl DockExtensions for DockState<Entity> {
   }
 }
 
-pub trait ShrinkableViewport: Component + Sized {
+pub(crate) trait ShrinkableViewport: Component + Sized {
   type Marker: Component;
 
   fn viewport(&self) -> egui::Rect;
@@ -244,7 +244,15 @@ pub trait ShrinkableViewport: Component + Sized {
     egui_settings: Single<&bevy_egui::EguiContextSettings>,
     q_views: Query<(&Self, &UiInfo)>,
     mut q_cameras: Query<&mut Camera, With<<Self as ShrinkableViewport>::Marker>>,
+    editor_settings: Res<EditorSettings>,
   ) {
+    if !editor_settings.render_ui {
+      for mut camera in q_cameras {
+        camera.viewport = None; // set viewport to max if editor ui is being hidden to reflect actual game views
+      }
+      return;
+    }
+
     for (view, ui_info) in &q_views {
       if ui_info.rendered() {
         for mut camera in &mut q_cameras {

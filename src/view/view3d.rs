@@ -1,8 +1,7 @@
 use super::{EditorCamera, OrbitState, PanState, UP};
 use crate::{
-  cache::{Cache, Saveable},
   input::EditorActions,
-  util,
+  util::{self, settings::Settings},
 };
 use bevy::{input::mouse::MouseMotion, prelude::*};
 use leafwing_input_manager::prelude::ActionState;
@@ -18,7 +17,7 @@ pub struct EditorCamera3d;
 pub fn enable(
   mut commands: Commands,
   mut q_prev_cams: Query<Entity, With<EditorCamera>>,
-  cache: Res<Cache>,
+  mut settings: ResMut<Settings>,
 ) {
   info!("Switched to 3d camera");
 
@@ -29,7 +28,7 @@ pub fn enable(
   let CameraSaveData {
     settings,
     transform,
-  } = cache.get().unwrap_or_default();
+  } = settings.get_or_default(CamStateSetting);
 
   commands.spawn((
     Name::new("Editor Camera 3D"),
@@ -44,15 +43,20 @@ pub fn enable(
 }
 
 pub fn save_settings(
-  mut cache: ResMut<Cache>,
+  mut settings: ResMut<Settings>,
   q_cam: Query<(&Transform, &CameraSettings), With<EditorCamera3d>>,
-) {
+) -> Result {
   for (cam_transform, cam_settings) in &q_cam {
-    cache.store(&CameraSaveData {
-      settings: cam_settings.clone(),
-      transform: *cam_transform,
-    });
+    settings.set(
+      CamStateSetting,
+      CameraSaveData {
+        settings: cam_settings.clone(),
+        transform: *cam_transform,
+      },
+    )?;
   }
+
+  Ok(())
 }
 
 pub(super) fn mouse_input_actions(
@@ -234,14 +238,18 @@ pub fn zoom_system(
   }
 }
 
+struct CamStateSetting;
+
+impl AsRef<str> for CamStateSetting {
+  fn as_ref(&self) -> &str {
+    "3d_cam_state"
+  }
+}
+
 #[derive(Default, Serialize, Deserialize)]
 struct CameraSaveData {
   settings: CameraSettings,
   transform: Transform,
-}
-
-impl Saveable for CameraSaveData {
-  const KEY: &str = "camera3d";
 }
 
 #[derive(Component, Reflect, Serialize, Deserialize, Clone)]

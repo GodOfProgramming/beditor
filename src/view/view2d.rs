@@ -1,8 +1,7 @@
 use super::{EditorCamera, PanState, UP};
 use crate::{
-  cache::{Cache, Saveable},
   input::EditorActions,
-  util,
+  util::{self, settings::Settings},
 };
 use bevy::{
   input::mouse::MouseMotion,
@@ -23,7 +22,7 @@ pub struct EditorCamera2d;
 pub fn enable(
   mut commands: Commands,
   mut q_prev_cams: Query<Entity, With<EditorCamera>>,
-  cache: Res<Cache>,
+  mut settings: ResMut<Settings>,
 ) {
   info!("Switched to 2d camera");
 
@@ -35,7 +34,7 @@ pub fn enable(
     settings,
     transform,
     orthographic_scale,
-  } = cache.get().unwrap_or_default();
+  } = settings.get_or_default(CamStateSetting);
 
   let mut ortho = OrthographicProjection::default_2d();
 
@@ -58,18 +57,23 @@ pub fn enable(
 }
 
 pub fn save_settings(
-  mut cache: ResMut<Cache>,
+  mut settings: ResMut<Settings>,
   q_cam: Query<(&Transform, &CameraSettings, &Projection), With<EditorCamera2d>>,
-) {
+) -> Result {
   for (cam_transform, cam_settings, cam_proj) in &q_cam {
     if let Projection::Orthographic(cam_ortho) = &cam_proj {
-      cache.store(&CameraSaveData {
-        settings: cam_settings.clone(),
-        transform: *cam_transform,
-        orthographic_scale: Some(cam_ortho.scale),
-      });
+      settings.set(
+        CamStateSetting,
+        CameraSaveData {
+          settings: cam_settings.clone(),
+          transform: *cam_transform,
+          orthographic_scale: Some(cam_ortho.scale),
+        },
+      )?;
     }
   }
+
+  Ok(())
 }
 
 pub(super) fn mouse_input_actions(
@@ -219,15 +223,19 @@ pub fn pan_system(
   }
 }
 
+struct CamStateSetting;
+
+impl AsRef<str> for CamStateSetting {
+  fn as_ref(&self) -> &str {
+    "2d_cam_state"
+  }
+}
+
 #[derive(Default, Serialize, Deserialize)]
 struct CameraSaveData {
   settings: CameraSettings,
   transform: Transform,
   orthographic_scale: Option<f32>,
-}
-
-impl Saveable for CameraSaveData {
-  const KEY: &str = "camera2d";
 }
 
 #[derive(Component, Reflect, Serialize, Deserialize, Clone)]

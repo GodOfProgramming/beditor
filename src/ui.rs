@@ -57,7 +57,13 @@ impl Plugin for UiPlugin {
   fn build(&self, app: &mut App) {
     debug!("Building UI Plugin");
 
+    let egui_settings = EguiGlobalSettings {
+      auto_create_primary_context: false,
+      ..default()
+    };
+
     app
+      .insert_resource(egui_settings)
       .add_plugins((EguiPlugin::default(), DefaultInspectorConfigPlugin))
       .add_event::<AddUiEvent>()
       .add_event::<RemoveUiEvent>()
@@ -65,7 +71,7 @@ impl Plugin for UiPlugin {
       .init_resource::<LayoutManager>()
       .init_state::<KeyboardFocus>()
       .configure_sets(Update, EditorUi)
-      .add_systems(Startup, (Self::init_resources, Self::setup_ctx))
+      .add_systems(Startup, (Self::setup_ctx, Self::init_resources).chain())
       .add_systems(
         EguiPrimaryContextPass,
         (
@@ -99,12 +105,7 @@ impl UiPlugin {
     });
   }
 
-  fn setup_ctx(
-    mut q_ctx: Query<&mut bevy_egui::EguiContext>,
-    mut egui_global_settings: ResMut<EguiGlobalSettings>,
-  ) {
-    egui_global_settings.auto_create_primary_context = false;
-
+  fn setup_ctx(mut q_ctx: Query<&mut bevy_egui::EguiContext>) {
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
 

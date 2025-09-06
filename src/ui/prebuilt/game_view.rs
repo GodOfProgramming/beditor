@@ -78,7 +78,7 @@ where
   }
 
   fn spawn(mut params: Self::Params<'_, '_>) -> Self {
-    let type_path = C::type_path();
+    let type_path = C::short_type_path();
     *params.title = format!("Game View of {type_path}");
     default()
   }

@@ -19,7 +19,6 @@ use bevy::{
   winit::WinitWindows,
 };
 use bevy_egui::EguiContext;
-use cache::Cache;
 use input::InputPlugin;
 pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
@@ -28,11 +27,12 @@ use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
 use util::{LogInfo, LogLevel, LoggingSettings};
 use view::EditorViewPlugin;
 
-use crate::cache::Saveable;
-
 pub mod prelude {
   pub use super::Editor;
-  pub use crate::ui::{RawUi, Ui, misc};
+  pub use crate::{
+    cache::{Cache, Saveable},
+    ui::{RawUi, Ui, misc},
+  };
   pub use bevy_egui;
   pub use macros::{self, Identifiable};
   pub use persistent_id::{self, Identifiable};
@@ -291,11 +291,13 @@ impl Editor {
   fn on_app_exit(
     mut cache: ResMut<Cache>,
     window_state: Res<WindowState>,
-    mut app_exit: EventWriter<AppExit>,
+    mut app_exit: EventReader<AppExit>,
   ) {
-    cache.store(&*window_state);
-    cache.save();
-    app_exit.write(AppExit::Success);
+    if !app_exit.is_empty() {
+      app_exit.clear();
+      cache.store(&*window_state);
+      cache.save();
+    }
   }
 
   fn init_app(app: &mut App) {
@@ -365,18 +367,18 @@ impl Editor {
       .add_systems(
         OnEnter(EditorState::Exiting),
         (
-          (
-            view::save_view_state,
-            view::view2d::save_settings,
-            view::view3d::save_settings,
-            UiPlugin::on_app_exit,
-            LogInfo::on_app_exit,
-          ),
-          Self::on_app_exit,
+          view::save_view_state,
+          view::view2d::save_settings,
+          view::view3d::save_settings,
+          UiPlugin::on_app_exit,
+          LogInfo::on_app_exit,
+          |mut app_exit: EventWriter<AppExit>| {
+            app_exit.write(AppExit::Success);
+          },
         )
-          .chain()
           .in_set(EditorGlobal),
-      );
+      )
+      .add_systems(FixedUpdate, Self::on_app_exit.in_set(EditorGlobal));
   }
 }
 

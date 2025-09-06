@@ -15,16 +15,20 @@ use bevy::{
   picking::hover::PickingInteraction,
   prelude::*,
   reflect::GetTypeRegistration,
-  window::{WindowCloseRequested, WindowMode},
+  window::{PrimaryWindow, WindowCloseRequested, WindowMode},
+  winit::WinitWindows,
 };
 use bevy_egui::EguiContext;
 use cache::Cache;
 use input::InputPlugin;
 pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
+use serde::{Deserialize, Serialize};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
 use util::{LogInfo, LogLevel, LoggingSettings};
 use view::EditorViewPlugin;
+
+use crate::cache::Saveable;
 
 pub mod prelude {
   pub use super::Editor;
@@ -162,6 +166,18 @@ impl Editor {
     }
   }
 
+  fn startup(
+    mut commands: Commands,
+    cache: Res<Cache>,
+    mut window: Single<&mut Window, With<PrimaryWindow>>,
+  ) {
+    let window_state = cache.get::<WindowState>().unwrap_or_default();
+
+    window.set_maximized(window_state.maximized);
+
+    commands.insert_resource(window_state);
+  }
+
   fn remove_picking_from_targets(
     mut commands: Commands,
     q_targets: Query<Entity, (With<Pickable>, Without<Camera>)>,
@@ -258,7 +274,26 @@ impl Editor {
     }
   }
 
-  fn on_app_exit(cache: ResMut<Cache>, mut app_exit: EventWriter<AppExit>) {
+  fn handle_window_events(
+    winit_windows: NonSendMut<WinitWindows>,
+    mut window_state: ResMut<WindowState>,
+    mut events: EventReader<bevy::window::WindowResized>,
+  ) {
+    for event in events.read() {
+      let Some(winit_window) = winit_windows.get_window(event.window) else {
+        continue;
+      };
+
+      window_state.maximized = winit_window.is_maximized();
+    }
+  }
+
+  fn on_app_exit(
+    mut cache: ResMut<Cache>,
+    window_state: Res<WindowState>,
+    mut app_exit: EventWriter<AppExit>,
+  ) {
+    cache.store(&*window_state);
     cache.save();
     app_exit.write(AppExit::Success);
   }
@@ -304,9 +339,13 @@ impl Editor {
       .add_systems(
         Startup,
         (
-          Self::set_picking_settings,
-          Self::initialize_prefabs,
-          LoggingSettings::restore,
+          Self::startup,
+          (
+            Self::set_picking_settings,
+            Self::initialize_prefabs,
+            LoggingSettings::restore,
+          )
+            .chain(),
         ),
       )
       .add_systems(PostStartup, Self::show_window)
@@ -318,11 +357,10 @@ impl Editor {
       .add_systems(
         Update,
         (
+          (Self::auto_register_picking_targets, Self::pick_all).in_set(Editing),
           Self::on_close_requested,
-          Self::auto_register_picking_targets,
-          Self::pick_all,
-        )
-          .in_set(Editing),
+          Self::handle_window_events,
+        ),
       )
       .add_systems(
         OnEnter(EditorState::Exiting),
@@ -357,4 +395,13 @@ impl Default for EditorSettings {
   fn default() -> Self {
     Self { render_ui: true }
   }
+}
+
+#[derive(Default, Resource, Serialize, Deserialize)]
+struct WindowState {
+  maximized: bool,
+}
+
+impl Saveable for WindowState {
+  const KEY: &str = "Window";
 }

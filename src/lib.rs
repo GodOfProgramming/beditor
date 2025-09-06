@@ -22,10 +22,11 @@ use bevy_egui::EguiContext;
 use input::InputPlugin;
 pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
-use serde::{Deserialize, Serialize};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
-use util::{LogInfo, LogLevel, LoggingSettings};
+use util::LogLevel;
 use view::EditorViewPlugin;
+
+use crate::util::{ChangeLogLevelEvent, LoggingExtensionsPlugin, settings::Settings};
 
 pub mod prelude {
   pub use super::Editor;
@@ -51,7 +52,6 @@ pub enum EditorState {
 pub struct Editor {
   #[deref]
   app: App,
-  cache: Cache,
   prefab_registrar: PrefabRegistrar,
   ui_manager: UiManager,
   component_registry: ComponentRegistry,
@@ -71,7 +71,6 @@ impl Editor {
 
     Self {
       app,
-      cache: Cache::load_or_default(),
       prefab_registrar: default(),
       component_registry: default(),
       ui_manager,
@@ -136,12 +135,10 @@ impl Editor {
       mut app,
       prefab_registrar,
       ui_manager,
-      cache,
       component_registry,
     } = self;
 
     app
-      .insert_resource(cache)
       .insert_resource(prefab_registrar)
       .insert_resource(component_registry)
       .insert_resource(ui_manager)
@@ -167,15 +164,14 @@ impl Editor {
   }
 
   fn startup(
-    mut commands: Commands,
-    cache: Res<Cache>,
+    mut settings: ResMut<Settings>,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
-  ) {
-    let window_state = cache.get::<WindowState>().unwrap_or_default();
+  ) -> Result<()> {
+    let maximized = settings.get_or_default::<bool>(WindowMaximizedSetting);
 
-    window.set_maximized(window_state.maximized);
+    window.set_maximized(maximized);
 
-    commands.insert_resource(window_state);
+    Ok(())
   }
 
   fn remove_picking_from_targets(
@@ -276,33 +272,26 @@ impl Editor {
 
   fn handle_window_events(
     winit_windows: NonSendMut<WinitWindows>,
-    mut window_state: ResMut<WindowState>,
+    mut settings: ResMut<Settings>,
     mut events: EventReader<bevy::window::WindowResized>,
-  ) {
+  ) -> Result {
     for event in events.read() {
       let Some(winit_window) = winit_windows.get_window(event.window) else {
         continue;
       };
 
-      window_state.maximized = winit_window.is_maximized();
+      settings.set(WindowMaximizedSetting, winit_window.is_maximized())?;
     }
-  }
 
-  fn on_app_exit(
-    mut cache: ResMut<Cache>,
-    window_state: Res<WindowState>,
-    mut app_exit: EventReader<AppExit>,
-  ) {
-    if !app_exit.is_empty() {
-      app_exit.clear();
-      cache.store(&*window_state);
-      cache.save();
-    }
+    Ok(())
   }
 
   fn init_app(app: &mut App) {
     app
+      .init_resource::<Cache>()
+      .insert_resource(Settings::new().unwrap())
       .add_plugins((
+        LoggingExtensionsPlugin,
         DefaultPlugins
           .set(WindowPlugin {
             primary_window: Some(Window {
@@ -342,12 +331,7 @@ impl Editor {
         Startup,
         (
           Self::startup,
-          (
-            Self::set_picking_settings,
-            Self::initialize_prefabs,
-            LoggingSettings::restore,
-          )
-            .chain(),
+          (Self::set_picking_settings, Self::initialize_prefabs),
         ),
       )
       .add_systems(PostStartup, Self::show_window)
@@ -356,6 +340,7 @@ impl Editor {
         OnExit(EditorState::Editing),
         Self::remove_picking_from_targets,
       )
+      .add_systems(FixedUpdate, ChangeLogLevelEvent::handle)
       .add_systems(
         Update,
         (
@@ -367,18 +352,15 @@ impl Editor {
       .add_systems(
         OnEnter(EditorState::Exiting),
         (
-          view::save_view_state,
           view::view2d::save_settings,
           view::view3d::save_settings,
           UiPlugin::on_app_exit,
-          LogInfo::on_app_exit,
           |mut app_exit: EventWriter<AppExit>| {
             app_exit.write(AppExit::Success);
           },
         )
           .in_set(EditorGlobal),
-      )
-      .add_systems(FixedUpdate, Self::on_app_exit.in_set(EditorGlobal));
+      );
   }
 }
 
@@ -399,11 +381,10 @@ impl Default for EditorSettings {
   }
 }
 
-#[derive(Default, Resource, Serialize, Deserialize)]
-struct WindowState {
-  maximized: bool,
-}
+struct WindowMaximizedSetting;
 
-impl Saveable for WindowState {
-  const KEY: &str = "Window";
+impl AsRef<str> for WindowMaximizedSetting {
+  fn as_ref(&self) -> &str {
+    "window.maximized"
+  }
 }

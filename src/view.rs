@@ -2,13 +2,12 @@ pub mod view2d;
 pub mod view3d;
 
 use crate::{
-  Editing,
-  cache::{Cache, Saveable},
-  input,
+  Editing, input,
   ui::{
     misc::UiInfo,
     prebuilt::{editor_view::EditorView, game_view::GameView},
   },
+  util::settings::Settings,
 };
 use bevy::{color::palettes::tailwind, prelude::*};
 use derive_new::new;
@@ -23,8 +22,11 @@ const GAME_CAMERA_COLOR: Srgba = tailwind::GREEN_700;
 pub struct EditorViewPlugin;
 
 impl EditorViewPlugin {
-  fn set_initial_state(cache: Res<Cache>, mut next_state: ResMut<NextState<ActiveEditorCamera>>) {
-    let state = cache.get::<ActiveEditorCamera>().unwrap_or_default();
+  fn set_initial_state(
+    mut settings: ResMut<Settings>,
+    mut next_state: ResMut<NextState<ActiveEditorCamera>>,
+  ) {
+    let state = settings.get_or_default::<ActiveEditorCamera>(ActiveEditorCameraSetting);
     next_state.set(state);
   }
 }
@@ -103,7 +105,11 @@ impl Plugin for EditorViewPlugin {
       )
       .add_systems(
         FixedUpdate,
-        (MoveCameraEvent::handle, PointCameraEvent::handle),
+        (
+          MoveCameraEvent::handle,
+          PointCameraEvent::handle,
+          track_editor_camera_changes.run_if(state_changed::<ActiveEditorCamera>),
+        ),
       );
   }
 }
@@ -122,8 +128,19 @@ pub enum ActiveEditorCamera {
   Cam3D,
 }
 
-impl Saveable for ActiveEditorCamera {
-  const KEY: &str = "view_state";
+pub struct ActiveEditorCameraSetting;
+
+impl AsRef<str> for ActiveEditorCameraSetting {
+  fn as_ref(&self) -> &str {
+    "view.active_editor_camera"
+  }
+}
+
+fn track_editor_camera_changes(
+  cam_state: Res<State<ActiveEditorCamera>>,
+  mut settings: ResMut<Settings>,
+) -> Result {
+  settings.set(ActiveEditorCameraSetting, **cam_state)
 }
 
 #[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
@@ -143,10 +160,6 @@ fn despawn_editor_cameras(mut commands: Commands, q_cams: Query<Entity, With<Edi
   for entity in &q_cams {
     commands.entity(entity).despawn();
   }
-}
-
-pub fn save_view_state(mut cache: ResMut<Cache>, view_state: Res<State<ActiveEditorCamera>>) {
-  cache.store(view_state.get());
 }
 
 pub fn disable_camera<C: Component>(mut q_camera: Query<&mut Camera, With<C>>) {

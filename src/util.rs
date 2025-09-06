@@ -1,6 +1,10 @@
+pub mod settings;
 pub mod vfs;
 
-use crate::cache::{Cache, Saveable};
+use crate::{
+  cache::{Cache, Saveable},
+  util::settings::Settings,
+};
 use bevy::{
   log::{
     BoxedLayer, Level,
@@ -12,6 +16,7 @@ use bevy::{
   window::CursorGrabMode,
   winit::cursor::CursorIcon,
 };
+use derive_new::new;
 use profiling::tracing::level_filters::LevelFilter;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::BTreeMap;
@@ -60,64 +65,63 @@ where
   ordered.serialize(serializer)
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
-pub struct LogInfo {
-  level: LogLevel,
-}
+pub struct LoggingExtensionsPlugin;
 
-impl Saveable for LogInfo {
-  const KEY: &str = "logging";
-}
-
-impl LogInfo {
-  pub fn on_app_exit(logging_settings: Res<LoggingSettings>, mut cache: ResMut<Cache>) {
-    cache.store(&LogInfo {
-      level: logging_settings.level,
-    });
+impl Plugin for LoggingExtensionsPlugin {
+  fn build(&self, app: &mut App) {
+    app
+      .add_event::<ChangeLogLevelEvent>()
+      .add_event::<LogLevelChangedEvent>();
   }
 }
 
-#[derive(Resource)]
-pub struct LoggingSettings {
-  level: LogLevel,
-  filter_handle: reload::Handle<LevelFilter, tracing_subscriber::Registry>,
-}
+#[derive(Event, Deref, DerefMut, new)]
+pub struct ChangeLogLevelEvent(LogLevel);
 
-impl LoggingSettings {
-  pub fn level(&self) -> LogLevel {
-    self.level
-  }
+impl ChangeLogLevelEvent {
+  pub fn handle(
+    mut events: EventReader<Self>,
+    mut settings: ResMut<Settings>,
+    log_handle: Res<LogHandle>,
+    mut writer: EventWriter<LogLevelChangedEvent>,
+  ) -> Result {
+    for event in events.read() {
+      settings.set(LogLevelSetting, **event)?;
+      log_handle
+        .modify(|filter| *filter = (**event).into())
+        .inspect_err(|err| {
+          eprintln!("Failed to set log level filter: {err}");
+        })
+        .ok();
+      LogLevelChangedEvent(**event).fire(&mut writer);
+    }
 
-  pub fn set_level(&mut self, level: LogLevel) {
-    self.level = level;
-    self
-      .filter_handle
-      .modify(|filter| *filter = level.into())
-      .inspect_err(|err| {
-        eprintln!("Failed to set log level filter: {err}");
-      })
-      .ok();
-  }
-
-  pub fn restore(mut logging: ResMut<Self>, cache: Res<Cache>) {
-    let Some(log_info) = cache.get::<LogInfo>() else {
-      error!("Failed to get log info, using default logging settings");
-      return;
-    };
-
-    logging.set_level(log_info.level);
+    Ok(())
   }
 }
+
+#[derive(Event, Deref, DerefMut, new)]
+pub struct LogLevelChangedEvent(LogLevel);
+
+#[derive(Resource, Deref, DerefMut)]
+pub struct LogHandle(reload::Handle<LevelFilter, tracing_subscriber::Registry>);
 
 pub fn dynamic_log_layer(app: &mut App) -> Option<BoxedLayer> {
-  let level = LogLevel::Info;
+  let mut settings = app.world_mut().resource_mut::<Settings>();
+  let level = settings.get_or_default::<LogLevel>(LogLevelSetting);
   let (filter, handle) = reload::Layer::new(level.into());
-  app.insert_resource(LoggingSettings {
-    level,
-    filter_handle: handle,
-  });
+  app.insert_resource(LogHandle(handle));
+  LogLevelChangedEvent(level).fire(app.world_mut());
 
   Some(filter.boxed())
+}
+
+struct LogLevelSetting;
+
+impl AsRef<str> for LogLevelSetting {
+  fn as_ref(&self) -> &str {
+    "log.level"
+  }
 }
 
 #[derive(Reflect, Default, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -153,3 +157,27 @@ impl From<LogLevel> for LevelFilter {
     }
   }
 }
+
+pub trait EventEmitter<E: Event> {
+  fn fire(&mut self, event: E);
+}
+
+impl<E: Event> EventEmitter<E> for World {
+  fn fire(&mut self, event: E) {
+    self.send_event(event);
+  }
+}
+
+impl<E: Event> EventEmitter<E> for EventWriter<'_, E> {
+  fn fire(&mut self, event: E) {
+    self.write(event);
+  }
+}
+
+pub trait FireEvent: Event + Sized {
+  fn fire<E: EventEmitter<Self>>(self, emitter: &mut E) {
+    emitter.fire(self);
+  }
+}
+
+impl<E: Event + Sized> FireEvent for E {}

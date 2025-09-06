@@ -1,7 +1,9 @@
 use std::marker::PhantomData;
 
-use crate::ui::Ui;
-use crate::util::LoggingSettings;
+use crate::{
+  ui::Ui,
+  util::{ChangeLogLevelEvent, FireEvent, LogLevel, LogLevelChangedEvent},
+};
 use bevy::{diagnostic::DiagnosticsStore, ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContext, egui};
 use bevy_inspector_egui::reflect_inspector::ui_for_value;
@@ -10,6 +12,7 @@ use uuid::uuid;
 #[derive(Default, Component, Reflect)]
 pub struct DebugMenu {
   ui_debug_on_hover: bool,
+  log_level: LogLevel,
 }
 
 impl DebugMenu {
@@ -19,11 +22,9 @@ impl DebugMenu {
         let type_registry = params.type_registry.as_ref().read();
 
         ui.label("Log Level");
-        let mut level = params.logging.level();
-        ui_for_value(&mut level, ui, &type_registry);
-
-        if level != params.logging.level() {
-          params.logging.set_level(level);
+        let mut log_level = self.log_level;
+        if ui_for_value(&mut log_level, ui, &type_registry) {
+          ChangeLogLevelEvent::new(log_level).fire(&mut params.change_log_level_writer);
         }
       });
     });
@@ -52,14 +53,25 @@ impl DebugMenu {
       }
     }
   }
+
+  fn handle_log_level_changes(
+    mut q_self: Query<&mut Self>,
+    mut events: EventReader<LogLevelChangedEvent>,
+  ) {
+    for event in events.read() {
+      for mut this in &mut q_self {
+        this.log_level = **event;
+      }
+    }
+  }
 }
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
   type_registry: Res<'w, AppTypeRegistry>,
-  logging: ResMut<'w, LoggingSettings>,
   diagnostics: Res<'w, DiagnosticsStore>,
   debug_ui_event_writer: EventWriter<'w, DebugUiEvent>,
+  change_log_level_writer: EventWriter<'w, ChangeLogLevelEvent>,
 
   _pd: PhantomData<&'s ()>,
 }
@@ -71,13 +83,14 @@ impl Ui for DebugMenu {
   type Params<'w, 's> = Params<'w, 's>;
 
   fn init(app: &mut App) {
-    app
-      .add_event::<DebugUiEvent>()
-      .add_systems(Update, Self::handle_ui_debug);
+    app.add_event::<DebugUiEvent>().add_systems(
+      FixedUpdate,
+      (Self::handle_ui_debug, Self::handle_log_level_changes),
+    );
   }
 
   fn spawn(_params: Self::Params<'_, '_>) -> Self {
-    default()
+    Self::default()
   }
 
   fn unique() -> bool {

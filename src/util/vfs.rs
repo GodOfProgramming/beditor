@@ -20,10 +20,10 @@ impl<T> Vfs<T> {
     Self { inner: default() }
   }
 
-  pub fn create(&mut self, path: impl Into<VfsPath>) -> &mut VfsDir<T> {
+  pub fn open(&mut self, path: impl Into<VfsPath>) -> &mut VfsDir<T> {
     let path = path.into();
     if let Some((parent_ref, basename)) = path.parent_ref().zip(path.basename()) {
-      self.create(parent_ref).add_dir(basename);
+      self.open(parent_ref).add_dir(basename);
     }
     self.inner.entry(path).or_default()
   }
@@ -344,8 +344,8 @@ mod tests {
   fn vfs_add_dir() {
     let mut vfs = Vfs::new();
 
-    vfs.create(["dir"]).add_item("item", 1);
-    vfs.create(["dir2"]);
+    vfs.open(["dir"]).add_item("item", 1);
+    vfs.open(["dir2"]);
 
     let VfsNode::Item { value, .. } = vfs.get_node(VfsPath::from(["dir", "item"])).unwrap() else {
       panic!("Item not an item");

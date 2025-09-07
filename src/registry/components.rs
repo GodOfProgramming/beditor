@@ -133,7 +133,7 @@ where
     };
 
     let path: VfsPath<&str> = path.into();
-    let dir = component_registry.vfs.create(path);
+    let dir = component_registry.vfs.open(path);
     dir.add_item(name, type_id);
 
     for (p, d) in component_registry.vfs.iter() {

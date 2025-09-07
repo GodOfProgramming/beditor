@@ -7,7 +7,7 @@ use crate::{
     misc::UiInfo,
     prebuilt::{editor_view::EditorView, game_view::GameView},
   },
-  util::settings::Settings,
+  util::storage::Settings,
 };
 use bevy::{color::palettes::tailwind, prelude::*};
 use derive_new::new;
@@ -23,7 +23,7 @@ pub struct EditorViewPlugin;
 
 impl EditorViewPlugin {
   fn set_initial_state(
-    mut settings: ResMut<Settings>,
+    mut settings: Settings,
     mut next_state: ResMut<NextState<ActiveEditorCamera>>,
   ) {
     let state = settings.get_or_default::<ActiveEditorCamera>(ActiveEditorCameraSetting);
@@ -138,7 +138,7 @@ impl AsRef<str> for ActiveEditorCameraSetting {
 
 fn track_editor_camera_changes(
   cam_state: Res<State<ActiveEditorCamera>>,
-  mut settings: ResMut<Settings>,
+  mut settings: Settings,
 ) -> Result {
   settings.set(ActiveEditorCameraSetting, **cam_state)
 }

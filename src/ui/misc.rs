@@ -1,6 +1,6 @@
-use crate::{EditorSettings, UiManager};
+use crate::{EditorSettings, UiManager, util::storage::LayoutInfo};
 
-use super::{LayoutInfo, RawUi, Ui, VTable};
+use super::{RawUi, Ui, VTable};
 use bevy::{
   ecs::{
     component::Mutable,
@@ -198,7 +198,7 @@ impl DockExtensions for DockState<Entity> {
           .unwrap_or_default();
       }
 
-      LayoutInfo { id, name }
+      LayoutInfo::new(id, name)
     })
   }
 
@@ -209,21 +209,21 @@ impl DockExtensions for DockState<Entity> {
   ) -> Self {
     dock.map_tabs(|layout_info| {
       vtables
-        .get(&layout_info.id)
+        .get(&layout_info.id())
         .map(|vtable| (vtable.spawn)(world))
         .unwrap_or_else(|| {
-          let name = &layout_info.name;
+          let name = layout_info.name();
           let state = SystemState::<<MissingUi as Ui>::Params<'_, '_>>::new(world);
 
           warn!(
             "Failed to find ui component {name} with uuid {}",
-            *layout_info.id
+            *layout_info.id()
           );
 
           world
             .spawn((
               Name::new(<MissingUi as RawUi>::NAME),
-              MissingUi::new(name, layout_info.id),
+              MissingUi::new(name, layout_info.id()),
               PersistentId(<MissingUi as RawUi>::ID),
               UiInfo::default(),
               UiComponentState(state),

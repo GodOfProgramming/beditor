@@ -5,8 +5,9 @@ pub mod misc;
 pub mod prebuilt;
 
 use crate::{
-  EditorSettings,
-  cache::{Cache, Saveable},
+  EditorSettings, Settings,
+  ui::managers::{CurrentLayoutSetting, SaveLayoutOnExitSetting},
+  util::storage::Layouts,
 };
 use bevy::{
   asset::UntypedAssetId,
@@ -18,14 +19,13 @@ use bevy::{
 };
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
 use bevy_inspector_egui::{DefaultInspectorConfigPlugin, bevy_inspector};
-use egui_dock::{DockState, NodeIndex, SurfaceIndex};
+use egui_dock::{NodeIndex, SurfaceIndex};
 use events::{AddUiEvent, RemoveUiEvent};
 use itertools::{Either, Itertools};
 use managers::{LayoutManager, UiManager};
 use misc::{MissingUi, UiExtensions, UiInfo};
 use persistent_id::PersistentId;
-use serde::{Deserialize, Serialize};
-use std::{any::TypeId, cell::RefCell, collections::BTreeMap};
+use std::{any::TypeId, cell::RefCell};
 use uuid::Uuid;
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
@@ -97,12 +97,10 @@ impl Plugin for UiPlugin {
 }
 
 impl UiPlugin {
-  fn init_resources(world: &mut World) {
+  fn init_resources(world: &mut World) -> Result {
     world.spawn((Name::new("Editor UI Camera"), EditorUiCamera));
     world.spawn((Name::new("Editor Ui Panels"), UiPanels));
-    world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-      ui_manager.restore_or_init(world);
-    });
+    world.resource_scope(|world, mut ui_manager: Mut<UiManager>| ui_manager.restore_or_init(world))
   }
 
   fn setup_ctx(mut q_ctx: Query<&mut bevy_egui::EguiContext>) {
@@ -156,17 +154,38 @@ impl UiPlugin {
   }
 
   pub fn on_app_exit(
-    mut cache: ResMut<Cache>,
     ui_manager: Res<UiManager>,
-    layout_manager: Res<LayoutManager>,
     q_uuids: Query<&PersistentId, Without<MissingUi>>,
     q_missing: Query<&MissingUi>,
-  ) {
-    let new_state = ui_manager.save_current_layout(&q_uuids, &q_missing);
-    cache.store(&LayoutState {
-      dock: new_state,
-      layouts: layout_manager.clone(),
-    });
+    mut params: ParamSet<(Settings, Layouts)>,
+  ) -> Result {
+    let current_layout = {
+      let mut settings = params.p0();
+
+      let save_on_exit = settings.get_or_default::<bool>(SaveLayoutOnExitSetting);
+      if save_on_exit {
+        let name = match settings.get::<String>(CurrentLayoutSetting).ok() {
+          Some(opt) => opt,
+          None => {
+            let default_layout = String::from("default");
+            settings.set(CurrentLayoutSetting, &default_layout)?;
+            default_layout
+          }
+        };
+
+        Some(name)
+      } else {
+        None
+      }
+    };
+
+    if let Some(name) = current_layout {
+      let mut layouts = params.p1();
+      let new_state = ui_manager.save_current_layout(&q_uuids, &q_missing);
+      layouts.save_layout(name, new_state)?;
+    }
+
+    Ok(())
   }
 }
 
@@ -602,22 +621,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     let vtable = self.vtable_of(*tab);
     (vtable.scroll_bars)(*tab, &mut self.world.borrow_mut())
   }
-}
-
-#[derive(Serialize, Deserialize)]
-struct LayoutState {
-  dock: DockState<LayoutInfo>,
-  layouts: BTreeMap<String, DockState<LayoutInfo>>,
-}
-
-impl Saveable for LayoutState {
-  const KEY: &str = "Layout";
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct LayoutInfo {
-  id: PersistentId,
-  name: String,
 }
 
 #[derive(Resource)]

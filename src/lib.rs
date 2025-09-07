@@ -1,11 +1,11 @@
 pub mod assets;
-mod cache;
 mod input;
 mod registry;
 mod ui;
 mod util;
 mod view;
 
+use crate::util::{ChangeLogLevelEvent, LoggingExtensionsPlugin};
 use assets::{Prefab, PrefabPlugin, PrefabRegistrar, Prefabs, StaticPrefab};
 use bevy::{
   diagnostic::{
@@ -26,13 +26,11 @@ use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
 use util::LogLevel;
 use view::EditorViewPlugin;
 
-use crate::util::{ChangeLogLevelEvent, LoggingExtensionsPlugin, settings::Settings};
-
 pub mod prelude {
   pub use super::Editor;
   pub use crate::{
-    cache::{Cache, Saveable},
     ui::{RawUi, Ui, misc},
+    util::storage::{Layouts, Settings, Storage},
   };
   pub use bevy_egui;
   pub use macros::{self, Identifiable};
@@ -164,7 +162,7 @@ impl Editor {
   }
 
   fn startup(
-    mut settings: ResMut<Settings>,
+    mut settings: Settings,
     mut window: Single<&mut Window, With<PrimaryWindow>>,
   ) -> Result<()> {
     let maximized = settings.get_or_default::<bool>(WindowMaximizedSetting);
@@ -272,7 +270,7 @@ impl Editor {
 
   fn handle_window_events(
     winit_windows: NonSendMut<WinitWindows>,
-    mut settings: ResMut<Settings>,
+    mut settings: Settings,
     mut events: EventReader<bevy::window::WindowResized>,
   ) -> Result {
     for event in events.read() {
@@ -288,8 +286,7 @@ impl Editor {
 
   fn init_app(app: &mut App) {
     app
-      .init_resource::<Cache>()
-      .insert_resource(Settings::new().unwrap())
+      .insert_resource(Storage::new().unwrap())
       .add_plugins((
         LoggingExtensionsPlugin,
         DefaultPlugins
@@ -352,13 +349,16 @@ impl Editor {
       .add_systems(
         OnEnter(EditorState::Exiting),
         (
-          view::view2d::save_settings,
-          view::view3d::save_settings,
-          UiPlugin::on_app_exit,
+          (
+            view::view2d::save_settings,
+            view::view3d::save_settings,
+            UiPlugin::on_app_exit,
+          ),
           |mut app_exit: EventWriter<AppExit>| {
             app_exit.write(AppExit::Success);
           },
         )
+          .chain()
           .in_set(EditorGlobal),
       );
   }

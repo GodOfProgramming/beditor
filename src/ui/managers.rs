@@ -1,5 +1,5 @@
 use super::{
-  LayoutInfo, LayoutState, RawUi, TabViewer, VTable,
+  RawUi, TabViewer, VTable,
   misc::{DockExtensions, MissingUi, UiComponentExtensions},
   prebuilt::{
     assets::Assets, components::Components, debug::DebugMenu, editor_view::EditorView,
@@ -7,12 +7,15 @@ use super::{
     resources::Resources,
   },
 };
-use crate::cache::Cache;
-use bevy::{platform::collections::HashMap, prelude::*};
+use crate::{
+  Settings,
+  util::storage::{LayoutInfo, Layouts},
+};
+use bevy::{ecs::system::SystemState, platform::collections::HashMap, prelude::*};
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, Surface, SurfaceIndex};
 use persistent_id::PersistentId;
-use std::{any::TypeId, cell::RefCell, collections::BTreeMap};
+use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
 
 #[derive(Resource)]
 pub(crate) struct UiManager {
@@ -46,21 +49,34 @@ impl UiManager {
     this
   }
 
-  pub fn restore_or_init(&mut self, world: &mut World) {
-    let (state, layouts) = world
-      .resource_scope(|world, cache: Mut<Cache>| {
-        cache.get::<LayoutState>().map(|layout| {
-          (
-            DockState::restore(&layout.dock, &self.vtables, world),
-            layout.layouts,
-          )
-        })
-      })
-      .unwrap_or_else(|| (self.default_dock_state(world), default()));
+  pub fn restore_or_init(&mut self, world: &mut World) -> Result {
+    let mut sys_state = SystemState::<ParamSet<(Settings, Layouts)>>::new(world);
+    let mut params = sys_state.get_mut(world);
 
-    self.state = state;
+    let current_layout_name = {
+      let mut settings = params.p0();
+      settings.get::<String>(CurrentLayoutSetting).ok()
+    };
+
+    let layouts = {
+      let mut layouts = params.p1();
+      BTreeSet::from_iter(layouts.list()?)
+    };
+
+    let dock = match current_layout_name {
+      Some(name) => {
+        let mut layouts = params.p1();
+        let layout = layouts.get_layout(name)?;
+        DockState::restore(&layout, &self.vtables, world)
+      }
+      None => self.default_dock_state(world),
+    };
+
+    self.state = dock;
 
     world.insert_resource(LayoutManager::new(layouts));
+
+    Ok(())
   }
 
   pub fn register<T: RawUi>(&mut self, app: &mut App) {
@@ -181,4 +197,20 @@ impl UiManager {
 }
 
 #[derive(new, Resource, Default, Deref, DerefMut)]
-pub struct LayoutManager(BTreeMap<String, DockState<LayoutInfo>>);
+pub struct LayoutManager(BTreeSet<String>);
+
+pub struct SaveLayoutOnExitSetting;
+
+impl AsRef<str> for SaveLayoutOnExitSetting {
+  fn as_ref(&self) -> &str {
+    "ui.save_layout_on_exit"
+  }
+}
+
+pub struct CurrentLayoutSetting;
+
+impl AsRef<str> for CurrentLayoutSetting {
+  fn as_ref(&self) -> &str {
+    "ui.current_layout"
+  }
+}

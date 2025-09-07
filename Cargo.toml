@@ -15,7 +15,7 @@ bevy = "0.16.1"
 bevy-inspector-egui = { git = "https://github.com/GodOfProgramming/bevy-inspector-egui", rev = "3cf81436b82504a6e8d9aecb881ae85ba7d47cee" }
 bevy_egui = "0.36.0"
 bimap = "0.6.3"
-bui = { path = "./crates/bui" }
+bincode = "2.0.1"
 cargo_metadata = "0.19.2"
 const-str = "0.6.2"
 const_format = "0.2.34"
@@ -42,6 +42,7 @@ parking_lot = "0.12.3"
 persistent-id = { path = "./crates/persistent-id" }
 petgraph = "0.8.2"
 platform-dirs = "0.3.0"
+postcard = "1.1.3"
 proc-macro2 = "1.0.95"
 profiling = "1.0.16"
 quote = "1.0.40"
@@ -75,6 +76,7 @@ async-std = { workspace = true }
 bevy = { workspace = true, features = ["default", "serialize"] }
 bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
 bimap = { workspace = true }
+bincode = { workspace = true, features = ["serde"] }
 const-str = { workspace = true }
 const_format = { workspace = true }
 derive-new = { workspace = true }
@@ -90,6 +92,7 @@ leafwing-input-manager = { workspace = true }
 nucleo = { workspace = true }
 parking_lot = { workspace = true }
 platform-dirs = { workspace = true }
+postcard = { workspace = true, features = ["use-std"] }
 profiling = { workspace = true, features = ["profile-with-tracing"] }
 ron = { workspace = true }
 rusqlite = { workspace = true, features = ["bundled"] }

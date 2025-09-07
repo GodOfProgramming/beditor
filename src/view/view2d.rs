@@ -1,7 +1,7 @@
 use super::{EditorCamera, PanState, UP};
 use crate::{
   input::EditorActions,
-  util::{self, settings::Settings},
+  util::{self, storage::Settings},
 };
 use bevy::{
   input::mouse::MouseMotion,
@@ -22,7 +22,7 @@ pub struct EditorCamera2d;
 pub fn enable(
   mut commands: Commands,
   mut q_prev_cams: Query<Entity, With<EditorCamera>>,
-  mut settings: ResMut<Settings>,
+  mut settings: Settings,
 ) {
   info!("Switched to 2d camera");
 
@@ -57,7 +57,7 @@ pub fn enable(
 }
 
 pub fn save_settings(
-  mut settings: ResMut<Settings>,
+  mut settings: Settings,
   q_cam: Query<(&Transform, &CameraSettings, &Projection), With<EditorCamera2d>>,
 ) -> Result {
   for (cam_transform, cam_settings, cam_proj) in &q_cam {

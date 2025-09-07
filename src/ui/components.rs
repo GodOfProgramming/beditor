@@ -101,16 +101,6 @@ impl Card {
     self
   }
 
-  pub fn with_border_thickness(mut self, thickness: impl Into<f32>) -> Self {
-    self.border_thickness = Some(thickness.into());
-    self
-  }
-
-  pub fn with_content_size(mut self, size: impl Into<f32>) -> Self {
-    self.content_size = Some(size.into());
-    self
-  }
-
   pub fn show<R>(
     &self,
     ui: &mut egui::Ui,

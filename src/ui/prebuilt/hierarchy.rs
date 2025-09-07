@@ -61,7 +61,11 @@ impl Hierarchy {
   }
 
   fn context_menu(ui: &mut egui::Ui, entity: Entity, world: &mut World, _: &mut ()) {
-    if ui.button("Select This").clicked() {
+    if ui.button("Despawn").clicked() {
+      world.despawn(entity);
+    }
+
+    if ui.button("Select").clicked() {
       world.send_event(SelectEntityEvent(entity));
     }
 

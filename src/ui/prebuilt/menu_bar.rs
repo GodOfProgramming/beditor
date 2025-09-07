@@ -1,7 +1,10 @@
 use crate::{
-  EditorState, Ui, UiManager,
+  EditorState, Layouts, Settings, Ui, UiManager,
   misc::{DockExtensions, MissingUi},
-  ui::{EditorUi, InspectorSelection, components, managers::LayoutManager},
+  ui::{
+    EditorUi, InspectorSelection, components,
+    managers::{LayoutManager, SaveLayoutOnExitSetting},
+  },
   view::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -11,7 +14,9 @@ use persistent_id::PersistentId;
 use uuid::{Uuid, uuid};
 
 #[derive(Default, Component, Reflect)]
-pub struct MenuBar;
+pub struct MenuBar {
+  save_layout_on_exit: bool,
+}
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
@@ -30,6 +35,8 @@ pub struct Params<'w, 's> {
   reset_layout_ew: EventWriter<'w, ResetLayoutEvent>,
   move_camera_ew: EventWriter<'w, MoveCameraEvent>,
   point_camera_ew: EventWriter<'w, PointCameraEvent>,
+
+  settings: Settings<'w>,
 
   q_transforms: Query<'w, 's, &'static Transform>,
 }
@@ -57,8 +64,11 @@ impl Ui for MenuBar {
       );
   }
 
-  fn spawn(_params: Self::Params<'_, '_>) -> Self {
-    Self
+  fn spawn(mut params: Self::Params<'_, '_>) -> Self {
+    let save_on_exit = params.settings.get_or_default(SaveLayoutOnExitSetting);
+    Self {
+      save_layout_on_exit: save_on_exit,
+    }
   }
 
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
@@ -91,7 +101,7 @@ impl MenuBar {
     });
   }
 
-  fn view_menu(&self, ui: &mut egui::Ui, params: &mut Params) {
+  fn view_menu(&mut self, ui: &mut egui::Ui, params: &mut Params) {
     ui.menu_button("View", |ui| {
       self.layout_menu(ui, params);
       self.camera_menu(ui, params);
@@ -110,7 +120,7 @@ impl MenuBar {
     }
   }
 
-  fn layout_menu(&self, ui: &mut egui::Ui, params: &mut Params) {
+  fn layout_menu(&mut self, ui: &mut egui::Ui, params: &mut Params) {
     ui.menu_button("Layouts", |ui| {
       if ui.button("Save Layout").clicked() {
         params.save_layout_ew.write(SaveLayoutEvent);
@@ -118,7 +128,7 @@ impl MenuBar {
 
       if !params.layout_manager.is_empty() {
         ui.menu_button("Restore", |ui| {
-          for layout in params.layout_manager.keys() {
+          for layout in params.layout_manager.iter() {
             if ui.button(layout).clicked() {
               params.load_layout_ew.write(LoadLayoutEvent(layout.clone()));
             }
@@ -129,6 +139,18 @@ impl MenuBar {
       if ui.button("Restore Default").clicked() {
         params.reset_layout_ew.write(ResetLayoutEvent);
       }
+
+      ui.horizontal(|ui| {
+        ui.label("Save On Exit");
+        if ui.toggle_value(&mut self.save_layout_on_exit, ()).clicked() {
+          if let Err(err) = params
+            .settings
+            .set(SaveLayoutOnExitSetting, self.save_layout_on_exit)
+          {
+            error!("{err}");
+          }
+        }
+      });
     });
   }
 
@@ -231,7 +253,7 @@ struct SaveLayoutEvent;
 
 impl SaveLayoutEvent {
   fn handle(
-    events: EventReader<Self>,
+    mut events: EventReader<Self>,
     mut ctx: Single<&mut bevy_egui::EguiContext>,
     mut should_show: Local<bool>,
     mut save_name_text: Local<String>,
@@ -239,8 +261,11 @@ impl SaveLayoutEvent {
     mut layout_manager: ResMut<LayoutManager>,
     q_uuids: Query<&PersistentId, Without<MissingUi>>,
     q_missing: Query<&MissingUi>,
+    mut layouts: Layouts,
+    mut last_error_msg: Local<String>,
   ) {
     if !events.is_empty() {
+      events.clear();
       *should_show = true;
       save_name_text.clear();
     }
@@ -254,7 +279,13 @@ impl SaveLayoutEvent {
         &mut layout_manager,
         &q_uuids,
         &q_missing,
+        &mut layouts,
+        &mut last_error_msg,
       );
+
+      if !*should_show {
+        last_error_msg.clear();
+      }
     }
   }
 
@@ -266,6 +297,8 @@ impl SaveLayoutEvent {
     layout_manager: &mut LayoutManager,
     q_uuids: &Query<&PersistentId, Without<MissingUi>>,
     q_missing: &Query<&MissingUi>,
+    layouts: &mut Layouts,
+    last_error: &mut String,
   ) -> bool {
     let mut save_clicked = false;
 
@@ -277,8 +310,16 @@ impl SaveLayoutEvent {
       ui.horizontal(|ui| {
         if ui.button("Save").clicked() {
           let dock = ui_manager.state().decouple(ui_manager, q_uuids, q_missing);
-          layout_manager.insert(save_name_text.take(), dock);
-          save_clicked = true;
+          if let Err(err) = layouts.save_layout(&save_name_text, dock) {
+            error!("{err}");
+            *last_error = err.to_string();
+          } else {
+            layout_manager.insert(save_name_text.take());
+            save_clicked = true;
+          }
+        }
+        if !last_error.is_empty() {
+          ui.colored_label(egui::Color32::RED, last_error);
         }
       });
     });
@@ -291,14 +332,10 @@ impl SaveLayoutEvent {
 struct LoadLayoutEvent(String);
 
 impl LoadLayoutEvent {
-  fn handle(
-    mut commands: Commands,
-    mut events: EventReader<Self>,
-    layout_manager: Res<LayoutManager>,
-  ) {
+  fn handle(mut commands: Commands, mut events: EventReader<Self>, mut layouts: Layouts) -> Result {
     for event in events.read() {
       let layout_name = event.0.clone();
-      let dock = layout_manager[&layout_name].clone();
+      let dock = layouts.get_layout(layout_name)?;
       commands.queue(move |world: &mut World| {
         world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
           let new_state = DockState::restore(&dock, ui_manager.vtables(), world);
@@ -306,6 +343,8 @@ impl LoadLayoutEvent {
         })
       });
     }
+
+    Ok(())
   }
 }
 

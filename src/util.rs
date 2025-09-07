@@ -1,16 +1,13 @@
-pub mod settings;
+pub mod storage;
 pub mod vfs;
 
-use crate::{
-  cache::{Cache, Saveable},
-  util::settings::Settings,
-};
+use crate::util::storage::Settings;
 use bevy::{
+  ecs::system::SystemState,
   log::{
     BoxedLayer, Level,
     tracing_subscriber::{self, Layer, reload},
   },
-  platform::collections::HashMap,
   prelude::*,
   reflect::GetTypeRegistration,
   window::CursorGrabMode,
@@ -18,8 +15,7 @@ use bevy::{
 };
 use derive_new::new;
 use profiling::tracing::level_filters::LevelFilter;
-use serde::{Deserialize, Serialize, Serializer};
-use std::collections::BTreeMap;
+use serde::{Deserialize, Serialize};
 
 #[macro_export]
 macro_rules! here {
@@ -54,17 +50,6 @@ pub fn set_cursor_icon(commands: &mut Commands, entity: Entity, cursor: impl Int
   commands.entity(entity).insert(cursor.into());
 }
 
-pub fn sorted_keys<S, K: Ord + Serialize, V: Serialize>(
-  value: &HashMap<K, V>,
-  serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-  S: Serializer,
-{
-  let ordered: BTreeMap<_, _> = value.iter().collect();
-  ordered.serialize(serializer)
-}
-
 pub struct LoggingExtensionsPlugin;
 
 impl Plugin for LoggingExtensionsPlugin {
@@ -81,7 +66,7 @@ pub struct ChangeLogLevelEvent(LogLevel);
 impl ChangeLogLevelEvent {
   pub fn handle(
     mut events: EventReader<Self>,
-    mut settings: ResMut<Settings>,
+    mut settings: Settings,
     log_handle: Res<LogHandle>,
     mut writer: EventWriter<LogLevelChangedEvent>,
   ) -> Result {
@@ -107,7 +92,8 @@ pub struct LogLevelChangedEvent(LogLevel);
 pub struct LogHandle(reload::Handle<LevelFilter, tracing_subscriber::Registry>);
 
 pub fn dynamic_log_layer(app: &mut App) -> Option<BoxedLayer> {
-  let mut settings = app.world_mut().resource_mut::<Settings>();
+  let mut system_state = SystemState::<Settings>::new(app.world_mut());
+  let mut settings = system_state.get_mut(app.world_mut());
   let level = settings.get_or_default::<LogLevel>(LogLevelSetting);
   let (filter, handle) = reload::Layer::new(level.into());
   app.insert_resource(LogHandle(handle));

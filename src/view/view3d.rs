@@ -1,7 +1,7 @@
 use super::{EditorCamera, OrbitState, PanState, UP};
 use crate::{
   input::EditorActions,
-  util::{self, settings::Settings},
+  util::{self, storage::Settings},
 };
 use bevy::{input::mouse::MouseMotion, prelude::*};
 use leafwing_input_manager::prelude::ActionState;
@@ -17,7 +17,7 @@ pub struct EditorCamera3d;
 pub fn enable(
   mut commands: Commands,
   mut q_prev_cams: Query<Entity, With<EditorCamera>>,
-  mut settings: ResMut<Settings>,
+  mut settings: Settings,
 ) {
   info!("Switched to 3d camera");
 
@@ -43,7 +43,7 @@ pub fn enable(
 }
 
 pub fn save_settings(
-  mut settings: ResMut<Settings>,
+  mut settings: Settings,
   q_cam: Query<(&Transform, &CameraSettings), With<EditorCamera3d>>,
 ) -> Result {
   for (cam_transform, cam_settings) in &q_cam {

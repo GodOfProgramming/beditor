@@ -15,6 +15,7 @@ use bevy::{
   picking::hover::PickingInteraction,
   prelude::*,
   reflect::GetTypeRegistration,
+  remote::{RemotePlugin, http::RemoteHttpPlugin},
   window::{PrimaryWindow, WindowCloseRequested, WindowMode},
   winit::WinitWindows,
 };
@@ -312,6 +313,8 @@ impl Editor {
         FrameTimeDiagnosticsPlugin::default(),
         EntityCountDiagnosticsPlugin,
         SystemInformationDiagnosticsPlugin,
+        RemotePlugin::default(),
+        RemoteHttpPlugin::default(),
       ))
       .init_resource::<EditorSettings>()
       .insert_state(EditorState::Editing)

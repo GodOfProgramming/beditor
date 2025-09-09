@@ -8,6 +8,7 @@ mod view;
 use crate::util::{ChangeLogLevelEvent, LoggingExtensionsPlugin};
 use assets::{Prefab, PrefabPlugin, PrefabRegistrar, Prefabs, StaticPrefab};
 use bevy::{
+  app::PluginGroupBuilder,
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
@@ -64,7 +65,22 @@ impl Default for Editor {
 
 impl Editor {
   pub fn new(mut app: App) -> Self {
-    Self::init_app(&mut app);
+    Self::init_app::<fn(DefaultPlugins) -> PluginGroupBuilder>(&mut app, None);
+
+    let ui_manager = UiManager::new(&mut app);
+
+    Self {
+      app,
+      prefab_registrar: default(),
+      component_registry: default(),
+      ui_manager,
+    }
+  }
+
+  pub fn new_with_defaults(f: impl FnOnce(DefaultPlugins) -> PluginGroupBuilder) -> Self {
+    let mut app = App::new();
+
+    Self::init_app(&mut app, Some(f));
 
     let ui_manager = UiManager::new(&mut app);
 
@@ -129,7 +145,7 @@ impl Editor {
     self.app.register_type::<T>();
   }
 
-  pub fn run(self) -> AppExit {
+  pub fn to_app(self) -> App {
     let Self {
       mut app,
       prefab_registrar,
@@ -140,8 +156,13 @@ impl Editor {
     app
       .insert_resource(prefab_registrar)
       .insert_resource(component_registry)
-      .insert_resource(ui_manager)
-      .run()
+      .insert_resource(ui_manager);
+
+    app
+  }
+
+  pub fn run(self) -> AppExit {
+    self.to_app().run()
   }
 
   // systems
@@ -285,12 +306,24 @@ impl Editor {
     Ok(())
   }
 
-  fn init_app(app: &mut App) {
+  fn init_app<F>(app: &mut App, inspector_fn: Option<F>)
+  where
+    F: FnOnce(DefaultPlugins) -> PluginGroupBuilder,
+  {
+    let default_plugins = DefaultPlugins;
+
+    let default_plugins = if let Some(inspector_fn) = inspector_fn {
+      (inspector_fn)(default_plugins)
+    } else {
+      default_plugins.build()
+    };
+
     app
       .insert_resource(Storage::new().unwrap())
+      .init_resource::<EditorSettings>()
       .add_plugins((
         LoggingExtensionsPlugin,
-        DefaultPlugins
+        default_plugins
           .set(WindowPlugin {
             primary_window: Some(Window {
               title: String::from("Beditor"),
@@ -316,7 +349,6 @@ impl Editor {
         RemotePlugin::default(),
         RemoteHttpPlugin::default(),
       ))
-      .init_resource::<EditorSettings>()
       .insert_state(EditorState::Editing)
       .configure_sets(
         Update,

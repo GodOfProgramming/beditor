@@ -264,7 +264,10 @@ impl Editor {
   fn pick_all(
     mut selection: ResMut<ui::InspectorSelection>,
     mut q_egui: Single<&mut EguiContext>,
-    q_pickables: Query<(Entity, &PickingInteraction), With<Pickable>>,
+    q_pickables: Query<
+      (Entity, &PickingInteraction),
+      (Changed<PickingInteraction>, With<Pickable>),
+    >,
   ) {
     let egui_context = q_egui.get_mut();
     let modifiers = egui_context.input(|i| i.modifiers);
@@ -273,8 +276,6 @@ impl Editor {
       if *interaction != PickingInteraction::Pressed {
         continue;
       }
-
-      debug!("Received pick for {entity}");
 
       selection.add_selected(entity, modifiers.ctrl);
     }

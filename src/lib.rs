@@ -5,14 +5,13 @@ mod ui;
 mod util;
 mod view;
 
-use crate::util::{ChangeLogLevelEvent, LoggingExtensionsPlugin};
 use assets::{Prefab, PrefabPlugin, PrefabRegistrar, Prefabs, StaticPrefab};
 use bevy::{
   app::PluginGroupBuilder,
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
-  log::{DEFAULT_FILTER, LogPlugin},
+  log::LogPlugin,
   picking::hover::PickingInteraction,
   prelude::*,
   reflect::GetTypeRegistration,
@@ -25,7 +24,7 @@ use input::InputPlugin;
 pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
-use util::LogLevel;
+use util::{ChangeLogLevelEvent, LogLevel, LoggingExtensionsPlugin};
 use view::EditorViewPlugin;
 
 pub mod prelude {
@@ -310,6 +309,8 @@ impl Editor {
   where
     F: FnOnce(DefaultPlugins) -> PluginGroupBuilder,
   {
+    dotenvy::dotenv().ok();
+
     let default_plugins = DefaultPlugins;
 
     let default_plugins = if let Some(inspector_fn) = inspector_fn {
@@ -336,8 +337,8 @@ impl Editor {
           })
           .set(LogPlugin {
             level: LogLevel::Trace.into(),
-            filter: DEFAULT_FILTER.to_string(),
             custom_layer: util::dynamic_log_layer,
+            ..default()
           }),
         EditorViewPlugin,
         MeshPickingPlugin,

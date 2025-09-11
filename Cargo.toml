@@ -23,6 +23,7 @@ derive-ctor = "1.0.6"
 derive-getters = "0.5.0"
 derive-new = "0.7.0"
 derive_more = "1.0.0"
+dotenvy = "0.15.7"
 egui = "0.32.1"
 egui-file-dialog = "0.11.0"
 egui-phosphor = "0.10.0"
@@ -82,6 +83,7 @@ const-str = { workspace = true }
 const_format = { workspace = true }
 derive-new = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
+dotenvy = { workspace = true }
 egui = { workspace = true }
 egui-file-dialog = { workspace = true }
 egui-phosphor = { workspace = true }

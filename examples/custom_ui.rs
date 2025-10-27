@@ -1,7 +1,10 @@
-use beditor::{Editor, Ui, misc::NoParams};
+use beditor::{
+  misc::NoParams,
+  prelude::*,
+  uuid::{self, uuid},
+};
 use bevy::prelude::*;
 use egui_demo_lib::{View, WidgetGallery};
-use uuid::uuid;
 
 fn main() {
   let mut editor = Editor::default();

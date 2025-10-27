@@ -1,6 +1,5 @@
-use beditor::Editor;
+use beditor::prelude::*;
 use bevy::{color::palettes::css::PURPLE, prelude::*};
-use macros::Identifiable;
 
 fn main() {
   let mut editor = Editor::default();

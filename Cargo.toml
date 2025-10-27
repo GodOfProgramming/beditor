@@ -6,7 +6,7 @@ rust-version = "1.89.0"
 publish = false
 
 [workspace]
-members = [".", "crates/macros", "crates/persistent-id"]
+members = ["crates/beditor-lib", "crates/macros", "crates/persistent-id"]
 
 [workspace.dependencies]
 anyhow = "1.0.100"
@@ -63,55 +63,12 @@ variadics_please = "1.1.0"
 walkdir = "2.5.0"
 xml-rs = "1.0.0"
 
-
 [dependencies]
-
-# exports
-bevy_egui = { workspace = true }
-macros = { workspace = true }
-persistent-id = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-uuid = { workspace = true, features = ["serde"] }
-
-# internal
-async-std = { workspace = true }
-bevy = { workspace = true, features = ["default", "serialize", "bevy_remote"] }
-bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
-bimap = { workspace = true }
-bincode = { workspace = true, features = ["serde"] }
-const-str = { workspace = true }
-const_format = { workspace = true }
-derive-new = { workspace = true }
-derive_more = { workspace = true, features = ["full"] }
-dotenvy = { workspace = true }
-egui = { workspace = true }
-egui-file-dialog = { workspace = true }
-egui-phosphor = { workspace = true }
-egui_dock = { workspace = true, features = ["serde"] }
-fuzzy-matcher = { workspace = true }
-include_dir = { workspace = true }
-itertools = { workspace = true }
-leafwing-input-manager = { workspace = true }
-nucleo = { workspace = true }
-parking_lot = { workspace = true }
-platform-dirs = { workspace = true }
-postcard = { workspace = true, features = ["use-std"] }
-profiling = { workspace = true, features = ["profile-with-tracing"] }
-ron = { workspace = true }
-rusqlite = { workspace = true, features = ["bundled"] }
-rusqlite_migration = { workspace = true, features = ["from-directory"] }
-serde_json = { workspace = true }
-static_assertions = { workspace = true }
-thiserror = { workspace = true }
-variadics_please = { workspace = true }
+beditor-lib = { path = "crates/beditor-lib" }
 
 [dev-dependencies]
 egui_demo_lib = { workspace = true }
-
-
-[features]
-profiling = ["bevy/trace_tracy"]
-watch = ["bevy/file_watcher"]
+bevy = { workspace = true }
 
 [profile.dev]
 opt-level = 0

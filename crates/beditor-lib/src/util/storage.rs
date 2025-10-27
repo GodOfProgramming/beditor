@@ -67,7 +67,7 @@ impl Settings<'_> {
 
     let result: String = {
       self.storage.db.lock().query_one(
-        &format!("SELECT [value] FROM [settings] WHERE [key] == ?1"),
+        "SELECT [value] FROM [settings] WHERE [key] == ?1",
         [key],
         |row| row.get(0).inspect_err(|err| error!("{err}")),
       )?
@@ -100,7 +100,7 @@ impl Layouts<'_> {
     let names = stmt
       .query_map((), |row| row.get(0))?
       .filter_map(Result::ok)
-      .filter(|name| name != "")
+      .filter(|name: &String| !name.is_empty())
       .collect::<Vec<String>>();
     Ok(names)
   }
@@ -119,7 +119,7 @@ impl Layouts<'_> {
 
     let result: Vec<u8> = {
       self.storage.db.lock().query_one(
-        &format!("SELECT [data] FROM [layouts] WHERE [name] == ?1"),
+        "SELECT [data] FROM [layouts] WHERE [name] == ?1",
         [name],
         |row| row.get(0).inspect_err(|err| error!("{err}")),
       )?

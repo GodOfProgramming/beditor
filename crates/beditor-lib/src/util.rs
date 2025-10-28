@@ -167,3 +167,13 @@ pub trait FireEvent: Event + Sized {
 }
 
 impl<E: Event + Sized> FireEvent for E {}
+
+pub trait WindowExtensions {
+  fn center(&self) -> [f32; 2];
+}
+
+impl WindowExtensions for Window {
+  fn center(&self) -> [f32; 2] {
+    [self.width() / 2.0, self.height() / 2.0]
+  }
+}

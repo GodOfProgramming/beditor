@@ -16,10 +16,6 @@ uuid = { workspace = true, features = ["serde"] }
 async-std = { workspace = true }
 bevy = { workspace = true, features = ["default", "serialize", "bevy_remote"] }
 bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
-bimap = { workspace = true }
-bincode = { workspace = true, features = ["serde"] }
-const-str = { workspace = true }
-const_format = { workspace = true }
 derive-new = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 dotenvy = { workspace = true }
@@ -27,11 +23,9 @@ egui = { workspace = true }
 egui-file-dialog = { workspace = true }
 egui-phosphor = { workspace = true }
 egui_dock = { workspace = true, features = ["serde"] }
-fuzzy-matcher = { workspace = true }
 include_dir = { workspace = true }
 itertools = { workspace = true }
 leafwing-input-manager = { workspace = true }
-nucleo = { workspace = true }
 parking_lot = { workspace = true }
 platform-dirs = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }

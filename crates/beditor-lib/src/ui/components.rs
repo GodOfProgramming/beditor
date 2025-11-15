@@ -13,23 +13,21 @@ impl<T> Dialog<T>
 where
   T: Into<egui::WidgetText>,
 {
-  pub fn open(
+  pub fn open<R>(
     self,
     ctx: &egui::Context,
-    mut opened: bool,
-    contents: impl FnOnce(&mut egui::Ui),
-  ) -> bool {
-    if opened {
-      egui::Window::new(self.title)
-        .open(&mut opened)
-        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-        .title_bar(true)
-        .resizable(false)
-        .movable(false)
-        .collapsible(false)
-        .show(ctx, contents);
-    }
-    opened
+    state: &mut bool,
+    contents: impl FnOnce(&mut egui::Ui) -> R,
+  ) -> Option<R> {
+    egui::Window::new(self.title)
+      .open(state)
+      .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+      .title_bar(true)
+      .resizable(false)
+      .movable(false)
+      .collapsible(false)
+      .show(ctx, contents)
+      .and_then(|resp| resp.inner)
   }
 }
 

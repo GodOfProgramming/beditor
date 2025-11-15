@@ -15,7 +15,6 @@ use bevy::{
   platform::collections::HashMap,
   prelude::*,
   reflect::GetTypeRegistration,
-  render::view::RenderLayers,
 };
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
 use bevy_inspector_egui::{DefaultInspectorConfigPlugin, bevy_inspector};
@@ -36,8 +35,7 @@ struct EditorUi;
   PrimaryEguiContext = default_primary_context(),
   Camera = editor_camera(),
   Camera2d,
-  MeshPickingCamera,
-  RenderLayers = RenderLayers::none())]
+  MeshPickingCamera)]
 pub struct EditorUiCamera;
 
 fn default_primary_context() -> PrimaryEguiContext {
@@ -65,28 +63,21 @@ impl Plugin for UiPlugin {
     app
       .insert_resource(egui_settings)
       .add_plugins((EguiPlugin::default(), DefaultInspectorConfigPlugin))
-      .add_event::<AddUiEvent>()
-      .add_event::<RemoveUiEvent>()
       .init_resource::<InspectorSelection>()
       .init_resource::<LayoutManager>()
       .init_state::<KeyboardFocus>()
-      .configure_sets(Update, EditorUi)
+      .configure_sets(EguiPrimaryContextPass, EditorUi)
+      .add_observer(AddUiEvent::on_event)
+      .add_observer(RemoveUiEvent::on_event)
       .add_systems(Startup, (Self::setup_ctx, Self::init_resources).chain())
       .add_systems(
         EguiPrimaryContextPass,
         (
           KeyboardFocus::set_state,
           (
-            RemoveUiEvent::on_event,
-            (
-              (
-                Self::dispatch_render_events,
-                Self::reset_ui_info,
-                Self::render,
-              )
-                .chain(),
-              AddUiEvent::on_event,
-            ),
+            Self::dispatch_render_events,
+            Self::reset_ui_info,
+            Self::render,
           )
             .chain()
             .run_if(|editor_settings: Res<EditorSettings>| editor_settings.render_ui),
@@ -105,7 +96,7 @@ impl UiPlugin {
 
   fn setup_ctx(mut q_ctx: Query<&mut bevy_egui::EguiContext>) {
     let mut fonts = egui::FontDefinitions::default();
-    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+    egui_phosphor_icons::add_fonts(&mut fonts);
 
     for mut ctx in &mut q_ctx {
       let ctx = ctx.get_mut();
@@ -480,7 +471,7 @@ impl VTable {
   fn despawn<T: RawUi>(entity: Entity, world: &mut World) {
     info!("Despawning UI component {}", T::NAME);
     <T as RawUi>::on_despawn(entity, world);
-    world.send_event(RemoveUiEvent::new(entity));
+    world.trigger(RemoveUiEvent::new(entity));
   }
 
   fn count<T: RawUi>(world: &mut World) -> usize {
@@ -552,7 +543,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
       ui.add_enabled_ui(enabled, |ui| {
         if ui.checkbox(&mut exists, name).clicked() {
           let entity = (vtable.spawn)(&mut world);
-          world.send_event(AddUiEvent::new(surface, node, entity));
+          world.trigger(AddUiEvent::new(surface, node, entity));
         }
       });
     }
@@ -570,7 +561,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         if ui.button(name).clicked() {
           let mut world = self.world.borrow_mut();
           let entity = (vtable.spawn)(&mut world);
-          world.send_event(AddUiEvent::new(surface, node, entity));
+          world.trigger(AddUiEvent::new(surface, node, entity));
         }
       }
     }

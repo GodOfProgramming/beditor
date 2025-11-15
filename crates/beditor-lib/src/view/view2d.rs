@@ -186,7 +186,7 @@ pub fn pan_system(
     ),
     With<EditorCamera2d>,
   >,
-  mut mouse_motion: EventReader<MouseMotion>,
+  mut mouse_motion: MessageReader<MouseMotion>,
 ) {
   let should_pan = q_action_states
     .iter()

@@ -27,8 +27,7 @@ impl Components {
     let response = Card::new(size)
       .with_label(label)
       .show(ui, |ui| {
-        let text = egui::RichText::new(egui_phosphor::regular::FOLDER).size(size.x / 3.0);
-        ui.label(text);
+        ui.label(egui_phosphor_icons::icons::FOLDER.regular());
 
         ui.interact(ui.min_rect(), ui.id().with(i), egui::Sense::click())
       })
@@ -53,8 +52,7 @@ impl Components {
     let id = component.type_id();
     ui.dnd_drag_source(egui::Id::new(id), InspectorDnd::AddComponent(id), |ui| {
       Card::new(size).with_label(label).show(ui, |ui| {
-        let text = egui::RichText::new(egui_phosphor::regular::PUZZLE_PIECE).size(size.x / 3.0);
-        ui.label(text);
+        ui.label(egui_phosphor_icons::icons::PUZZLE_PIECE.regular());
       });
     });
   }
@@ -94,9 +92,10 @@ impl Ui for Components {
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
     ui.horizontal(|ui| {
       ui.text_edit_singleline(&mut *params.filter);
-      let text = egui::RichText::new(egui_phosphor::regular::ARROW_U_UP_LEFT);
       if params.current_path.has_parent()
-        && ui.button(text).clicked()
+        && ui
+          .button(egui_phosphor_icons::icons::ARROW_U_UP_LEFT.regular())
+          .clicked()
         && let Some(parent) = params.current_path.parent()
       {
         *params.current_path = parent;

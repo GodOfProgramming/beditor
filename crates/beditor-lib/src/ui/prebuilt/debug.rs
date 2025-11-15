@@ -1,8 +1,6 @@
-use std::marker::PhantomData;
-
 use crate::{
   ui::Ui,
-  util::{ChangeLogLevelEvent, FireEvent, LogLevel, LogLevelChangedEvent},
+  util::{ChangeLogLevelEvent, LogLevel, LogLevelChangedEvent},
 };
 use bevy::{diagnostic::DiagnosticsStore, ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContext, egui};
@@ -24,7 +22,7 @@ impl DebugMenu {
         ui.label("Log Level");
         let mut log_level = self.log_level;
         if ui_for_value(&mut log_level, ui, &type_registry) {
-          ChangeLogLevelEvent::new(log_level).fire(&mut params.change_log_level_writer);
+          params.commands.trigger(ChangeLogLevelEvent::new(log_level));
         }
       });
     });
@@ -42,38 +40,25 @@ impl DebugMenu {
     });
   }
 
-  fn handle_ui_debug(
-    mut events: EventReader<DebugUiEvent>,
-    mut q_egui_ctx: Query<&mut EguiContext>,
-  ) {
-    for event in events.read() {
-      for mut ctx in &mut q_egui_ctx {
-        let ctx = ctx.get_mut();
-        ctx.set_debug_on_hover(event.0);
-      }
+  fn handle_ui_debug(event: On<DebugUiEvent>, mut q_egui_ctx: Query<&mut EguiContext>) {
+    for mut ctx in &mut q_egui_ctx {
+      let ctx = ctx.get_mut();
+      ctx.set_debug_on_hover(event.0);
     }
   }
 
-  fn handle_log_level_changes(
-    mut q_self: Query<&mut Self>,
-    mut events: EventReader<LogLevelChangedEvent>,
-  ) {
-    for event in events.read() {
-      for mut this in &mut q_self {
-        this.log_level = **event;
-      }
+  fn handle_log_level_changes(event: On<LogLevelChangedEvent>, mut q_self: Query<&mut Self>) {
+    for mut this in &mut q_self {
+      this.log_level = **event;
     }
   }
 }
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
+  commands: Commands<'w, 's>,
   type_registry: Res<'w, AppTypeRegistry>,
   diagnostics: Res<'w, DiagnosticsStore>,
-  debug_ui_event_writer: EventWriter<'w, DebugUiEvent>,
-  change_log_level_writer: EventWriter<'w, ChangeLogLevelEvent>,
-
-  _pd: PhantomData<&'s ()>,
 }
 
 impl Ui for DebugMenu {
@@ -83,10 +68,9 @@ impl Ui for DebugMenu {
   type Params<'w, 's> = Params<'w, 's>;
 
   fn init(app: &mut App) {
-    app.add_event::<DebugUiEvent>().add_systems(
-      FixedUpdate,
-      (Self::handle_ui_debug, Self::handle_log_level_changes),
-    );
+    app
+      .add_observer(Self::handle_ui_debug)
+      .add_observer(Self::handle_log_level_changes);
   }
 
   fn spawn(_params: Self::Params<'_, '_>) -> Self {
@@ -107,8 +91,8 @@ impl Ui for DebugMenu {
       .clicked()
     {
       params
-        .debug_ui_event_writer
-        .write(DebugUiEvent(self.ui_debug_on_hover));
+        .commands
+        .trigger(DebugUiEvent(self.ui_debug_on_hover));
     }
   }
 }

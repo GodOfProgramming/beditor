@@ -12,12 +12,8 @@ impl RawUi for Hierarchy {
 
   fn init(app: &mut App) {
     app
-      .add_event::<SelectEntityEvent>()
-      .add_event::<ReparentEvent>()
-      .add_systems(
-        FixedUpdate,
-        (SelectEntityEvent::handle, ReparentEvent::handle),
-      );
+      .add_observer(SelectEntityEvent::handle)
+      .add_observer(ReparentEvent::handle);
   }
 
   fn spawn(_entity: Entity, _world: &mut World) -> Self {
@@ -66,11 +62,11 @@ impl Hierarchy {
     }
 
     if ui.button("Select").clicked() {
-      world.send_event(SelectEntityEvent(entity));
+      world.trigger(SelectEntityEvent(entity));
     }
 
     if ui.button("Reparent Selected").clicked() {
-      world.send_event(ReparentEvent(entity));
+      world.trigger(ReparentEvent(entity));
     }
 
     let mut entity_ref = world.entity_mut(entity);
@@ -81,31 +77,23 @@ impl Hierarchy {
   }
 }
 
-#[derive(Event)]
+#[derive(EntityEvent)]
 struct SelectEntityEvent(Entity);
 
 impl SelectEntityEvent {
-  fn handle(mut events: EventReader<Self>, mut selection: ResMut<InspectorSelection>) {
-    for event in events.read() {
-      select_entity(&mut selection, event.0);
-    }
+  fn handle(event: On<Self>, mut selection: ResMut<InspectorSelection>) {
+    select_entity(&mut selection, event.0);
   }
 }
 
-#[derive(Event)]
+#[derive(EntityEvent)]
 struct ReparentEvent(Entity);
 
 impl ReparentEvent {
-  fn handle(
-    mut commands: Commands,
-    mut events: EventReader<Self>,
-    mut selection: ResMut<InspectorSelection>,
-  ) {
-    for event in events.read() {
-      if let InspectorSelection::Entities(selected) = &*selection {
-        commands.entity(event.0).add_children(selected.as_slice());
-        select_entity(&mut selection, event.0);
-      }
+  fn handle(event: On<Self>, mut commands: Commands, mut selection: ResMut<InspectorSelection>) {
+    if let InspectorSelection::Entities(selected) = &*selection {
+      commands.entity(event.0).add_children(selected.as_slice());
+      select_entity(&mut selection, event.0);
     }
   }
 }

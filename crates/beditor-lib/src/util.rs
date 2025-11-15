@@ -10,8 +10,7 @@ use bevy::{
   },
   prelude::*,
   reflect::GetTypeRegistration,
-  window::CursorGrabMode,
-  winit::cursor::CursorIcon,
+  window::{CursorGrabMode, CursorIcon, CursorOptions},
 };
 use derive_new::new;
 use profiling::tracing::level_filters::LevelFilter;
@@ -36,14 +35,14 @@ where
     .short_path()
 }
 
-pub fn show_cursor(window: &mut Window) {
-  window.cursor_options.visible = true;
-  window.cursor_options.grab_mode = CursorGrabMode::None;
+pub fn show_cursor(cursor: &mut CursorOptions) {
+  cursor.visible = true;
+  cursor.grab_mode = CursorGrabMode::None;
 }
 
-pub fn hide_cursor(window: &mut Window) {
-  window.cursor_options.visible = false;
-  window.cursor_options.grab_mode = CursorGrabMode::Locked;
+pub fn hide_cursor(cursor: &mut CursorOptions) {
+  cursor.visible = false;
+  cursor.grab_mode = CursorGrabMode::Locked;
 }
 
 pub fn set_cursor_icon(commands: &mut Commands, entity: Entity, cursor: impl Into<CursorIcon>) {
@@ -54,9 +53,7 @@ pub struct LoggingExtensionsPlugin;
 
 impl Plugin for LoggingExtensionsPlugin {
   fn build(&self, app: &mut App) {
-    app
-      .add_event::<ChangeLogLevelEvent>()
-      .add_event::<LogLevelChangedEvent>();
+    app.add_observer(ChangeLogLevelEvent::handle);
   }
 }
 
@@ -65,21 +62,20 @@ pub struct ChangeLogLevelEvent(LogLevel);
 
 impl ChangeLogLevelEvent {
   pub fn handle(
-    mut events: EventReader<Self>,
+    event: On<Self>,
+    mut commands: Commands,
     mut settings: Settings,
     log_handle: Res<LogHandle>,
-    mut writer: EventWriter<LogLevelChangedEvent>,
   ) -> Result {
-    for event in events.read() {
-      settings.set(LogLevelSetting, **event)?;
-      log_handle
-        .modify(|filter| *filter = (**event).into())
-        .inspect_err(|err| {
-          eprintln!("Failed to set log level filter: {err}");
-        })
-        .ok();
-      LogLevelChangedEvent(**event).fire(&mut writer);
-    }
+    settings.set(LogLevelSetting, **event)?;
+    log_handle
+      .modify(|filter| *filter = (**event).into())
+      .inspect_err(|err| {
+        eprintln!("Failed to set log level filter: {err}");
+      })
+      .ok();
+
+    commands.trigger(LogLevelChangedEvent(**event));
 
     Ok(())
   }
@@ -97,7 +93,7 @@ pub fn dynamic_log_layer(app: &mut App) -> Option<BoxedLayer> {
   let level = settings.get_or_default::<LogLevel>(LogLevelSetting);
   let (filter, handle) = reload::Layer::new(level.into());
   app.insert_resource(LogHandle(handle));
-  LogLevelChangedEvent(level).fire(app.world_mut());
+  app.world_mut().trigger(LogLevelChangedEvent(level));
 
   Some(filter.boxed())
 }
@@ -143,30 +139,6 @@ impl From<LogLevel> for LevelFilter {
     }
   }
 }
-
-pub trait EventEmitter<E: Event> {
-  fn fire(&mut self, event: E);
-}
-
-impl<E: Event> EventEmitter<E> for World {
-  fn fire(&mut self, event: E) {
-    self.send_event(event);
-  }
-}
-
-impl<E: Event> EventEmitter<E> for EventWriter<'_, E> {
-  fn fire(&mut self, event: E) {
-    self.write(event);
-  }
-}
-
-pub trait FireEvent: Event + Sized {
-  fn fire<E: EventEmitter<Self>>(self, emitter: &mut E) {
-    emitter.fire(self);
-  }
-}
-
-impl<E: Event + Sized> FireEvent for E {}
 
 pub trait WindowExtensions {
   fn center(&self) -> [f32; 2];

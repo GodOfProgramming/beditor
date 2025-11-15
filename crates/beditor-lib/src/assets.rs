@@ -27,12 +27,12 @@ where
   fn build(&self, app: &mut App) {
     app
       .init_asset::<T::Descriptor>()
-      .add_event::<PrefabLoadedEvent<T>>()
+      .add_observer(Self::on_prefab_loaded)
       .register_asset_loader(PrefabLoader::<T>::default())
       // on startup create a prefab loader
       .add_systems(Startup, Self::on_start)
       // then read all events that come in for the loaded prefab
-      .add_systems(Update, (Self::on_load, Self::on_prefab_loaded));
+      .add_systems(FixedUpdate, Self::on_load);
   }
 }
 
@@ -47,10 +47,10 @@ where
   }
 
   fn on_load(
-    mut event_reader: EventReader<AssetEvent<LoadedFolder>>,
+    mut commands: Commands,
+    mut event_reader: MessageReader<AssetEvent<LoadedFolder>>,
     folder: Res<PrefabFolder<T>>,
     loaded_folders: Res<Assets<LoadedFolder>>,
-    mut event_writer: EventWriter<PrefabLoadedEvent<T>>,
   ) {
     for event in event_reader.read() {
       info!("Loaded folder for {}", util::short_name_of::<T>());
@@ -58,32 +58,30 @@ where
         let folders = loaded_folders.get(folder.handle()).unwrap();
         for handle in folders.handles.iter() {
           let id = handle.id().typed_unchecked::<T::Descriptor>();
-          event_writer.write(PrefabLoadedEvent::<T>::new(id));
+          commands.trigger(PrefabLoadedEvent::<T>::new(id));
         }
       }
     }
   }
 
   fn on_prefab_loaded(
-    mut event_reader: EventReader<PrefabLoadedEvent<T>>,
+    event: On<PrefabLoadedEvent<T>>,
     descriptors: Res<Assets<T::Descriptor>>,
     mut prefabs: ResMut<Prefabs>,
     assets: Res<AssetServer>,
   ) {
-    for event in event_reader.read() {
-      info!(
-        "Received prefab load event for {}",
-        util::short_name_of::<T>()
-      );
+    info!(
+      "Received prefab load event for {}",
+      util::short_name_of::<T>()
+    );
 
-      let Some(desc) = descriptors.get(event.id) else {
-        warn!("asset id did not resolve to a descriptor asset");
-        return;
-      };
+    let Some(desc) = descriptors.get(event.id) else {
+      warn!("asset id did not resolve to a descriptor asset");
+      return;
+    };
 
-      let prefab = T::transform(desc, &assets);
-      prefabs.register(prefab);
-    }
+    let prefab = T::transform(desc, &assets);
+    prefabs.register(prefab);
   }
 }
 

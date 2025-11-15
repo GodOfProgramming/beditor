@@ -3,7 +3,7 @@ use crate::{
   input::EditorActions,
   util::{self, storage::Settings},
 };
-use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorOptions};
 use leafwing_input_manager::prelude::ActionState;
 use serde::{Deserialize, Serialize};
 
@@ -61,7 +61,7 @@ pub fn save_settings(
 
 pub(super) fn mouse_input_actions(
   q_action_states: Query<&ActionState<EditorActions>>,
-  mut windows: Query<&mut Window>,
+  mut q_cursors: Query<&mut CursorOptions>,
   mut orbit_state: ResMut<NextState<OrbitState>>,
   mut pan_state: ResMut<NextState<PanState>>,
 ) {
@@ -70,11 +70,9 @@ pub(super) fn mouse_input_actions(
     let pan_active = action_state.just_pressed(&EditorActions::PanCamera);
 
     if orbit_active || pan_active {
-      let Ok(mut window) = windows.single_mut() else {
-        return;
-      };
-
-      util::hide_cursor(&mut window);
+      for mut cursor in &mut q_cursors {
+        util::hide_cursor(&mut cursor);
+      }
     }
 
     if orbit_active {
@@ -89,7 +87,7 @@ pub(super) fn mouse_input_actions(
 
 pub(super) fn released_mouse_input_actions(
   q_action_states: Query<&ActionState<EditorActions>>,
-  mut windows: Query<&mut Window>,
+  mut q_cursors: Query<&mut CursorOptions>,
   mut orbit_state: ResMut<NextState<OrbitState>>,
   mut pan_state: ResMut<NextState<PanState>>,
 ) {
@@ -100,11 +98,9 @@ pub(super) fn released_mouse_input_actions(
     if (orbit_inactive && action_state.released(&EditorActions::PanCamera))
       || (pan_inactive && action_state.released(&EditorActions::OrbitCamera))
     {
-      let Ok(mut window) = windows.single_mut() else {
-        return;
-      };
-
-      util::show_cursor(&mut window);
+      for mut cursor in &mut q_cursors {
+        util::show_cursor(&mut cursor);
+      }
     }
 
     if orbit_inactive {
@@ -156,7 +152,7 @@ pub fn movement_system(
 pub fn orbit_system(
   q_action_states: Query<&ActionState<EditorActions>>,
   mut q_cam: Single<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
-  mut mouse_motion: EventReader<MouseMotion>,
+  mut mouse_motion: MessageReader<MouseMotion>,
   time: Res<Time>,
 ) {
   let should_orbit = q_action_states
@@ -184,7 +180,7 @@ pub fn orbit_system(
 pub fn pan_system(
   q_action_states: Query<&ActionState<EditorActions>>,
   mut q_cam: Single<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
-  mut mouse_motion: EventReader<MouseMotion>,
+  mut mouse_motion: MessageReader<MouseMotion>,
   time: Res<Time>,
 ) {
   let should_pan = q_action_states

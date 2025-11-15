@@ -14,6 +14,6 @@ pub mod resources;
 
 pub enum InspectorDnd {
   AddComponent(TypeId),
-  #[allow(dead_code)]
+  #[allow(dead_code, clippy::complexity)]
   Custom(Box<dyn Fn(&mut World, &[Entity]) + Send + Sync>),
 }

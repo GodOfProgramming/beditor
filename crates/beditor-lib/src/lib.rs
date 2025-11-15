@@ -12,19 +12,18 @@ use bevy::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
   log::LogPlugin,
-  picking::hover::PickingInteraction,
   prelude::*,
   reflect::GetTypeRegistration,
   remote::{RemotePlugin, http::RemoteHttpPlugin},
-  window::{PrimaryWindow, WindowCloseRequested, WindowMode},
-  winit::WinitWindows,
+  window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
+  winit::WINIT_WINDOWS,
 };
 use bevy_egui::EguiContext;
 use input::InputPlugin;
 pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
-use util::{ChangeLogLevelEvent, LogLevel, LoggingExtensionsPlugin};
+use util::{LogLevel, LoggingExtensionsPlugin};
 use view::EditorViewPlugin;
 
 pub mod prelude {
@@ -176,9 +175,9 @@ impl Editor {
     }
   }
 
-  fn show_window_cursor(mut q_windows: Query<&mut Window>) {
-    for mut window in q_windows.iter_mut() {
-      util::show_cursor(&mut window);
+  fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
+    for mut cursor in &mut q_cursors {
+      util::show_cursor(&mut cursor);
     }
   }
 
@@ -242,7 +241,7 @@ impl Editor {
   }
 
   fn handle_click_event(
-    trigger: Trigger<Pointer<Click>>,
+    trigger: On<Pointer<Click>>,
     mut selection: ResMut<ui::InspectorSelection>,
     mut q_egui: Single<&mut EguiContext>,
     q_pickables: Query<&Pickable>,
@@ -250,7 +249,7 @@ impl Editor {
     let egui_context = q_egui.get_mut();
     let modifiers = egui_context.input(|i| i.modifiers);
 
-    let target = trigger.target;
+    let target = trigger.event_target();
 
     debug!("Received pick for {target}");
 
@@ -260,50 +259,31 @@ impl Editor {
     }
   }
 
-  // TODO this is inefficient, but picking seems to be weird, use the above when it is eventually reliable
-  fn pick_all(
-    mut selection: ResMut<ui::InspectorSelection>,
-    mut q_egui: Single<&mut EguiContext>,
-    q_pickables: Query<
-      (Entity, &PickingInteraction),
-      (Changed<PickingInteraction>, With<Pickable>),
-    >,
-  ) {
-    let egui_context = q_egui.get_mut();
-    let modifiers = egui_context.input(|i| i.modifiers);
-
-    for (entity, interaction) in &q_pickables {
-      if *interaction != PickingInteraction::Pressed {
-        continue;
-      }
-
-      selection.add_selected(entity, modifiers.ctrl);
-    }
-  }
-
   fn on_close_requested(
-    close_requests: EventReader<WindowCloseRequested>,
+    mut close_requests: MessageReader<WindowCloseRequested>,
     mut next_editor_state: ResMut<NextState<EditorState>>,
   ) {
     if !close_requests.is_empty() {
+      close_requests.clear();
       next_editor_state.set(EditorState::Exiting)
     }
   }
 
   fn handle_window_events(
-    winit_windows: NonSendMut<WinitWindows>,
     mut settings: Settings,
-    mut events: EventReader<bevy::window::WindowResized>,
+    mut events: MessageReader<bevy::window::WindowResized>,
   ) -> Result {
-    for event in events.read() {
-      let Some(winit_window) = winit_windows.get_window(event.window) else {
-        continue;
-      };
+    WINIT_WINDOWS.with_borrow(|windows| {
+      for event in events.read() {
+        let Some(winit_window) = windows.get_window(event.window) else {
+          continue;
+        };
 
-      settings.set(WindowMaximizedSetting, winit_window.is_maximized())?;
-    }
+        settings.set(WindowMaximizedSetting, winit_window.is_maximized())?;
+      }
 
-    Ok(())
+      Ok(())
+    })
   }
 
   fn init_app<F>(app: &mut App, inspector_fn: Option<F>)
@@ -346,7 +326,7 @@ impl Editor {
         InputPlugin,
         UiPlugin,
         FrameTimeDiagnosticsPlugin::default(),
-        EntityCountDiagnosticsPlugin,
+        EntityCountDiagnosticsPlugin::default(),
         SystemInformationDiagnosticsPlugin,
         RemotePlugin::default(),
         RemoteHttpPlugin::default(),
@@ -374,11 +354,10 @@ impl Editor {
         OnExit(EditorState::Editing),
         Self::remove_picking_from_targets,
       )
-      .add_systems(FixedUpdate, ChangeLogLevelEvent::handle)
       .add_systems(
         Update,
         (
-          (Self::auto_register_picking_targets, Self::pick_all).in_set(Editing),
+          Self::auto_register_picking_targets.in_set(Editing),
           Self::on_close_requested,
           Self::handle_window_events,
         ),
@@ -391,7 +370,7 @@ impl Editor {
             view::view3d::save_settings,
             UiPlugin::on_app_exit,
           ),
-          |mut app_exit: EventWriter<AppExit>| {
+          |mut app_exit: MessageWriter<AppExit>| {
             app_exit.write(AppExit::Success);
           },
         )

@@ -2,13 +2,13 @@ use crate::{EditorSettings, UiManager, util::storage::LayoutInfo};
 
 use super::{RawUi, Ui, VTable};
 use bevy::{
+  camera::Viewport,
   ecs::{
     component::Mutable,
     system::{SystemParam, SystemState},
   },
   platform::collections::HashMap,
   prelude::*,
-  render::camera::Viewport,
   window::PrimaryWindow,
 };
 use derive_more::derive::Deref;

@@ -8,6 +8,7 @@ use crate::{
   view::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy_egui::EguiPrimaryContextPass;
 use egui::TextBuffer;
 use egui_dock::DockState;
 use persistent_id::PersistentId;
@@ -30,15 +31,23 @@ pub struct Params<'w, 's> {
 
   layout_manager: Res<'w, LayoutManager>,
 
-  load_layout_ew: EventWriter<'w, LoadLayoutEvent>,
-  save_layout_ew: EventWriter<'w, SaveLayoutEvent>,
-  reset_layout_ew: EventWriter<'w, ResetLayoutEvent>,
-  move_camera_ew: EventWriter<'w, MoveCameraEvent>,
-  point_camera_ew: EventWriter<'w, PointCameraEvent>,
+  save_layout_dialog_state: ResMut<'w, SaveLayoutDialogState>,
+  reset_layout_dialog_state: ResMut<'w, ResetLayoutDialogState>,
 
   settings: Settings<'w>,
 
   q_transforms: Query<'w, 's, &'static Transform>,
+}
+
+#[derive(Resource, Default)]
+struct SaveLayoutDialogState {
+  open: bool,
+  error: Option<String>,
+}
+
+#[derive(Resource, Default)]
+struct ResetLayoutDialogState {
+  open: bool,
 }
 
 impl Ui for MenuBar {
@@ -50,15 +59,24 @@ impl Ui for MenuBar {
 
   fn init(app: &mut App) {
     app
-      .add_event::<SaveLayoutEvent>()
-      .add_event::<LoadLayoutEvent>()
-      .add_event::<ResetLayoutEvent>()
+      .init_resource::<SaveLayoutDialogState>()
+      .init_resource::<ResetLayoutDialogState>()
+      .add_message::<SaveLayoutMessage>()
+      .add_message::<ResetLayoutMessage>()
+      .add_message::<LoadLayoutMessage>()
       .add_systems(
-        Update,
+        FixedUpdate,
         (
-          SaveLayoutEvent::handle,
-          LoadLayoutEvent::handle,
-          ResetLayoutEvent::handle,
+          ResetLayoutMessage::handle,
+          SaveLayoutMessage::handle,
+          LoadLayoutMessage::handle,
+        ),
+      )
+      .add_systems(
+        EguiPrimaryContextPass,
+        (
+          Self::save_layout_dialog_display,
+          Self::reset_layout_dialog_display,
         )
           .after(EditorUi),
       );
@@ -122,33 +140,43 @@ impl MenuBar {
 
   fn layout_menu(&mut self, ui: &mut egui::Ui, params: &mut Params) {
     ui.menu_button("Layouts", |ui| {
-      if ui.button("Save Layout").clicked() {
-        params.save_layout_ew.write(SaveLayoutEvent);
-      }
+      ui.add_enabled_ui(!params.save_layout_dialog_state.open, |ui| {
+        if ui.button("Save Layout").clicked() {
+          params.save_layout_dialog_state.open = true;
+        }
+      });
 
       if !params.layout_manager.is_empty() {
-        ui.menu_button("Restore", |ui| {
-          for layout in params.layout_manager.iter() {
-            if ui.button(layout).clicked() {
-              params.load_layout_ew.write(LoadLayoutEvent(layout.clone()));
-            }
-          }
-        });
+        ui.add_enabled_ui(
+          !params.save_layout_dialog_state.open && !params.reset_layout_dialog_state.open,
+          |ui| {
+            ui.menu_button("Restore", |ui| {
+              for layout in params.layout_manager.iter() {
+                if ui.button(layout).clicked() {
+                  params
+                    .commands
+                    .write_message(LoadLayoutMessage(layout.clone()));
+                }
+              }
+            });
+          },
+        );
       }
 
-      if ui.button("Restore Default").clicked() {
-        params.reset_layout_ew.write(ResetLayoutEvent);
-      }
+      ui.add_enabled_ui(!params.reset_layout_dialog_state.open, |ui| {
+        if ui.button("Restore Default").clicked() {
+          params.reset_layout_dialog_state.open = true;
+        }
+      });
 
       ui.horizontal(|ui| {
         ui.label("Save On Exit");
-        if ui.toggle_value(&mut self.save_layout_on_exit, ()).clicked() {
-          if let Err(err) = params
+        if ui.toggle_value(&mut self.save_layout_on_exit, ()).clicked()
+          && let Err(err) = params
             .settings
             .set(SaveLayoutOnExitSetting, self.save_layout_on_exit)
-          {
-            error!("{err}");
-          }
+        {
+          error!("{err}");
         }
       });
     });
@@ -181,9 +209,7 @@ impl MenuBar {
 
   fn look_at_origin_button(&self, ui: &mut egui::Ui, params: &mut Params) {
     if ui.button("Look At Origin").clicked() {
-      params
-        .point_camera_ew
-        .write(PointCameraEvent::new(Vec3::ZERO));
+      params.commands.trigger(PointCameraEvent::new(Vec3::ZERO));
     }
   }
 
@@ -217,9 +243,7 @@ impl MenuBar {
         return;
       };
 
-      params
-        .move_camera_ew
-        .write(MoveCameraEvent::new(entity_pos));
+      params.commands.trigger(MoveCameraEvent::new(entity_pos));
     }
   }
 
@@ -229,9 +253,7 @@ impl MenuBar {
         return;
       };
 
-      params
-        .point_camera_ew
-        .write(PointCameraEvent::new(entity_pos));
+      params.commands.trigger(PointCameraEvent::new(entity_pos));
     }
   }
 
@@ -246,95 +268,102 @@ impl MenuBar {
       params.next_editor_state.set(EditorState::Editing);
     }
   }
-}
 
-#[derive(Event)]
-struct SaveLayoutEvent;
-
-impl SaveLayoutEvent {
-  fn handle(
-    mut events: EventReader<Self>,
+  fn save_layout_dialog_display(
+    mut commands: Commands,
+    mut state: ResMut<SaveLayoutDialogState>,
     mut ctx: Single<&mut bevy_egui::EguiContext>,
-    mut should_show: Local<bool>,
-    mut save_name_text: Local<String>,
-    ui_manager: Option<Res<UiManager>>,
-    mut layout_manager: ResMut<LayoutManager>,
-    q_uuids: Query<&PersistentId, Without<MissingUi>>,
-    q_missing: Query<&MissingUi>,
-    mut layouts: Layouts,
-    mut last_error_msg: Local<String>,
+    mut layout_name: Local<String>,
   ) {
-    if !events.is_empty() {
-      events.clear();
-      *should_show = true;
-      save_name_text.clear();
+    if !state.open {
+      layout_name.clear();
+      return;
     }
 
-    if let Some(ui_manager) = &ui_manager {
-      *should_show = Self::show_dialog(
-        ctx.get_mut(),
-        *should_show,
-        &mut save_name_text,
-        ui_manager,
-        &mut layout_manager,
-        &q_uuids,
-        &q_missing,
-        &mut layouts,
-        &mut last_error_msg,
-      );
-
-      if !*should_show {
-        last_error_msg.clear();
-      }
-    }
-  }
-
-  fn show_dialog(
-    ctx: &egui::Context,
-    should_show: bool,
-    save_name_text: &mut String,
-    ui_manager: &UiManager,
-    layout_manager: &mut LayoutManager,
-    q_uuids: &Query<&PersistentId, Without<MissingUi>>,
-    q_missing: &Query<&MissingUi>,
-    layouts: &mut Layouts,
-    last_error: &mut String,
-  ) -> bool {
-    let mut save_clicked = false;
-
-    let open = components::Dialog::new("Save Layout").open(ctx, should_show, |ui| {
+    let mut open = state.open;
+    components::Dialog::new("Save Layout").open(ctx.get_mut(), &mut open, |ui| {
       ui.horizontal(|ui| {
         ui.label("Name");
-        ui.text_edit_singleline(save_name_text);
+        ui.text_edit_singleline(&mut *layout_name);
       });
+
       ui.horizontal(|ui| {
         if ui.button("Save").clicked() {
-          let dock = ui_manager.state().decouple(ui_manager, q_uuids, q_missing);
-          if let Err(err) = layouts.save_layout(&save_name_text, dock) {
-            error!("{err}");
-            *last_error = err.to_string();
-          } else {
-            layout_manager.insert(save_name_text.take());
-            save_clicked = true;
-          }
+          commands.write_message(SaveLayoutMessage(layout_name.take()));
         }
-        if !last_error.is_empty() {
-          ui.colored_label(egui::Color32::RED, last_error);
+
+        if let Some(error) = &state.error {
+          ui.colored_label(egui::Color32::RED, error);
         }
       });
     });
 
-    !save_clicked && open
+    state.open = open;
+  }
+
+  fn reset_layout_dialog_display(
+    mut commands: Commands,
+    mut ctx: Single<&mut bevy_egui::EguiContext>,
+    mut state: ResMut<ResetLayoutDialogState>,
+  ) {
+    if !state.open {
+      return;
+    }
+
+    let mut open = state.open;
+
+    components::Dialog::new("Confirm Layout Reset?").open(ctx.get_mut(), &mut open, |ui| {
+      ui.label("This will reset your layout to the default configuration. Continue?");
+      ui.horizontal(|ui| {
+        if ui.button("Ok").clicked() {
+          commands.write_message(ResetLayoutMessage);
+        }
+      });
+    });
+
+    state.open = open;
   }
 }
 
-#[derive(Event)]
-struct LoadLayoutEvent(String);
+#[derive(Message)]
+struct SaveLayoutMessage(String);
 
-impl LoadLayoutEvent {
-  fn handle(mut commands: Commands, mut events: EventReader<Self>, mut layouts: Layouts) -> Result {
-    for event in events.read() {
-      let layout_name = event.0.clone();
+impl SaveLayoutMessage {
+  fn handle(
+    mut reader: MessageReader<Self>,
+    mut state: ResMut<SaveLayoutDialogState>,
+    ui_manager: Res<UiManager>,
+    mut layout_manager: ResMut<LayoutManager>,
+    q_uuids: Query<&PersistentId, Without<MissingUi>>,
+    q_missing: Query<&MissingUi>,
+    mut layouts: Layouts,
+  ) {
+    for msg in reader.read() {
+      let dock = ui_manager
+        .state()
+        .decouple(&ui_manager, &q_uuids, &q_missing);
+      if let Err(err) = layouts.save_layout(&msg.0, dock) {
+        error!("{err}");
+        state.error = Some(err.to_string());
+      } else {
+        layout_manager.insert(msg.0.clone());
+        state.open = false;
+      }
+    }
+  }
+}
+
+#[derive(Message)]
+struct LoadLayoutMessage(String);
+
+impl LoadLayoutMessage {
+  fn handle(
+    mut reader: MessageReader<Self>,
+    mut commands: Commands,
+    mut layouts: Layouts,
+  ) -> Result {
+    for msg in reader.read() {
+      let layout_name = msg.0.clone();
       let dock = layouts.get_layout(layout_name)?;
       commands.queue(move |world: &mut World| {
         world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
@@ -348,41 +377,24 @@ impl LoadLayoutEvent {
   }
 }
 
-#[derive(Event)]
-struct ResetLayoutEvent;
+#[derive(Message)]
+struct ResetLayoutMessage;
 
-impl ResetLayoutEvent {
-  fn handle(
-    mut commands: Commands,
-    events: EventReader<Self>,
-    mut ctx: Single<&mut bevy_egui::EguiContext>,
-    mut should_show: Local<bool>,
-  ) {
-    if !events.is_empty() {
-      *should_show = true;
+impl ResetLayoutMessage {
+  fn handle(mut reader: MessageReader<ResetLayoutMessage>, mut commands: Commands) {
+    if reader.is_empty() {
+      return;
     }
 
-    *should_show = Self::show_dialog(&mut commands, ctx.get_mut(), *should_show);
-  }
+    reader.clear();
 
-  fn show_dialog(commands: &mut Commands, ctx: &egui::Context, should_show: bool) -> bool {
-    let mut ok_clicked = false;
-
-    let open = components::Dialog::new("Confirm Layout Reset?").open(ctx, should_show, |ui| {
-      ui.label("This will reset your layout to the default configuration. Continue?");
-      ui.horizontal(|ui| {
-        if ui.button("Ok").clicked() {
-          commands.queue(|world: &mut World| {
-            world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-              let default_state = ui_manager.default_dock_state(world);
-              ui_manager.switch_state(default_state, world);
-            });
-          });
-          ok_clicked = true;
-        }
+    commands.queue(|world: &mut World| {
+      world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
+        let default_state = ui_manager.default_dock_state(world);
+        ui_manager.switch_state(default_state, world);
+        let mut state = world.resource_mut::<ResetLayoutDialogState>();
+        state.open = false;
       });
     });
-
-    !ok_clicked && open
   }
 }

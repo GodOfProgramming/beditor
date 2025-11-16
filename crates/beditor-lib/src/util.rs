@@ -140,6 +140,7 @@ impl From<LogLevel> for LevelFilter {
   }
 }
 
+#[allow(unused)]
 pub trait WindowExtensions {
   fn center(&self) -> [f32; 2];
 }

@@ -85,6 +85,8 @@ impl Plugin for UiPlugin {
         )
           .in_set(EditorUi),
       );
+
+    prebuilt::menu_bar::init(app);
   }
 }
 

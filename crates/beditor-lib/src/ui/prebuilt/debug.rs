@@ -1,6 +1,7 @@
 use crate::{
   ui::Ui,
   util::{ChangeLogLevelEvent, LogLevel, LogLevelChangedEvent},
+  view::{RenderCameras, SyncRenderCamerasEvent},
 };
 use bevy::{diagnostic::DiagnosticsStore, ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContext, egui};
@@ -59,6 +60,7 @@ pub struct Params<'w, 's> {
   commands: Commands<'w, 's>,
   type_registry: Res<'w, AppTypeRegistry>,
   diagnostics: Res<'w, DiagnosticsStore>,
+  render_cameras: ResMut<'w, RenderCameras>,
 }
 
 impl Ui for DebugMenu {
@@ -83,9 +85,13 @@ impl Ui for DebugMenu {
 
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
     self.diagnostics(ui, &params);
+
     ui.separator();
+
     self.log_level_selector(ui, &mut params);
+
     ui.separator();
+
     if ui
       .checkbox(&mut self.ui_debug_on_hover, "Debug UI")
       .clicked()
@@ -93,6 +99,13 @@ impl Ui for DebugMenu {
       params
         .commands
         .trigger(DebugUiEvent(self.ui_debug_on_hover));
+    }
+
+    if ui
+      .checkbox(&mut **params.render_cameras, "Render Cameras")
+      .clicked()
+    {
+      params.commands.trigger(SyncRenderCamerasEvent);
     }
   }
 }

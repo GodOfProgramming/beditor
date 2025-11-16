@@ -12,7 +12,8 @@ use bevy::{
   window::PrimaryWindow,
 };
 use derive_more::derive::Deref;
-use egui::text::LayoutJob;
+use derive_new::new;
+use egui::{emath::Numeric, text::LayoutJob};
 use egui_dock::DockState;
 use persistent_id::PersistentId;
 use uuid::{Uuid, uuid};
@@ -111,6 +112,11 @@ unsafe impl<T> UiExtensions for T where T: Ui {}
 
 #[derive(Component, Deref, DerefMut)]
 struct UiComponentState<P>(SystemState<P>)
+where
+  P: SystemParam + 'static;
+
+#[derive(new, Resource, Deref, DerefMut)]
+pub struct UiResourceState<P>(SystemState<P>)
 where
   P: SystemParam + 'static;
 
@@ -288,5 +294,45 @@ pub(crate) trait ShrinkableViewport: Component + Sized {
         }
       }
     }
+  }
+}
+
+pub fn apply_dock_style_to_egui_style(dock: &egui_dock::Style, es: &mut egui::Style) {
+  let visuals = &mut es.visuals;
+  let spacing = &mut es.spacing;
+
+  visuals.panel_fill = dock.tab_bar.bg_fill;
+  visuals.window_fill = dock.tab_bar.bg_fill;
+
+  visuals.widgets.inactive.bg_fill = dock.tab.inactive.bg_fill;
+  visuals.widgets.active.bg_fill = dock.tab.active.bg_fill;
+  visuals.widgets.hovered.bg_fill = dock.tab.hovered.bg_fill;
+
+  visuals.widgets.inactive.bg_stroke = egui::Stroke::new(
+    visuals.widgets.inactive.bg_stroke.width.max(0.0),
+    dock.tab.inactive.outline_color,
+  );
+  visuals.widgets.active.bg_stroke = egui::Stroke::new(
+    visuals.widgets.active.bg_stroke.width.max(0.0),
+    dock.tab.active.outline_color,
+  );
+  visuals.window_stroke = dock.tab.tab_body.stroke;
+
+  visuals.override_text_color = Some(dock.tab.inactive.text_color);
+
+  visuals.window_corner_radius = dock.tab.inactive.corner_radius;
+  visuals.menu_corner_radius = visuals.window_corner_radius;
+  visuals.widgets.inactive.corner_radius = visuals.window_corner_radius;
+  visuals.widgets.active.corner_radius = visuals.window_corner_radius;
+  visuals.widgets.hovered.corner_radius = visuals.window_corner_radius;
+
+  spacing.window_margin = dock.tab.tab_body.inner_margin.into();
+  spacing.item_spacing = egui::Vec2::new(
+    dock.tab.spacing,
+    dock.tab.tab_body.inner_margin.top.to_f64() as f32,
+  );
+
+  if dock.tab_bar.hline_color.a() != 0 {
+    visuals.window_stroke.color = dock.tab_bar.hline_color;
   }
 }

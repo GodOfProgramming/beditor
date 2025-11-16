@@ -10,6 +10,7 @@ use crate::{
   util::storage::Settings,
 };
 use bevy::{color::palettes::tailwind, prelude::*};
+use derive_more::derive::DerefMut;
 use derive_new::new;
 use serde::{Deserialize, Serialize};
 use view2d::View2d;
@@ -60,14 +61,17 @@ impl Plugin for EditorViewPlugin {
       .insert_state(ActiveEditorCamera::None)
       .insert_state(OrbitState::Inactive)
       .insert_state(PanState::Inactive)
+      .init_resource::<RenderCameras>()
       .add_observer(MoveCameraEvent::handle)
       .add_observer(PointCameraEvent::handle)
+      .add_observer(SyncRenderCamerasEvent::handle)
       .add_systems(PostStartup, Self::set_initial_state)
       .add_systems(OnEnter(ActiveEditorCamera::None), despawn_editor_cameras)
       .add_systems(OnEnter(ActiveEditorCamera::Cam2D), view2d::enable)
       .add_systems(OnExit(ActiveEditorCamera::Cam2D), view2d::save_settings)
       .add_systems(OnEnter(ActiveEditorCamera::Cam3D), view3d::enable)
       .add_systems(OnExit(ActiveEditorCamera::Cam3D), view3d::save_settings)
+      .add_systems(Startup, retrieve_show_cameras_value)
       .add_systems(
         Update,
         (
@@ -174,10 +178,18 @@ where
     .add_systems(
       Update,
       (
-        render_2d_cameras::<C>.in_set(View2d),
-        render_3d_cameras::<C>.in_set(View3d),
+        render_2d_cameras::<C>
+          .in_set(View2d)
+          .run_if(should_show_cameras),
+        render_3d_cameras::<C>
+          .in_set(View3d)
+          .run_if(should_show_cameras),
       ),
     );
+}
+
+fn should_show_cameras(render_cameras: Res<RenderCameras>) -> bool {
+  **render_cameras
 }
 
 #[allow(clippy::type_complexity)]
@@ -283,4 +295,29 @@ impl PointCameraEvent {
       cam.look_at(event.0, UP);
     }
   }
+}
+
+#[derive(Event)]
+pub struct SyncRenderCamerasEvent;
+
+impl SyncRenderCamerasEvent {
+  fn handle(_: On<Self>, render_cameras: Res<RenderCameras>, mut settings: Settings) -> Result {
+    settings.set(RenderCamerasSetting, **render_cameras)?;
+    Ok(())
+  }
+}
+
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct RenderCameras(bool);
+
+struct RenderCamerasSetting;
+
+impl AsRef<str> for RenderCamerasSetting {
+  fn as_ref(&self) -> &str {
+    "view.render_cameras"
+  }
+}
+
+fn retrieve_show_cameras_value(mut render_cameras: ResMut<RenderCameras>, mut settings: Settings) {
+  **render_cameras = settings.get_or_default(RenderCamerasSetting);
 }

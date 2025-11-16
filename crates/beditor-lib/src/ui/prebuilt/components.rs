@@ -15,49 +15,6 @@ pub struct Components {
   components_per_row: usize,
 }
 
-impl Components {
-  fn ui_for_dir(
-    current_path: &mut VfsPath,
-    ui: &mut egui::Ui,
-    size: impl Into<egui::Vec2>,
-    label: &str,
-    i: usize,
-  ) -> bool {
-    let size = size.into();
-    let response = Card::new(size)
-      .with_label(label)
-      .show(ui, |ui| {
-        ui.label(egui_phosphor_icons::icons::FOLDER.regular());
-
-        ui.interact(ui.min_rect(), ui.id().with(i), egui::Sense::click())
-      })
-      .inner
-      .on_hover_cursor(egui::CursorIcon::PointingHand);
-
-    if response.double_clicked() {
-      current_path.push(String::from(label));
-      true
-    } else {
-      false
-    }
-  }
-
-  fn ui_for_item(
-    ui: &mut egui::Ui,
-    size: impl Into<egui::Vec2>,
-    label: &str,
-    component: &RegisteredComponent,
-  ) {
-    let size = size.into();
-    let id = component.type_id();
-    ui.dnd_drag_source(egui::Id::new(id), InspectorDnd::AddComponent(id), |ui| {
-      Card::new(size).with_label(label).show(ui, |ui| {
-        ui.label(egui_phosphor_icons::icons::PUZZLE_PIECE.regular());
-      });
-    });
-  }
-}
-
 impl Default for Components {
   fn default() -> Self {
     Self {
@@ -70,12 +27,22 @@ impl Default for Components {
 pub struct Params<'w, 's> {
   component_registry: Res<'w, ComponentRegistry>,
 
-  current_dir: Local<'s, Option<VfsDir<TypeId>>>,
   current_path: Local<'s, VfsPath>,
+  current_dir: Local<'s, Option<VfsDir<TypeId>>>,
 
   filter: Local<'s, String>,
 
   _pd: PhantomData<&'s ()>,
+}
+
+impl Params<'_, '_> {
+  fn set_cur_dir(&mut self) {
+    *self.current_dir = self
+      .component_registry
+      .vfs()
+      .get_dir(&*self.current_path)
+      .cloned();
+  }
 }
 
 impl Ui for Components {
@@ -92,6 +59,7 @@ impl Ui for Components {
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
     ui.horizontal(|ui| {
       ui.text_edit_singleline(&mut *params.filter);
+
       if params.current_path.has_parent()
         && ui
           .button(egui_phosphor_icons::icons::ARROW_U_UP_LEFT.regular())
@@ -109,11 +77,7 @@ impl Ui for Components {
     let num_columns = self.components_per_row.max(1);
 
     if params.current_dir.is_none() {
-      *params.current_dir = params
-        .component_registry
-        .vfs()
-        .get_dir(&*params.current_path)
-        .cloned();
+      params.set_cur_dir();
     }
 
     let Some(current_dir) = &*params.current_dir else {
@@ -137,7 +101,7 @@ impl Ui for Components {
 
       match node {
         VfsNode::Dir(dir) => {
-          clicked = Self::ui_for_dir(
+          clicked |= ui_for_dir(
             &mut params.current_path,
             ui,
             (card_width, card_height),
@@ -147,18 +111,14 @@ impl Ui for Components {
         }
         VfsNode::Item { name, value } => {
           if let Some(component) = params.component_registry.get(value) {
-            Self::ui_for_item(ui, (card_width, card_height), name, component);
+            ui_for_item(ui, (card_width, card_height), name, component);
           }
         }
       }
     });
 
     if clicked {
-      *params.current_dir = params
-        .component_registry
-        .vfs()
-        .get_dir(&*params.current_path)
-        .cloned();
+      *params.current_dir = None;
     }
   }
 
@@ -169,4 +129,46 @@ impl Ui for Components {
   fn scroll_bars(&self, _params: Self::Params<'_, '_>) -> [bool; 2] {
     [false, true]
   }
+}
+
+fn ui_for_dir(
+  current_path: &mut VfsPath,
+  ui: &mut egui::Ui,
+  size: impl Into<egui::Vec2>,
+  label: &str,
+  i: usize,
+) -> bool {
+  let size = size.into();
+  let response = Card::new(size)
+    .with_label(label)
+    .show(ui, |ui| {
+      ui.label(egui_phosphor_icons::icons::FOLDER.regular());
+
+      ui.interact(ui.min_rect(), ui.id().with(i), egui::Sense::click())
+    })
+    .inner
+    .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+  if response.double_clicked() {
+    current_path.push(String::from(label));
+    info!("here????");
+    true
+  } else {
+    false
+  }
+}
+
+fn ui_for_item(
+  ui: &mut egui::Ui,
+  size: impl Into<egui::Vec2>,
+  label: &str,
+  component: &RegisteredComponent,
+) {
+  let size = size.into();
+  let id = component.type_id();
+  ui.dnd_drag_source(egui::Id::new(id), InspectorDnd::AddComponent(id), |ui| {
+    Card::new(size).with_label(label).show(ui, |ui| {
+      ui.label(egui_phosphor_icons::icons::PUZZLE_PIECE.regular());
+    });
+  });
 }

@@ -3,17 +3,17 @@ use super::{
   misc::{DockExtensions, MissingUi, UiComponentExtensions},
   prebuilt::{
     assets::Assets, components::Components, debug::DebugMenu, editor_view::EditorView,
-    hierarchy::Hierarchy, inspector::Inspector, menu_bar::MenuBar, prefabs::Prefabs,
-    resources::Resources,
+    hierarchy::Hierarchy, inspector::Inspector, prefabs::Prefabs, resources::Resources,
   },
 };
 use crate::{
   Settings,
+  misc::UiResourceState,
+  ui::prebuilt::menu_bar,
   util::storage::{LayoutInfo, Layouts},
 };
 use bevy::{ecs::system::SystemState, platform::collections::HashMap, prelude::*};
 use derive_new::new;
-use egui::{CornerRadius, Margin};
 use egui_dock::{DockArea, DockState, NodeIndex, Surface, SurfaceIndex};
 use persistent_id::PersistentId;
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
@@ -43,9 +43,11 @@ impl UiManager {
     this.register::<EditorView>(app);
     this.register::<Hierarchy>(app);
     this.register::<Inspector>(app);
-    this.register::<MenuBar>(app);
     this.register::<Prefabs>(app);
     this.register::<Resources>(app);
+
+    let state = SystemState::<menu_bar::Params<'_, '_>>::new(app.world_mut());
+    app.insert_resource(UiResourceState::new(state));
 
     this
   }
@@ -104,12 +106,28 @@ impl UiManager {
     egui::CentralPanel::default()
       .frame(
         egui::Frame::central_panel(&style)
-          // this makes it so the egui dock panels all surround the window's edges
+          // this makes it so the ui panels all surround the window's edges
           .inner_margin(0)
           // this allows the game to be rendered behind egui
           .fill(egui::Color32::TRANSPARENT),
       )
       .show(&ctx, |ui| {
+        ui.scope(|ui| {
+          ui.style_mut().spacing.item_spacing.y = 0.0;
+          egui::Frame::new()
+            .inner_margin(0)
+            .outer_margin(0)
+            .fill(dock_style.tab_bar.bg_fill)
+            .show(ui, |ui| {
+              super::misc::apply_dock_style_to_egui_style(&dock_style, ui.style_mut());
+              world.resource_scope(|world, mut state: Mut<UiResourceState<menu_bar::Params>>| {
+                let params = state.get_mut(world);
+                menu_bar::render(ui, params);
+                state.apply(world);
+              });
+            });
+        });
+
         let mut tab_viewer = TabViewer {
           vtables: &mut self.vtables,
           world: RefCell::new(world),
@@ -168,14 +186,11 @@ impl UiManager {
 
     let root = NodeIndex::root();
 
-    let tabs = vec![self.spawn_type::<MenuBar>(world)];
-    let [central_panel, _top_bar] = tree.split_above(root, 0.1, tabs);
-
     let tabs = vec![
       self.spawn_type::<Hierarchy>(world),
       self.spawn_type::<DebugMenu>(world),
     ];
-    let [central_panel, _left_panel] = tree.split_left(central_panel, 1.0 / 6.0, tabs);
+    let [central_panel, _left_panel] = tree.split_left(root, 1.0 / 6.0, tabs);
 
     let tabs = vec![self.spawn_type::<Inspector>(world)];
     let [central_panel, _right_panel] = tree.split_right(central_panel, 4.0 / 5.0, tabs);

@@ -1,3 +1,7 @@
+use crate::{
+  Editor,
+  util::vfs::{Vfs, VfsPath},
+};
 use bevy::{
   ecs::{
     component::{Component, ComponentId},
@@ -5,15 +9,10 @@ use bevy::{
     world::FromWorld,
   },
   prelude::*,
-  reflect::{GetTypeRegistration, Reflect},
+  reflect::{GetTypeRegistration, Reflect, TypeRegistration},
   utils::TypeIdMap,
 };
 use std::any::TypeId;
-
-use crate::{
-  Editor,
-  util::vfs::{Vfs, VfsPath},
-};
 
 macro_rules! impl_reg_comp {
   // Base case: stop recursion
@@ -63,6 +62,48 @@ impl ComponentRegistry {
   pub fn vfs(&self) -> &Vfs<TypeId> {
     &self.vfs
   }
+
+  pub(crate) fn register_raw(&mut self, world: &mut World, type_registration: &TypeRegistration) {
+    let Some(reflect_component) = type_registration.data::<ReflectComponent>() else {
+      return;
+    };
+
+    let name = type_registration.type_info().type_path();
+    let type_id = type_registration.type_id();
+    let component_id = reflect_component.register_component(world);
+
+    self.mapping.insert(
+      type_id,
+      RegisteredComponent {
+        name,
+        type_id,
+        id: component_id,
+      },
+    );
+
+    let mut path = name.split("::");
+
+    let count = path.clone().count();
+
+    let (path, Some(name)) = (if count == 0 {
+      (Vec::new(), path.next())
+    } else {
+      (
+        path.clone().take(count - 1).collect::<Vec<_>>(),
+        path.nth(count - 1),
+      )
+    }) else {
+      return;
+    };
+
+    let path: VfsPath<&str> = path.into();
+    let dir = self.vfs.open(path);
+    dir.add_item(name, type_id);
+
+    for (p, d) in self.vfs.iter() {
+      debug!("Registered component path: {p:?}: {d:?}");
+    }
+  }
 }
 
 #[derive(Clone)]
@@ -70,7 +111,6 @@ pub struct RegisteredComponent {
   name: &'static str,
   type_id: TypeId,
   id: ComponentId,
-  spawn_fn: fn(entity: Entity, &mut World),
 }
 
 impl RegisteredComponent {
@@ -79,7 +119,24 @@ impl RegisteredComponent {
   }
 
   pub fn spawn(&self, entity: Entity, world: &mut World) {
-    (self.spawn_fn)(entity, world);
+    let app_type_registry = world.resource::<AppTypeRegistry>().0.clone();
+    let type_registry = app_type_registry.read();
+    let Some(type_registration) = type_registry.get(self.type_id) else {
+      return;
+    };
+
+    let Some(reflect_component) = type_registration.data::<ReflectComponent>() else {
+      return;
+    };
+
+    let Some(reflect_default) = type_registration.data::<ReflectDefault>() else {
+      return;
+    };
+
+    let component = reflect_default.default();
+
+    let mut entity = world.entity_mut(entity);
+    reflect_component.insert(&mut entity, &*component, &type_registry);
   }
 
   pub fn type_id(&self) -> TypeId {
@@ -100,45 +157,7 @@ where
   T: Reflect + GetTypeRegistration + FromWorld + Component,
 {
   fn register(world: &mut World, component_registry: &mut ComponentRegistry) {
-    let name = T::get_type_registration().type_info().type_path();
-    let type_id = TypeId::of::<T>();
-    let id = world.register_component::<T>();
-
-    component_registry.mapping.insert(
-      type_id,
-      RegisteredComponent {
-        name,
-        type_id,
-        id,
-        spawn_fn: |entity, world| {
-          let comp = T::from_world(world);
-          world.entity_mut(entity).insert(comp);
-        },
-      },
-    );
-
-    let mut path = name.split("::");
-
-    let count = path.clone().count();
-
-    let (path, Some(name)) = (if count == 0 {
-      (Vec::new(), path.next())
-    } else {
-      (
-        path.clone().take(count - 1).collect::<Vec<_>>(),
-        path.nth(count - 1),
-      )
-    }) else {
-      return;
-    };
-
-    let path: VfsPath<&str> = path.into();
-    let dir = component_registry.vfs.open(path);
-    dir.add_item(name, type_id);
-
-    for (p, d) in component_registry.vfs.iter() {
-      debug!("Registered component path: {p:?}: {d:?}");
-    }
+    component_registry.register_raw(world, &T::get_type_registration());
   }
 }
 

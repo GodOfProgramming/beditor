@@ -11,6 +11,7 @@ use bevy::{
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
+  ecs::system::NonSendMarker,
   log::LogPlugin,
   prelude::*,
   reflect::GetTypeRegistration,
@@ -148,8 +149,10 @@ impl Editor {
       mut app,
       prefab_registrar,
       ui_manager,
-      component_registry,
+      mut component_registry,
     } = self;
+
+    Self::auto_register_types(&mut app, &mut component_registry);
 
     app
       .insert_resource(prefab_registrar)
@@ -272,6 +275,7 @@ impl Editor {
   fn handle_window_events(
     mut settings: Settings,
     mut events: MessageReader<bevy::window::WindowResized>,
+    _non_send_marker: NonSendMarker,
   ) -> Result {
     WINIT_WINDOWS.with_borrow(|windows| {
       for event in events.read() {
@@ -377,6 +381,15 @@ impl Editor {
           .chain()
           .in_set(EditorGlobal),
       );
+  }
+
+  fn auto_register_types(app: &mut App, component_registry: &mut ComponentRegistry) {
+    let app_type_registry = app.world().resource::<AppTypeRegistry>().0.clone();
+    let tr = app_type_registry.read();
+
+    for entry in tr.iter() {
+      component_registry.register_raw(app.world_mut(), entry);
+    }
   }
 }
 

@@ -13,6 +13,7 @@ use crate::{
 };
 use bevy::{ecs::system::SystemState, platform::collections::HashMap, prelude::*};
 use derive_new::new;
+use egui::{CornerRadius, Margin};
 use egui_dock::{DockArea, DockState, NodeIndex, Surface, SurfaceIndex};
 use persistent_id::PersistentId;
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
@@ -94,9 +95,15 @@ impl UiManager {
       return;
     };
 
+    let style = ctx.style();
+
+    let mut dock_style = egui_dock::Style::from_egui(&style);
+    dock_style.main_surface_border_rounding = egui::CornerRadius::ZERO;
+    dock_style.tab_bar.corner_radius = egui::CornerRadius::ZERO;
+
     egui::CentralPanel::default()
       .frame(
-        egui::Frame::central_panel(&ctx.style())
+        egui::Frame::central_panel(&style)
           // this makes it so the egui dock panels all surround the window's edges
           .inner_margin(0)
           // this allows the game to be rendered behind egui
@@ -110,6 +117,7 @@ impl UiManager {
 
         DockArea::new(&mut self.state)
           .id(self.id)
+          .style(dock_style)
           .show_add_buttons(true)
           .show_add_popup(true)
           .show_inside(ui, &mut tab_viewer);

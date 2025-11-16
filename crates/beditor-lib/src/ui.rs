@@ -69,7 +69,8 @@ impl Plugin for UiPlugin {
       .configure_sets(EguiPrimaryContextPass, EditorUi)
       .add_observer(AddUiEvent::on_event)
       .add_observer(RemoveUiEvent::on_event)
-      .add_systems(Startup, (Self::setup_ctx, Self::init_resources).chain())
+      .add_systems(Startup, Self::init_resources.chain())
+      .add_systems(First, Self::setup_ctx)
       .add_systems(
         EguiPrimaryContextPass,
         (
@@ -94,7 +95,7 @@ impl UiPlugin {
     world.resource_scope(|world, mut ui_manager: Mut<UiManager>| ui_manager.restore_or_init(world))
   }
 
-  fn setup_ctx(mut q_ctx: Query<&mut bevy_egui::EguiContext>) {
+  fn setup_ctx(mut q_ctx: Query<&mut bevy_egui::EguiContext, Added<PrimaryEguiContext>>) {
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor_icons::add_fonts(&mut fonts);
 
@@ -543,7 +544,9 @@ impl egui_dock::TabViewer for TabViewer<'_> {
       ui.add_enabled_ui(enabled, |ui| {
         if ui.checkbox(&mut exists, name).clicked() {
           let entity = (vtable.spawn)(&mut world);
-          world.trigger(AddUiEvent::new(surface, node, entity));
+          world
+            .commands()
+            .trigger(AddUiEvent::new(surface, node, entity));
         }
       });
     }

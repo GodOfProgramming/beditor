@@ -41,7 +41,7 @@ impl Inspector {
     if let Some(dnd) = component_id {
       match &*dnd {
         InspectorDnd::AddComponent(type_id) => {
-          Self::spawn_components_on(type_id, entities.as_ref(), world);
+          Self::spawn_component_on(type_id, entities.as_ref(), world);
         }
         InspectorDnd::Custom(f) => {
           (f)(world, entities.as_ref());
@@ -50,12 +50,9 @@ impl Inspector {
     }
   }
 
-  fn spawn_components_on(component_id: &TypeId, entities: &[Entity], world: &mut World) {
-    let Some(component) = world.resource_scope(
-      |_: &mut World, component_registry: Mut<ComponentRegistry>| {
-        component_registry.get(component_id).cloned()
-      },
-    ) else {
+  fn spawn_component_on(component_id: &TypeId, entities: &[Entity], world: &mut World) {
+    let cr = world.resource::<ComponentRegistry>();
+    let Some(component) = cr.get(component_id).cloned() else {
       warn!("Failed to lookup component");
       return;
     };

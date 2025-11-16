@@ -1,7 +1,8 @@
-use super::{EditorCamera, PanState, UP};
+use super::{PanState, UP};
 use crate::{
   input::EditorActions,
   util::{self, storage::Settings},
+  view::cam::EditorCamera,
 };
 use bevy::{
   input::mouse::MouseMotion,

@@ -1,7 +1,8 @@
-use super::{EditorCamera, OrbitState, PanState, UP};
+use super::{OrbitState, PanState, UP};
 use crate::{
   input::EditorActions,
   util::{self, storage::Settings},
+  view::cam::EditorCamera,
 };
 use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorOptions};
 use leafwing_input_manager::prelude::ActionState;

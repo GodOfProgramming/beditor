@@ -11,6 +11,7 @@ use crate::{
 };
 use bevy::{
   asset::UntypedAssetId,
+  camera::visibility::{Layer, RenderLayers},
   ecs::{component::Mutable, system::SystemParam},
   platform::collections::HashMap,
   prelude::*,
@@ -35,7 +36,8 @@ struct EditorUi;
   PrimaryEguiContext = default_primary_context(),
   Camera = editor_camera(),
   Camera2d,
-  MeshPickingCamera)]
+  MeshPickingCamera,
+  RenderLayers = RenderLayers::layer(EDITOR_UI_LAYER))]
 pub struct EditorUiCamera;
 
 fn default_primary_context() -> PrimaryEguiContext {
@@ -48,6 +50,8 @@ fn editor_camera() -> Camera {
     ..default()
   }
 }
+
+pub const EDITOR_UI_LAYER: Layer = 31;
 
 pub(crate) struct UiPlugin;
 
@@ -69,7 +73,7 @@ impl Plugin for UiPlugin {
       .configure_sets(EguiPrimaryContextPass, EditorUi)
       .add_observer(AddUiEvent::on_event)
       .add_observer(RemoveUiEvent::on_event)
-      .add_systems(Startup, Self::init_resources.chain())
+      .add_systems(Startup, Self::init_resources)
       .add_systems(First, Self::setup_ctx)
       .add_systems(
         EguiPrimaryContextPass,

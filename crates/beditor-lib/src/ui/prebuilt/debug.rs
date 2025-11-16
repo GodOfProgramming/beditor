@@ -1,7 +1,7 @@
 use crate::{
   ui::Ui,
   util::{ChangeLogLevelEvent, LogLevel, LogLevelChangedEvent},
-  view::{RenderCameras, SyncRenderCamerasEvent},
+  view::cam::{RenderCameras, SyncRenderCamerasEvent},
 };
 use bevy::{diagnostic::DiagnosticsStore, ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContext, egui};

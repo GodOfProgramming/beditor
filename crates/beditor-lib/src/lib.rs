@@ -8,10 +8,14 @@ mod view;
 use assets::{Prefab, PrefabPlugin, PrefabRegistrar, Prefabs, StaticPrefab};
 use bevy::{
   app::PluginGroupBuilder,
+  camera::visibility::{Layer, RenderLayers},
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
-  ecs::system::NonSendMarker,
+  ecs::{
+    bundle::NoBundleEffect,
+    system::{NonSendMarker, SystemParam},
+  },
   log::LogPlugin,
   prelude::*,
   reflect::GetTypeRegistration,
@@ -307,6 +311,7 @@ impl Editor {
     app
       .insert_resource(Storage::new().unwrap())
       .init_resource::<EditorSettings>()
+      .init_resource::<GameRenderLayer>()
       .add_plugins((
         LoggingExtensionsPlugin,
         default_plugins
@@ -415,5 +420,39 @@ struct WindowMaximizedSetting;
 impl AsRef<str> for WindowMaximizedSetting {
   fn as_ref(&self) -> &str {
     "window.maximized"
+  }
+}
+
+#[derive(Resource, Default)]
+pub struct GameRenderLayer(Layer);
+
+#[derive(Component)]
+#[require(RenderLayers = RenderLayers::layer(0))]
+pub struct GameEntity;
+
+#[derive(SystemParam)]
+pub struct EntityManager<'w, 's> {
+  commands: Commands<'w, 's>,
+  render_layer: Res<'w, GameRenderLayer>,
+}
+
+impl EntityManager<'_, '_> {
+  pub fn spawn(&mut self, bundle: impl Bundle) -> EntityCommands<'_> {
+    let mut cmds = self
+      .commands
+      .spawn(RenderLayers::layer(self.render_layer.0));
+    cmds.insert(bundle);
+    cmds
+  }
+
+  pub fn spawn_batch<I>(&mut self, batch: I)
+  where
+    I: IntoIterator + Send + Sync + 'static,
+    I::IntoIter: Send + Sync + 'static,
+    I::Item: Bundle<Effect: NoBundleEffect>,
+  {
+    self
+      .commands
+      .spawn_batch(batch.into_iter().map(|bundle| (GameEntity, bundle)));
   }
 }

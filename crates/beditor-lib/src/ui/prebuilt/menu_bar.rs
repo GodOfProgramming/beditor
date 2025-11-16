@@ -5,7 +5,7 @@ use crate::{
     EditorUi, InspectorSelection, components,
     managers::{LayoutManager, SaveLayoutOnExitSetting},
   },
-  view::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
+  view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiPrimaryContextPass;

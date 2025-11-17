@@ -1,4 +1,5 @@
 use crate::{
+  EditorSettings,
   ui::Ui,
   util::{ChangeLogLevelEvent, LogLevel, LogLevelChangedEvent},
   view::cam::{RenderCameras, SyncRenderCamerasEvent},
@@ -61,6 +62,7 @@ pub struct Params<'w, 's> {
   type_registry: Res<'w, AppTypeRegistry>,
   diagnostics: Res<'w, DiagnosticsStore>,
   render_cameras: ResMut<'w, RenderCameras>,
+  editor_settings: ResMut<'w, EditorSettings>,
 }
 
 impl Ui for DebugMenu {
@@ -107,6 +109,13 @@ impl Ui for DebugMenu {
     {
       params.commands.trigger(SyncRenderCamerasEvent);
     }
+
+    let type_registry = params.type_registry.read();
+    bevy_inspector_egui::reflect_inspector::ui_for_value(
+      &mut *params.editor_settings,
+      ui,
+      &type_registry,
+    );
   }
 }
 

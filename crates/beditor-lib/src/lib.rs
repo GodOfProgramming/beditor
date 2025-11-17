@@ -23,6 +23,7 @@ use bevy_egui::EguiContext;
 use input::InputPlugin;
 pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
+use serde::{Deserialize, Serialize};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
 use util::{LogLevel, LoggingExtensionsPlugin};
 use view::EditorViewPlugin;
@@ -152,7 +153,7 @@ impl Editor {
       mut app,
       prefab_registrar,
       ui_manager,
-      mut component_registry,
+      component_registry,
     } = self;
 
     app
@@ -230,6 +231,7 @@ impl Editor {
           set_picking_settings,
           initialize_prefabs,
           auto_register_components,
+          load_editor_settings,
         ),
       )
       .add_systems(PostStartup, show_window)
@@ -245,18 +247,7 @@ impl Editor {
       )
       .add_systems(
         OnEnter(EditorState::Exiting),
-        (
-          (
-            view::view2d::save_settings,
-            view::view3d::save_settings,
-            UiPlugin::on_app_exit,
-          ),
-          |mut app_exit: MessageWriter<AppExit>| {
-            app_exit.write(AppExit::Success);
-          },
-        )
-          .chain()
-          .in_set(EditorGlobal),
+        (save_editor_settings, finish_exit).in_set(EditorGlobal),
       );
   }
 }
@@ -267,15 +258,37 @@ struct EditorGlobal;
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 struct Editing;
 
-#[derive(Resource)]
+#[derive(Resource, Reflect, Serialize, Deserialize)]
 struct EditorSettings {
   render_ui: bool,
+  game_requires_mouse: bool,
+  game_requires_picking: bool,
 }
 
 impl Default for EditorSettings {
   fn default() -> Self {
-    Self { render_ui: true }
+    Self {
+      render_ui: true,
+      game_requires_mouse: false,
+      game_requires_picking: false,
+    }
   }
+}
+
+struct EditorSettingsSetting;
+
+impl AsRef<str> for EditorSettingsSetting {
+  fn as_ref(&self) -> &str {
+    "editor.settings"
+  }
+}
+
+fn save_editor_settings(mut settings: Settings, editor_settings: Res<EditorSettings>) -> Result {
+  settings.set(EditorSettingsSetting, &*editor_settings)
+}
+
+fn load_editor_settings(mut settings: Settings, mut editor_settings: ResMut<EditorSettings>) {
+  *editor_settings = settings.get_or_default(EditorSettingsSetting);
 }
 
 struct WindowMaximizedSetting;
@@ -289,9 +302,9 @@ impl AsRef<str> for WindowMaximizedSetting {
 fn auto_register_components(world: &mut World) {
   world.resource_scope(|world, mut component_registry: Mut<ComponentRegistry>| {
     let app_type_registry = world.resource::<AppTypeRegistry>().0.clone();
-    let tr = app_type_registry.read();
+    let type_registry = app_type_registry.read();
 
-    for entry in tr.iter() {
+    for entry in type_registry.iter() {
       component_registry.register_raw(world, entry);
     }
   });
@@ -305,6 +318,10 @@ fn show_window(mut q_windows: Query<&mut Window>) {
   for mut window in &mut q_windows {
     window.visible = true;
   }
+}
+
+fn finish_exit(mut app_exit: MessageWriter<AppExit>) {
+  app_exit.write(AppExit::Success);
 }
 
 fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {

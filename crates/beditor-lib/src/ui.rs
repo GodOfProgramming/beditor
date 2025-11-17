@@ -5,7 +5,7 @@ pub mod misc;
 pub mod prebuilt;
 
 use crate::{
-  EditorSettings, Settings,
+  EditorSettings, EditorState, Settings,
   ui::managers::{CurrentLayoutSetting, SaveLayoutOnExitSetting},
   util::storage::Layouts,
 };
@@ -75,6 +75,7 @@ impl Plugin for UiPlugin {
       .add_observer(RemoveUiEvent::on_event)
       .add_systems(Startup, Self::init_resources)
       .add_systems(First, Self::setup_ctx)
+      .add_systems(OnEnter(EditorState::Exiting), Self::on_app_exit)
       .add_systems(
         EguiPrimaryContextPass,
         (

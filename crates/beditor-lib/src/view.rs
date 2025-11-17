@@ -3,7 +3,7 @@ pub mod view2d;
 pub mod view3d;
 
 use crate::{
-  Editing, input,
+  Editing, EditorState, input,
   ui::{
     misc::UiInfo,
     prebuilt::{editor_view::EditorView, game_view::GameView},
@@ -54,6 +54,10 @@ impl Plugin for EditorViewPlugin {
       .add_systems(OnExit(ActiveEditorCamera::Cam2D), view2d::save_settings)
       .add_systems(OnEnter(ActiveEditorCamera::Cam3D), view3d::enable)
       .add_systems(OnExit(ActiveEditorCamera::Cam3D), view3d::save_settings)
+      .add_systems(
+        OnEnter(EditorState::Exiting),
+        (view2d::save_settings, view3d::save_settings),
+      )
       .add_systems(
         Update,
         (

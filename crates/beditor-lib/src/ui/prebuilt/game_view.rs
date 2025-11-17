@@ -1,4 +1,4 @@
-use crate::{misc::ShrinkableViewport, ui::Ui};
+use crate::{DisableGameUiEvent, EnableGameUiEvent, misc::ShrinkableViewport, ui::Ui};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use persistent_id::Identifiable;
 use std::marker::PhantomData;
@@ -9,7 +9,6 @@ where
   C: Component + Reflect,
 {
   viewport_rect: Rect,
-  was_rendered: bool,
   #[reflect(ignore)]
   _pd: PhantomData<C>,
 }
@@ -21,19 +20,7 @@ where
   fn default() -> Self {
     Self {
       viewport_rect: default(),
-      was_rendered: false,
       _pd: PhantomData,
-    }
-  }
-}
-
-impl<C> GameView<C>
-where
-  C: Component + Reflect,
-{
-  fn on_preupdate(mut q_game_views: Query<&mut Self>) {
-    for mut game_view in &mut q_game_views {
-      game_view.was_rendered = false;
     }
   }
 }
@@ -54,6 +41,7 @@ where
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's, C: Component> {
+  commands: Commands<'w, 's>,
   q_cameras: Query<'w, 's, &'static mut Camera, With<C>>,
   title: Local<'s, String>,
 }
@@ -72,9 +60,7 @@ where
   }
 
   fn init(app: &mut App) {
-    app
-      .add_systems(PreUpdate, Self::on_preupdate)
-      .add_systems(PostUpdate, Self::set_viewport);
+    app.add_systems(PostUpdate, Self::set_viewport);
   }
 
   fn spawn(mut params: Self::Params<'_, '_>) -> Self {
@@ -90,8 +76,6 @@ where
   }
 
   fn render(&mut self, ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {
-    self.was_rendered = true;
-
     let egui_rect = ui.clip_rect();
     self.viewport_rect = Rect {
       max: Vec2::new(egui_rect.max.x, egui_rect.max.y),
@@ -100,13 +84,23 @@ where
   }
 
   fn when_rendered(&mut self, mut params: Self::Params<'_, '_>) {
-    for mut camera in &mut params.q_cameras {
+    for mut camera in &mut params
+      .q_cameras
+      .iter_mut()
+      .filter(|camera| !camera.is_active)
+    {
+      params.commands.trigger(EnableGameUiEvent);
       camera.is_active = true;
     }
   }
 
   fn when_not_rendered(&mut self, mut params: Self::Params<'_, '_>) {
-    for mut camera in &mut params.q_cameras {
+    for mut camera in &mut params
+      .q_cameras
+      .iter_mut()
+      .filter(|camera| camera.is_active)
+    {
+      params.commands.trigger(DisableGameUiEvent);
       camera.is_active = false;
     }
   }

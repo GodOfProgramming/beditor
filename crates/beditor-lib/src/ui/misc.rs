@@ -22,12 +22,12 @@ use uuid::{Uuid, uuid};
 pub struct NoParams;
 
 #[derive(Component, Default)]
-pub struct UiInfo {
+pub struct UiState {
   pub(super) rendered: bool,
   pub(super) hovered: bool,
 }
 
-impl UiInfo {
+impl UiState {
   pub fn rendered(&self) -> bool {
     self.rendered
   }
@@ -81,11 +81,14 @@ pub unsafe trait UiExtensions: Ui {
   {
     let mut q = world.query::<(&mut Self, &mut UiParams<Self>)>();
     let world_cell = world.as_unsafe_world_cell();
-    let (mut this, mut params) = q
-      .get_mut(unsafe { world_cell.world_mut() }, entity)
-      .unwrap();
-    let params = params.get_mut(unsafe { world_cell.world_mut() });
-    f(this.as_mut(), params)
+    let Ok((mut this, mut params)) = q.get_mut(unsafe { world_cell.world_mut() }, entity) else {
+      panic!("Failed to query {}", <Self as Ui>::NAME);
+    };
+
+    let items = params.get_mut(unsafe { world_cell.world_mut() });
+    let result = f(this.as_mut(), items);
+    unsafe { params.apply(world_cell.world_mut()) };
+    result
   }
 
   fn register_params(entity: Entity, world: &mut World) {
@@ -231,7 +234,7 @@ impl DockExtensions for DockState<Entity> {
               Name::new(<MissingUi as RawUi>::NAME),
               MissingUi::new(name, layout_info.id()),
               PersistentId(<MissingUi as RawUi>::ID),
-              UiInfo::default(),
+              UiState::default(),
               UiComponentState(state),
             ))
             .id()
@@ -248,7 +251,7 @@ pub(crate) trait ShrinkableViewport: Component + Sized {
   fn set_viewport(
     window: Single<&Window, With<PrimaryWindow>>,
     egui_settings: Single<&bevy_egui::EguiContextSettings>,
-    q_views: Query<(&Self, &UiInfo)>,
+    q_views: Query<(&Self, &UiState)>,
     mut q_cameras: Query<&mut Camera, With<<Self as ShrinkableViewport>::Marker>>,
     editor_settings: Res<EditorSettings>,
   ) {

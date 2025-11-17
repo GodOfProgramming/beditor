@@ -5,7 +5,7 @@ pub mod view3d;
 use crate::{
   EditingSystems, EditorState, input,
   ui::{
-    misc::UiInfo,
+    misc::UiState,
     prebuilt::{editor_view::EditorView, game_view::GameView},
   },
   view::cam::{ActiveEditorCamera, EditorCamPlugin},
@@ -103,8 +103,8 @@ enum CameraInputSystems {
 }
 
 impl CameraInputSystems {
-  fn mouse_hovered(q_editor_view_ui_info: Query<&UiInfo, With<EditorView>>) -> bool {
-    q_editor_view_ui_info.iter().any(UiInfo::hovered)
+  fn mouse_hovered(q_editor_view_ui_info: Query<&UiState, With<EditorView>>) -> bool {
+    q_editor_view_ui_info.iter().any(UiState::hovered)
   }
 }
 

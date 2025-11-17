@@ -1,6 +1,6 @@
 [package]
 name = "beditor"
-version = "0.16.1"
+version = "0.17.2"
 edition = "2024"
 rust-version = "1.91.0"
 publish = false

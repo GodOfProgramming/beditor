@@ -11,7 +11,7 @@ use bevy::{
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
-  ecs::system::NonSendMarker,
+  ecs::{entity_disabling::Disabled, system::NonSendMarker},
   log::LogPlugin,
   prelude::*,
   reflect::GetTypeRegistration,
@@ -62,25 +62,12 @@ pub struct Editor {
 
 impl Default for Editor {
   fn default() -> Self {
-    Self::new(App::new())
+    Self::from(App::new())
   }
 }
 
 impl Editor {
-  pub fn new(mut app: App) -> Self {
-    Self::init_app::<fn(DefaultPlugins) -> PluginGroupBuilder>(&mut app, None);
-
-    let ui_manager = UiManager::new(&mut app);
-
-    Self {
-      app,
-      prefab_registrar: default(),
-      component_registry: default(),
-      ui_manager,
-    }
-  }
-
-  pub fn new_with_defaults(f: impl FnOnce(DefaultPlugins) -> PluginGroupBuilder) -> Self {
+  pub fn configure_defaults(f: impl FnOnce(DefaultPlugins) -> PluginGroupBuilder) -> Self {
     let mut app = App::new();
 
     Self::init_app(&mut app, Some(f));
@@ -224,6 +211,17 @@ impl Editor {
             .run_if(in_state(EditorState::Editing)),
         ),
       )
+      .configure_sets(
+        FixedUpdate,
+        (
+          EditorGlobalSystems,
+          EditingSystems
+            .in_set(EditorGlobalSystems)
+            .run_if(in_state(EditorState::Editing)),
+        ),
+      )
+      .add_observer(EnableGameUiEvent::handle)
+      .add_observer(DisableGameUiEvent::handle)
       .add_systems(
         Startup,
         (
@@ -238,7 +236,7 @@ impl Editor {
       .add_systems(OnEnter(EditorState::Editing), show_window_cursor)
       .add_systems(OnExit(EditorState::Editing), remove_picking_from_targets)
       .add_systems(
-        Update,
+        FixedUpdate,
         (
           auto_register_picking_targets.in_set(EditingSystems),
           on_close_requested,
@@ -249,6 +247,21 @@ impl Editor {
         OnEnter(EditorState::Exiting),
         (save_editor_settings, finish_exit).in_set(EditorGlobalSystems),
       );
+  }
+}
+
+impl From<App> for Editor {
+  fn from(mut app: App) -> Self {
+    Self::init_app::<fn(DefaultPlugins) -> PluginGroupBuilder>(&mut app, None);
+
+    let ui_manager = UiManager::new(&mut app);
+
+    Self {
+      app,
+      prefab_registrar: default(),
+      component_registry: default(),
+      ui_manager,
+    }
   }
 }
 
@@ -357,6 +370,38 @@ fn initialize_prefabs(world: &mut World) {
   let prefabs = Prefabs::new(world, registrar);
 
   world.insert_resource(prefabs);
+}
+
+#[derive(Event)]
+pub struct EnableGameUiEvent;
+
+impl EnableGameUiEvent {
+  /// This will likely need further logic to account for game logic that wants to disable UI but needs to not be managed by this
+  /// Maybe a marker component that signals that the editor should not disable or enable the UI as a first pass
+  fn handle(
+    _: On<Self>,
+    mut commands: Commands,
+    q_ui: Query<Entity, (With<Node>, Allow<Disabled>)>,
+  ) {
+    for entity in q_ui {
+      commands
+        .entity(entity)
+        .remove_recursive::<Children, Disabled>();
+    }
+  }
+}
+
+#[derive(Event)]
+pub struct DisableGameUiEvent;
+
+impl DisableGameUiEvent {
+  fn handle(_: On<Self>, mut commands: Commands, q_ui: Query<Entity, With<Node>>) {
+    for entity in q_ui {
+      commands
+        .entity(entity)
+        .insert_recursive::<Children>(Disabled);
+    }
+  }
 }
 
 #[allow(clippy::type_complexity)]

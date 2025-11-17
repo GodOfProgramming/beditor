@@ -23,7 +23,7 @@ use egui_dock::{NodeIndex, SurfaceIndex};
 use events::{AddUiEvent, RemoveUiEvent};
 use itertools::{Either, Itertools};
 use managers::{LayoutManager, UiManager};
-use misc::{MissingUi, UiExtensions, UiInfo};
+use misc::{MissingUi, UiExtensions, UiState};
 use persistent_id::PersistentId;
 use std::{any::TypeId, cell::RefCell};
 use uuid::Uuid;
@@ -82,7 +82,7 @@ impl Plugin for UiPlugin {
           KeyboardFocus::set_state,
           (
             Self::dispatch_render_events,
-            Self::reset_ui_info,
+            Self::reset_ui_state,
             Self::render,
           )
             .chain()
@@ -112,7 +112,7 @@ impl UiPlugin {
     }
   }
 
-  pub fn reset_ui_info(mut q_ui_infos: Query<&mut UiInfo>) {
+  pub fn reset_ui_state(mut q_ui_infos: Query<&mut UiState>) {
     q_ui_infos.par_iter_mut().for_each(|mut ui_info| {
       ui_info.rendered = false;
     });
@@ -125,7 +125,7 @@ impl UiPlugin {
   }
 
   pub fn dispatch_render_events(world: &mut World) {
-    let mut q_entities = world.query::<(Entity, &UiInfo)>();
+    let mut q_entities = world.query::<(Entity, &UiState)>();
     let (rendered, unrendered): (Vec<Entity>, Vec<Entity>) =
       q_entities.iter(world).partition_map(|(entity, ui_info)| {
         if ui_info.rendered {
@@ -462,7 +462,7 @@ impl VTable {
   fn spawn<T: RawUi>(world: &mut World) -> Entity {
     info!("Spawning UI component {}", T::NAME);
     let entity = world
-      .spawn((Name::new(T::NAME), PersistentId(T::ID), UiInfo::default()))
+      .spawn((Name::new(T::NAME), PersistentId(T::ID), UiState::default()))
       .id();
 
     let ui_scene = world
@@ -489,6 +489,7 @@ impl VTable {
 }
 
 struct TabViewer<'a> {
+  /// RefCell so that functions with &self can access a mut World
   world: RefCell<&'a mut World>,
   vtables: &'a mut HashMap<PersistentId, VTable>,
 }
@@ -501,13 +502,12 @@ impl TabViewer<'_> {
     self.vtables[id].clone()
   }
 
-  fn ui_info(&self, entity: Entity, f: impl FnOnce(&mut UiInfo)) {
+  fn ui_info(&self, entity: Entity, f: impl FnOnce(&mut UiState)) {
     let mut world = self.world.borrow_mut();
-    let mut q_ids = world.query::<&mut UiInfo>();
-    let mut ui_info = q_ids.get_mut(&mut world, entity).ok();
-    let ui_info = ui_info.as_deref_mut();
-    if let Some(ui_info) = ui_info {
-      f(ui_info);
+    let mut q_ids = world.query::<&mut UiState>();
+    let ui_info = q_ids.get_mut(&mut world, entity).ok();
+    if let Some(mut ui_info) = ui_info {
+      f(&mut ui_info);
     }
   }
 }

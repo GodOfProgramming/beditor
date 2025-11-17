@@ -1,4 +1,4 @@
-use crate::{Editing, EditorSettings, EditorState, ui::KeyboardFocus};
+use crate::{EditingSystems, EditorSettings, EditorState, ui::KeyboardFocus};
 use bevy::prelude::*;
 use leafwing_input_manager::{
   Actionlike,
@@ -49,7 +49,7 @@ impl Plugin for InputPlugin {
       .configure_sets(
         Update,
         Unfocused
-          .in_set(Editing)
+          .in_set(EditingSystems)
           .run_if(in_state(KeyboardFocus::Unfocused)),
       )
       .add_systems(Startup, Self::init_input)

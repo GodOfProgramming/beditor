@@ -218,9 +218,9 @@ impl Editor {
       .configure_sets(
         Update,
         (
-          EditorGlobal,
-          Editing
-            .in_set(EditorGlobal)
+          EditorGlobalSystems,
+          EditingSystems
+            .in_set(EditorGlobalSystems)
             .run_if(in_state(EditorState::Editing)),
         ),
       )
@@ -240,23 +240,23 @@ impl Editor {
       .add_systems(
         Update,
         (
-          auto_register_picking_targets.in_set(Editing),
+          auto_register_picking_targets.in_set(EditingSystems),
           on_close_requested,
           handle_window_events,
         ),
       )
       .add_systems(
         OnEnter(EditorState::Exiting),
-        (save_editor_settings, finish_exit).in_set(EditorGlobal),
+        (save_editor_settings, finish_exit).in_set(EditorGlobalSystems),
       );
   }
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct EditorGlobal;
+struct EditorGlobalSystems;
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct Editing;
+struct EditingSystems;
 
 #[derive(Resource, Reflect, Serialize, Deserialize)]
 struct EditorSettings {

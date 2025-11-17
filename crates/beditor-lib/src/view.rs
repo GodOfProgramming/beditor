@@ -3,7 +3,7 @@ pub mod view2d;
 pub mod view3d;
 
 use crate::{
-  Editing, EditorState, input,
+  EditingSystems, EditorState, input,
   ui::{
     misc::UiInfo,
     prebuilt::{editor_view::EditorView, game_view::GameView},
@@ -27,19 +27,19 @@ impl Plugin for EditorViewPlugin {
       .configure_sets(
         Update,
         (
-          CameraInput::Mouse
-            .run_if(CameraInput::mouse_hovered)
-            .in_set(Editing),
+          CameraInputSystems::Mouse
+            .run_if(CameraInputSystems::mouse_hovered)
+            .in_set(EditingSystems),
           View2d
-            .in_set(Editing)
+            .in_set(EditingSystems)
             .run_if(in_state(ActiveEditorCamera::Cam2D)),
           View3d
-            .in_set(Editing)
+            .in_set(EditingSystems)
             .run_if(in_state(ActiveEditorCamera::Cam3D)),
-          OrbitSet.run_if(in_state(OrbitState::Active)),
-          PanSet.run_if(in_state(PanState::Active)),
-          ZoomSet.in_set(CameraInput::Mouse),
-          CameraInput::Keyboard
+          OrbitSystems.run_if(in_state(OrbitState::Active)),
+          PanSystems.run_if(in_state(PanState::Active)),
+          ZoomSystems.in_set(CameraInputSystems::Mouse),
+          CameraInputSystems::Keyboard
             .in_set(input::Unfocused)
             .run_if(mouse_movement_active),
         ),
@@ -63,14 +63,14 @@ impl Plugin for EditorViewPlugin {
         (
           view2d::released_mouse_input_actions,
           (
-            view2d::mouse_input_actions.in_set(CameraInput::Mouse),
+            view2d::mouse_input_actions.in_set(CameraInputSystems::Mouse),
             (
-              view2d::pan_system.in_set(PanSet),
-              view2d::zoom_system.in_set(ZoomSet),
+              view2d::pan_system.in_set(PanSystems),
+              view2d::zoom_system.in_set(ZoomSystems),
             ),
           )
             .chain(),
-          view2d::movement_system.in_set(CameraInput::Keyboard),
+          view2d::movement_system.in_set(CameraInputSystems::Keyboard),
         )
           .chain()
           .in_set(View2d),
@@ -80,15 +80,15 @@ impl Plugin for EditorViewPlugin {
         (
           view3d::released_mouse_input_actions,
           (
-            view3d::mouse_input_actions.in_set(CameraInput::Mouse),
+            view3d::mouse_input_actions.in_set(CameraInputSystems::Mouse),
             (
-              view3d::orbit_system.in_set(OrbitSet),
-              view3d::pan_system.in_set(PanSet),
-              view3d::zoom_system.in_set(ZoomSet),
+              view3d::orbit_system.in_set(OrbitSystems),
+              view3d::pan_system.in_set(PanSystems),
+              view3d::zoom_system.in_set(ZoomSystems),
             ),
           )
             .chain(),
-          view3d::movement_system.in_set(CameraInput::Keyboard),
+          view3d::movement_system.in_set(CameraInputSystems::Keyboard),
         )
           .chain()
           .in_set(View3d),
@@ -97,12 +97,12 @@ impl Plugin for EditorViewPlugin {
 }
 
 #[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
-enum CameraInput {
+enum CameraInputSystems {
   Keyboard,
   Mouse,
 }
 
-impl CameraInput {
+impl CameraInputSystems {
   fn mouse_hovered(q_editor_view_ui_info: Query<&UiInfo, With<EditorView>>) -> bool {
     q_editor_view_ui_info.iter().any(UiInfo::hovered)
   }
@@ -133,7 +133,7 @@ where
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct OrbitSet;
+struct OrbitSystems;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States)]
 enum OrbitState {
@@ -142,7 +142,7 @@ enum OrbitState {
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct PanSet;
+struct PanSystems;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States)]
 enum PanState {
@@ -151,4 +151,4 @@ enum PanState {
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct ZoomSet;
+struct ZoomSystems;

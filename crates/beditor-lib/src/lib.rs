@@ -8,14 +8,10 @@ mod view;
 use assets::{Prefab, PrefabPlugin, PrefabRegistrar, Prefabs, StaticPrefab};
 use bevy::{
   app::PluginGroupBuilder,
-  camera::visibility::{Layer, RenderLayers},
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
-  ecs::{
-    bundle::NoBundleEffect,
-    system::{NonSendMarker, SystemParam},
-  },
+  ecs::system::NonSendMarker,
   log::LogPlugin,
   prelude::*,
   reflect::GetTypeRegistration,
@@ -35,7 +31,10 @@ pub mod prelude {
   pub use super::Editor;
   pub use crate::{
     ui::{RawUi, Ui, misc},
-    util::storage::{Layouts, Settings, Storage},
+    util::{
+      EntityManager, GameEntity, GameRenderLayer,
+      storage::{Layouts, Settings, Storage},
+    },
   };
   pub use bevy_egui;
   pub use macros::{self, Identifiable};
@@ -156,8 +155,6 @@ impl Editor {
       mut component_registry,
     } = self;
 
-    Self::auto_register_types(&mut app, &mut component_registry);
-
     app
       .insert_resource(prefab_registrar)
       .insert_resource(component_registry)
@@ -168,130 +165,6 @@ impl Editor {
 
   pub fn run(self) -> AppExit {
     self.to_app().run()
-  }
-
-  // systems
-
-  fn set_picking_settings(mut picking_settings: ResMut<MeshPickingSettings>) {
-    picking_settings.require_markers = true;
-  }
-
-  fn show_window(mut q_windows: Query<&mut Window>) {
-    for mut window in &mut q_windows {
-      window.visible = true;
-    }
-  }
-
-  fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
-    for mut cursor in &mut q_cursors {
-      util::show_cursor(&mut cursor);
-    }
-  }
-
-  fn startup(
-    mut settings: Settings,
-    mut window: Single<&mut Window, With<PrimaryWindow>>,
-  ) -> Result<()> {
-    let maximized = settings.get_or_default::<bool>(WindowMaximizedSetting);
-
-    window.set_maximized(maximized);
-
-    Ok(())
-  }
-
-  fn remove_picking_from_targets(
-    mut commands: Commands,
-    q_targets: Query<Entity, (With<Pickable>, Without<Camera>)>,
-  ) {
-    for target in q_targets.iter() {
-      commands.entity(target).remove::<Pickable>();
-      debug!("Removed Pickable from {target}");
-    }
-  }
-
-  fn initialize_prefabs(world: &mut World) {
-    let Some(registrar) = world.remove_resource::<PrefabRegistrar>() else {
-      return;
-    };
-
-    let prefabs = Prefabs::new(world, registrar);
-
-    world.insert_resource(prefabs);
-  }
-
-  #[allow(clippy::type_complexity)]
-  fn auto_register_picking_targets(
-    mut commands: Commands,
-    q_entities: Query<
-      (Entity, Option<&Name>),
-      (
-        Without<Pickable>,
-        Or<(With<Sprite>, With<Mesh2d>, With<Mesh3d>)>,
-      ),
-    >,
-  ) {
-    for (entity, name) in &q_entities {
-      if let Some(name) = name {
-        debug!("Registered picking on object: {name}");
-      } else {
-        debug!("Registered picking on entity: {entity}");
-      }
-
-      commands
-        .entity(entity)
-        .insert(Pickable {
-          is_hoverable: true,
-          should_block_lower: true,
-        })
-        .observe(Self::handle_click_event);
-    }
-  }
-
-  fn handle_click_event(
-    trigger: On<Pointer<Click>>,
-    mut selection: ResMut<ui::InspectorSelection>,
-    mut q_egui: Single<&mut EguiContext>,
-    q_pickables: Query<&Pickable>,
-  ) {
-    let egui_context = q_egui.get_mut();
-    let modifiers = egui_context.input(|i| i.modifiers);
-
-    let target = trigger.event_target();
-
-    debug!("Received pick for {target}");
-
-    if q_pickables.get(target).is_ok() {
-      debug!("{target} is not pickable");
-      selection.add_selected(target, modifiers.ctrl);
-    }
-  }
-
-  fn on_close_requested(
-    mut close_requests: MessageReader<WindowCloseRequested>,
-    mut next_editor_state: ResMut<NextState<EditorState>>,
-  ) {
-    if !close_requests.is_empty() {
-      close_requests.clear();
-      next_editor_state.set(EditorState::Exiting)
-    }
-  }
-
-  fn handle_window_events(
-    mut settings: Settings,
-    mut events: MessageReader<bevy::window::WindowResized>,
-    _non_send_marker: NonSendMarker,
-  ) -> Result {
-    WINIT_WINDOWS.with_borrow(|windows| {
-      for event in events.read() {
-        let Some(winit_window) = windows.get_window(event.window) else {
-          continue;
-        };
-
-        settings.set(WindowMaximizedSetting, winit_window.is_maximized())?;
-      }
-
-      Ok(())
-    })
   }
 
   fn init_app<F>(app: &mut App, inspector_fn: Option<F>)
@@ -353,22 +226,21 @@ impl Editor {
       .add_systems(
         Startup,
         (
-          Self::startup,
-          (Self::set_picking_settings, Self::initialize_prefabs),
+          configure_windows,
+          set_picking_settings,
+          initialize_prefabs,
+          auto_register_components,
         ),
       )
-      .add_systems(PostStartup, Self::show_window)
-      .add_systems(OnEnter(EditorState::Editing), Self::show_window_cursor)
-      .add_systems(
-        OnExit(EditorState::Editing),
-        Self::remove_picking_from_targets,
-      )
+      .add_systems(PostStartup, show_window)
+      .add_systems(OnEnter(EditorState::Editing), show_window_cursor)
+      .add_systems(OnExit(EditorState::Editing), remove_picking_from_targets)
       .add_systems(
         Update,
         (
-          Self::auto_register_picking_targets.in_set(Editing),
-          Self::on_close_requested,
-          Self::handle_window_events,
+          auto_register_picking_targets.in_set(Editing),
+          on_close_requested,
+          handle_window_events,
         ),
       )
       .add_systems(
@@ -386,15 +258,6 @@ impl Editor {
           .chain()
           .in_set(EditorGlobal),
       );
-  }
-
-  fn auto_register_types(app: &mut App, component_registry: &mut ComponentRegistry) {
-    let app_type_registry = app.world().resource::<AppTypeRegistry>().0.clone();
-    let tr = app_type_registry.read();
-
-    for entry in tr.iter() {
-      component_registry.register_raw(app.world_mut(), entry);
-    }
   }
 }
 
@@ -423,36 +286,133 @@ impl AsRef<str> for WindowMaximizedSetting {
   }
 }
 
-#[derive(Resource, Default)]
-pub struct GameRenderLayer(Layer);
+fn auto_register_components(world: &mut World) {
+  world.resource_scope(|world, mut component_registry: Mut<ComponentRegistry>| {
+    let app_type_registry = world.resource::<AppTypeRegistry>().0.clone();
+    let tr = app_type_registry.read();
 
-#[derive(Component)]
-#[require(RenderLayers = RenderLayers::layer(0))]
-pub struct GameEntity;
-
-#[derive(SystemParam)]
-pub struct EntityManager<'w, 's> {
-  commands: Commands<'w, 's>,
-  render_layer: Res<'w, GameRenderLayer>,
+    for entry in tr.iter() {
+      component_registry.register_raw(world, entry);
+    }
+  });
 }
 
-impl EntityManager<'_, '_> {
-  pub fn spawn(&mut self, bundle: impl Bundle) -> EntityCommands<'_> {
-    let mut cmds = self
-      .commands
-      .spawn(RenderLayers::layer(self.render_layer.0));
-    cmds.insert(bundle);
-    cmds
-  }
+fn set_picking_settings(mut picking_settings: ResMut<MeshPickingSettings>) {
+  picking_settings.require_markers = true;
+}
 
-  pub fn spawn_batch<I>(&mut self, batch: I)
-  where
-    I: IntoIterator + Send + Sync + 'static,
-    I::IntoIter: Send + Sync + 'static,
-    I::Item: Bundle<Effect: NoBundleEffect>,
-  {
-    self
-      .commands
-      .spawn_batch(batch.into_iter().map(|bundle| (GameEntity, bundle)));
+fn show_window(mut q_windows: Query<&mut Window>) {
+  for mut window in &mut q_windows {
+    window.visible = true;
   }
+}
+
+fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
+  for mut cursor in &mut q_cursors {
+    util::show_cursor(&mut cursor);
+  }
+}
+
+fn configure_windows(
+  mut settings: Settings,
+  mut window: Single<&mut Window, With<PrimaryWindow>>,
+) -> Result<()> {
+  let maximized = settings.get_or_default::<bool>(WindowMaximizedSetting);
+  window.set_maximized(maximized);
+  Ok(())
+}
+
+fn remove_picking_from_targets(
+  mut commands: Commands,
+  q_targets: Query<Entity, (With<Pickable>, Without<Camera>)>,
+) {
+  for target in q_targets.iter() {
+    commands.entity(target).remove::<Pickable>();
+    debug!("Removed Pickable from {target}");
+  }
+}
+
+fn initialize_prefabs(world: &mut World) {
+  let Some(registrar) = world.remove_resource::<PrefabRegistrar>() else {
+    return;
+  };
+
+  let prefabs = Prefabs::new(world, registrar);
+
+  world.insert_resource(prefabs);
+}
+
+#[allow(clippy::type_complexity)]
+fn auto_register_picking_targets(
+  mut commands: Commands,
+  q_entities: Query<
+    (Entity, Option<&Name>),
+    (
+      Without<Pickable>,
+      Or<(With<Sprite>, With<Mesh2d>, With<Mesh3d>)>,
+    ),
+  >,
+) {
+  for (entity, name) in &q_entities {
+    if let Some(name) = name {
+      debug!("Registered picking on object: {name}");
+    } else {
+      debug!("Registered picking on entity: {entity}");
+    }
+
+    commands
+      .entity(entity)
+      .insert(Pickable {
+        is_hoverable: true,
+        should_block_lower: true,
+      })
+      .observe(handle_click_event);
+  }
+}
+
+fn handle_click_event(
+  trigger: On<Pointer<Click>>,
+  mut selection: ResMut<ui::InspectorSelection>,
+  mut q_egui: Single<&mut EguiContext>,
+  q_pickables: Query<&Pickable>,
+) {
+  let egui_context = q_egui.get_mut();
+  let modifiers = egui_context.input(|i| i.modifiers);
+
+  let target = trigger.event_target();
+
+  debug!("Received pick for {target}");
+
+  if q_pickables.get(target).is_ok() {
+    debug!("{target} is not pickable");
+    selection.add_selected(target, modifiers.ctrl);
+  }
+}
+
+fn on_close_requested(
+  mut close_requests: MessageReader<WindowCloseRequested>,
+  mut next_editor_state: ResMut<NextState<EditorState>>,
+) {
+  if !close_requests.is_empty() {
+    close_requests.clear();
+    next_editor_state.set(EditorState::Exiting)
+  }
+}
+
+fn handle_window_events(
+  mut settings: Settings,
+  mut events: MessageReader<bevy::window::WindowResized>,
+  _non_send_marker: NonSendMarker,
+) -> Result {
+  WINIT_WINDOWS.with_borrow(|windows| {
+    for event in events.read() {
+      let Some(winit_window) = windows.get_window(event.window) else {
+        continue;
+      };
+
+      settings.set(WindowMaximizedSetting, winit_window.is_maximized())?;
+    }
+
+    Ok(())
+  })
 }

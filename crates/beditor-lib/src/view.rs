@@ -27,15 +27,9 @@ impl Plugin for EditorViewPlugin {
       .configure_sets(
         Update,
         (
-          CameraInputSystems::Mouse
-            .run_if(CameraInputSystems::mouse_hovered)
-            .in_set(EditingSystems),
-          View2d
-            .in_set(EditingSystems)
-            .run_if(in_state(ActiveEditorCamera::Cam2D)),
-          View3d
-            .in_set(EditingSystems)
-            .run_if(in_state(ActiveEditorCamera::Cam3D)),
+          CameraInputSystems::Mouse.run_if(CameraInputSystems::mouse_hovered),
+          View2d.run_if(in_state(ActiveEditorCamera::Cam2D)),
+          View3d.run_if(in_state(ActiveEditorCamera::Cam3D)),
           OrbitSystems.run_if(in_state(OrbitState::Active)),
           PanSystems.run_if(in_state(PanState::Active)),
           ZoomSystems.in_set(CameraInputSystems::Mouse),
@@ -61,16 +55,19 @@ impl Plugin for EditorViewPlugin {
       .add_systems(
         Update,
         (
-          view2d::released_mouse_input_actions,
           (
-            view2d::mouse_input_actions.in_set(CameraInputSystems::Mouse),
+            view2d::released_mouse_input_actions,
+            view2d::mouse_input_actions,
             (
               view2d::pan_system.in_set(PanSystems),
               view2d::zoom_system.in_set(ZoomSystems),
             ),
           )
-            .chain(),
-          view2d::movement_system.in_set(CameraInputSystems::Keyboard),
+            .chain()
+            .in_set(CameraInputSystems::Mouse),
+          view2d::movement_system
+            .in_set(CameraInputSystems::Keyboard)
+            .in_set(EditingSystems),
         )
           .chain()
           .in_set(View2d),
@@ -78,17 +75,20 @@ impl Plugin for EditorViewPlugin {
       .add_systems(
         Update,
         (
-          view3d::released_mouse_input_actions,
           (
-            view3d::mouse_input_actions.in_set(CameraInputSystems::Mouse),
+            view3d::released_mouse_input_actions,
+            view3d::mouse_input_actions,
             (
               view3d::orbit_system.in_set(OrbitSystems),
               view3d::pan_system.in_set(PanSystems),
               view3d::zoom_system.in_set(ZoomSystems),
             ),
           )
-            .chain(),
-          view3d::movement_system.in_set(CameraInputSystems::Keyboard),
+            .chain()
+            .in_set(CameraInputSystems::Mouse),
+          view3d::movement_system
+            .in_set(CameraInputSystems::Keyboard)
+            .in_set(EditingSystems),
         )
           .chain()
           .in_set(View3d),

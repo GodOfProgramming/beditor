@@ -3,7 +3,7 @@ pub mod view2d;
 pub mod view3d;
 
 use crate::{
-  EditingSystems, EditorState, input,
+  EditorState, input,
   ui::{
     misc::UiState,
     prebuilt::{editor_view::EditorView, game_view::GameView},
@@ -32,7 +32,6 @@ impl Plugin for EditorViewPlugin {
           View3d.run_if(in_state(ActiveEditorCamera::Cam3D)),
           OrbitSystems.run_if(in_state(OrbitState::Active)),
           PanSystems.run_if(in_state(PanState::Active)),
-          ZoomSystems.in_set(CameraInputSystems::Mouse),
           CameraInputSystems::Keyboard
             .in_set(input::Unfocused)
             .run_if(mouse_movement_active),
@@ -58,16 +57,11 @@ impl Plugin for EditorViewPlugin {
           (
             view2d::released_mouse_input_actions,
             view2d::mouse_input_actions,
-            (
-              view2d::pan_system.in_set(PanSystems),
-              view2d::zoom_system.in_set(ZoomSystems),
-            ),
+            (view2d::pan_system.in_set(PanSystems), view2d::zoom_system),
           )
             .chain()
             .in_set(CameraInputSystems::Mouse),
-          view2d::movement_system
-            .in_set(CameraInputSystems::Keyboard)
-            .in_set(EditingSystems),
+          view2d::movement_system.in_set(CameraInputSystems::Keyboard),
         )
           .chain()
           .in_set(View2d),
@@ -81,14 +75,12 @@ impl Plugin for EditorViewPlugin {
             (
               view3d::orbit_system.in_set(OrbitSystems),
               view3d::pan_system.in_set(PanSystems),
-              view3d::zoom_system.in_set(ZoomSystems),
+              view3d::zoom_system,
             ),
           )
             .chain()
             .in_set(CameraInputSystems::Mouse),
-          view3d::movement_system
-            .in_set(CameraInputSystems::Keyboard)
-            .in_set(EditingSystems),
+          view3d::movement_system.in_set(CameraInputSystems::Keyboard),
         )
           .chain()
           .in_set(View3d),
@@ -149,6 +141,3 @@ enum PanState {
   Active,
   Inactive,
 }
-
-#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct ZoomSystems;

@@ -27,6 +27,13 @@ macro_rules! here {
     println!("{}({})", file!(), line!());
     std::io::stdout().flush().ok();
   }};
+
+  ($($arg:tt)*) => {{
+    use std::io::Write;
+    print!("{}({}): ", file!(), line!());
+    std::io::stdout().flush().ok();
+    println!($($arg)*);
+  }};
 }
 
 pub fn short_name_of<T>() -> &'static str

@@ -8,11 +8,12 @@ use crate::{
   EditorSettings, EditorState, Settings,
   ui::managers::{CurrentLayoutSetting, SaveLayoutOnExitSetting},
   util::storage::Layouts,
+  view::mouse_hovered_in_editor_view,
 };
 use bevy::{
   asset::UntypedAssetId,
   camera::visibility::{Layer, RenderLayers},
-  ecs::{component::Mutable, system::SystemParam},
+  ecs::{component::Mutable, query::QueryFilter, system::SystemParam},
   platform::collections::HashMap,
   prelude::*,
   reflect::GetTypeRegistration,
@@ -25,7 +26,7 @@ use itertools::{Either, Itertools};
 use managers::{LayoutManager, UiManager};
 use misc::{MissingUi, UiExtensions, UiState};
 use persistent_id::PersistentId;
-use std::{any::TypeId, cell::RefCell};
+use std::{any::TypeId, cell::RefCell, marker::PhantomData};
 use uuid::Uuid;
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
@@ -36,7 +37,6 @@ struct EditorUi;
   PrimaryEguiContext = default_primary_context(),
   Camera = editor_camera(),
   Camera2d,
-  MeshPickingCamera,
   RenderLayers = RenderLayers::layer(EDITOR_UI_LAYER))]
 pub struct EditorUiCamera;
 
@@ -66,7 +66,11 @@ impl Plugin for UiPlugin {
 
     app
       .insert_resource(egui_settings)
-      .add_plugins((EguiPlugin::default(), DefaultInspectorConfigPlugin))
+      .add_plugins((
+        EguiPlugin::default(),
+        DefaultInspectorConfigPlugin,
+        InspectorIntegrationPlugin::<Or<(With<Sprite>, With<Mesh2d>, With<Mesh3d>, With<Node>)>>::default(),
+      ))
       .init_resource::<InspectorSelection>()
       .init_resource::<LayoutManager>()
       .init_state::<KeyboardFocus>()
@@ -74,8 +78,8 @@ impl Plugin for UiPlugin {
       .add_observer(AddUiEvent::on_event)
       .add_observer(RemoveUiEvent::on_event)
       .add_systems(Startup, Self::init_resources)
-      .add_systems(First, Self::setup_ctx)
       .add_systems(OnEnter(EditorState::Exiting), Self::on_app_exit)
+      .add_systems(First, Self::setup_ctx)
       .add_systems(
         EguiPrimaryContextPass,
         (
@@ -86,7 +90,7 @@ impl Plugin for UiPlugin {
             Self::render,
           )
             .chain()
-            .run_if(|editor_settings: Res<EditorSettings>| editor_settings.render_ui),
+            .run_if(should_render_ui),
         )
           .in_set(EditorUi),
       );
@@ -102,13 +106,22 @@ impl UiPlugin {
     world.resource_scope(|world, mut ui_manager: Mut<UiManager>| ui_manager.restore_or_init(world))
   }
 
-  fn setup_ctx(mut q_ctx: Query<&mut bevy_egui::EguiContext, Added<PrimaryEguiContext>>) {
+  fn setup_ctx(
+    mut q_ctx: Query<
+      (
+        &mut bevy_egui::EguiContext,
+        &mut bevy_egui::EguiContextSettings,
+      ),
+      Added<PrimaryEguiContext>,
+    >,
+  ) {
     let mut fonts = egui::FontDefinitions::default();
     egui_phosphor_icons::add_fonts(&mut fonts);
 
-    for mut ctx in &mut q_ctx {
+    for (mut ctx, mut settings) in &mut q_ctx {
       let ctx = ctx.get_mut();
       ctx.set_fonts(fonts.clone());
+      settings.capture_pointer_input = false;
     }
   }
 
@@ -649,6 +662,61 @@ impl InspectorSelection {
   }
 }
 
+pub struct InspectorIntegrationPlugin<F: QueryFilter>(PhantomData<F>);
+
+impl<F: QueryFilter> Default for InspectorIntegrationPlugin<F> {
+  fn default() -> Self {
+    Self(default())
+  }
+}
+
+impl<F: QueryFilter + Send + Sync + 'static> Plugin for InspectorIntegrationPlugin<F> {
+  fn build(&self, app: &mut App) {
+    app.add_systems(
+      FixedUpdate,
+      (
+        auto_register_picking_targets::<F>,
+        handle_click_events::<F>.run_if(mouse_hovered_in_editor_view),
+      ),
+    );
+  }
+}
+
+fn auto_register_picking_targets<F: QueryFilter>(
+  mut commands: Commands,
+  q_entities: Query<(Entity, Option<&Name>), (Without<Pickable>, F)>,
+) {
+  for (entity, name) in &q_entities {
+    if let Some(name) = name {
+      debug!("Registered picking on object: {name}");
+    } else {
+      debug!("Registered picking on entity: {entity}");
+    }
+
+    commands.entity(entity).insert(Pickable {
+      is_hoverable: true,
+      should_block_lower: true,
+    });
+  }
+}
+
+fn handle_click_events<F: QueryFilter>(
+  mut events: MessageReader<Pointer<Click>>,
+  mut selection: ResMut<InspectorSelection>,
+  keyboard: Res<ButtonInput<KeyCode>>,
+  q_pickables: Query<(), F>,
+) {
+  for event in events
+    .read()
+    .filter(|event| q_pickables.contains(event.event_target()))
+  {
+    selection.add_selected(
+      event.event_target(),
+      keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
+    );
+  }
+}
+
 #[derive(Default, Deref, DerefMut, Debug)]
 pub struct SelectedEntities(bevy_inspector::hierarchy::SelectedEntities);
 
@@ -674,4 +742,8 @@ impl KeyboardFocus {
 
     keyboard_focus.set(focus.map(Self::Focused).unwrap_or(Self::Unfocused))
   }
+}
+
+fn should_render_ui(editor_settings: Res<EditorSettings>) -> bool {
+  editor_settings.render_ui
 }

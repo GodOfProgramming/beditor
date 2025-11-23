@@ -11,7 +11,7 @@ use bevy::{
   diagnostic::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
-  ecs::{entity_disabling::Disabled, system::NonSendMarker},
+  ecs::{entity_disabling::Disabled, query::QueryFilter, system::NonSendMarker},
   log::LogPlugin,
   prelude::*,
   reflect::GetTypeRegistration,
@@ -19,7 +19,6 @@ use bevy::{
   window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
   winit::WINIT_WINDOWS,
 };
-use bevy_egui::EguiContext;
 use input::InputPlugin;
 pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
@@ -27,6 +26,8 @@ use serde::{Deserialize, Serialize};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
 use util::{LogLevel, LoggingExtensionsPlugin};
 use view::EditorViewPlugin;
+
+use crate::ui::InspectorIntegrationPlugin;
 
 pub mod prelude {
   pub use super::Editor;
@@ -128,6 +129,13 @@ impl Editor {
     self
   }
 
+  pub fn register_pickable<F: QueryFilter + Send + Sync + 'static>(&mut self) -> &mut Self {
+    self
+      .app
+      .add_plugins(InspectorIntegrationPlugin::<F>::default());
+    self
+  }
+
   fn register_type<T>(&mut self)
   where
     T: GetTypeRegistration,
@@ -191,16 +199,14 @@ impl Editor {
             custom_layer: util::dynamic_log_layer,
             ..default()
           }),
-        EditorViewPlugin,
         MeshPickingPlugin,
-        InputPlugin,
-        UiPlugin,
         FrameTimeDiagnosticsPlugin::default(),
         EntityCountDiagnosticsPlugin::default(),
         SystemInformationDiagnosticsPlugin,
         RemotePlugin::default(),
         RemoteHttpPlugin::default(),
       ))
+      .add_plugins((EditorViewPlugin, InputPlugin, UiPlugin))
       .insert_state(EditorState::Editing)
       .configure_sets(
         Update,
@@ -234,15 +240,7 @@ impl Editor {
       )
       .add_systems(PostStartup, show_window)
       .add_systems(OnEnter(EditorState::Editing), show_window_cursor)
-      .add_systems(OnExit(EditorState::Editing), remove_picking_from_targets)
-      .add_systems(
-        FixedUpdate,
-        (
-          auto_register_picking_targets.in_set(EditingSystems),
-          on_close_requested,
-          handle_window_events,
-        ),
-      )
+      .add_systems(FixedUpdate, (on_close_requested, handle_window_events))
       .add_systems(
         OnEnter(EditorState::Exiting),
         (save_editor_settings, finish_exit).in_set(EditorGlobalSystems),
@@ -352,16 +350,6 @@ fn configure_windows(
   Ok(())
 }
 
-fn remove_picking_from_targets(
-  mut commands: Commands,
-  q_targets: Query<Entity, (With<Pickable>, Without<Camera>)>,
-) {
-  for target in q_targets.iter() {
-    commands.entity(target).remove::<Pickable>();
-    debug!("Removed Pickable from {target}");
-  }
-}
-
 fn initialize_prefabs(world: &mut World) {
   let Some(registrar) = world.remove_resource::<PrefabRegistrar>() else {
     return;
@@ -401,53 +389,6 @@ impl DisableGameUiEvent {
         .entity(entity)
         .insert_recursive::<Children>(Disabled);
     }
-  }
-}
-
-#[allow(clippy::type_complexity)]
-fn auto_register_picking_targets(
-  mut commands: Commands,
-  q_entities: Query<
-    (Entity, Option<&Name>),
-    (
-      Without<Pickable>,
-      Or<(With<Sprite>, With<Mesh2d>, With<Mesh3d>)>,
-    ),
-  >,
-) {
-  for (entity, name) in &q_entities {
-    if let Some(name) = name {
-      debug!("Registered picking on object: {name}");
-    } else {
-      debug!("Registered picking on entity: {entity}");
-    }
-
-    commands
-      .entity(entity)
-      .insert(Pickable {
-        is_hoverable: true,
-        should_block_lower: true,
-      })
-      .observe(handle_click_event);
-  }
-}
-
-fn handle_click_event(
-  trigger: On<Pointer<Click>>,
-  mut selection: ResMut<ui::InspectorSelection>,
-  mut q_egui: Single<&mut EguiContext>,
-  q_pickables: Query<&Pickable>,
-) {
-  let egui_context = q_egui.get_mut();
-  let modifiers = egui_context.input(|i| i.modifiers);
-
-  let target = trigger.event_target();
-
-  debug!("Received pick for {target}");
-
-  if q_pickables.get(target).is_ok() {
-    debug!("{target} is not pickable");
-    selection.add_selected(target, modifiers.ctrl);
   }
 }
 

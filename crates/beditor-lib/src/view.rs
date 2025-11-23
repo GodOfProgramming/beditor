@@ -27,7 +27,7 @@ impl Plugin for EditorViewPlugin {
       .configure_sets(
         Update,
         (
-          CameraInputSystems::Mouse.run_if(CameraInputSystems::mouse_hovered),
+          CameraInputSystems::Mouse.run_if(mouse_hovered_in_editor_view),
           View2d.run_if(in_state(ActiveEditorCamera::Cam2D)),
           View3d.run_if(in_state(ActiveEditorCamera::Cam3D)),
           OrbitSystems.run_if(in_state(OrbitState::Active)),
@@ -94,10 +94,10 @@ enum CameraInputSystems {
   Mouse,
 }
 
-impl CameraInputSystems {
-  fn mouse_hovered(q_editor_view_ui_info: Query<&UiState, With<EditorView>>) -> bool {
-    q_editor_view_ui_info.iter().any(UiState::hovered)
-  }
+pub fn mouse_hovered_in_editor_view(
+  q_editor_view_ui_info: Query<&UiState, With<EditorView>>,
+) -> bool {
+  q_editor_view_ui_info.iter().any(UiState::hovered)
 }
 
 fn mouse_movement_active(orbit: Res<State<OrbitState>>, pan: Res<State<PanState>>) -> bool {

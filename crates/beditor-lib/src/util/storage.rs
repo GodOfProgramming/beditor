@@ -29,13 +29,13 @@ impl Storage {
   }
 
   fn path() -> PathBuf {
-    const FILE: &str = concat!(env!("CARGO_PKG_NAME"), ".sqlite");
-    std::env::current_exe()
-      .unwrap()
-      .parent()
-      .unwrap()
-      .to_path_buf()
-      .join(FILE)
+    let current_exe = std::env::current_exe().expect("failed to get current executable");
+    let stem = current_exe
+      .file_stem()
+      .expect("failed to get current executable file stem");
+
+    let filename = format!("{}-beditor-settings.sqlite", stem.display());
+    current_exe.parent().unwrap().to_path_buf().join(filename)
   }
 }
 

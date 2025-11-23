@@ -52,6 +52,14 @@ pub enum EditorState {
   Exiting,
 }
 
+pub struct EditorPlugin;
+
+impl Plugin for EditorPlugin {
+  fn build(&self, _: &mut App) {
+    // Do nothing, this is a marker plugin
+  }
+}
+
 #[derive(Deref, DerefMut)]
 pub struct Editor {
   #[deref]
@@ -152,6 +160,7 @@ impl Editor {
     } = self;
 
     app
+      .add_plugins(EditorPlugin)
       .insert_resource(prefab_registrar)
       .insert_resource(component_registry)
       .insert_resource(ui_manager);

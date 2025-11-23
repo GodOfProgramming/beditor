@@ -6,7 +6,10 @@ pub mod prebuilt;
 
 use crate::{
   EditorSettings, EditorState, Settings,
-  ui::managers::{CurrentLayoutSetting, SaveLayoutOnExitSetting},
+  ui::{
+    events::AddUiMessage,
+    managers::{CurrentLayoutSetting, SaveLayoutOnExitSetting},
+  },
   util::storage::Layouts,
   view::mouse_hovered_in_editor_view,
 };
@@ -21,7 +24,7 @@ use bevy::{
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
 use bevy_inspector_egui::{DefaultInspectorConfigPlugin, bevy_inspector};
 use egui_dock::{NodeIndex, SurfaceIndex};
-use events::{AddUiEvent, RemoveUiEvent};
+use events::RemoveUiEvent;
 use itertools::{Either, Itertools};
 use managers::{LayoutManager, UiManager};
 use misc::{MissingUi, UiExtensions, UiState};
@@ -74,12 +77,13 @@ impl Plugin for UiPlugin {
       .init_resource::<InspectorSelection>()
       .init_resource::<LayoutManager>()
       .init_state::<KeyboardFocus>()
+      .add_message::<AddUiMessage>()
       .configure_sets(EguiPrimaryContextPass, EditorUi)
-      .add_observer(AddUiEvent::on_event)
       .add_observer(RemoveUiEvent::on_event)
       .add_systems(Startup, Self::init_resources)
       .add_systems(OnEnter(EditorState::Exiting), Self::on_app_exit)
       .add_systems(First, Self::setup_ctx)
+      .add_systems(FixedUpdate, AddUiMessage::handle)
       .add_systems(
         EguiPrimaryContextPass,
         (
@@ -564,9 +568,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
       ui.add_enabled_ui(enabled, |ui| {
         if ui.checkbox(&mut exists, name).clicked() {
           let entity = (vtable.spawn)(&mut world);
-          world
-            .commands()
-            .trigger(AddUiEvent::new(surface, node, entity));
+          world.write_message(AddUiMessage::new(surface, node, entity));
         }
       });
     }
@@ -584,7 +586,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         if ui.button(name).clicked() {
           let mut world = self.world.borrow_mut();
           let entity = (vtable.spawn)(&mut world);
-          world.trigger(AddUiEvent::new(surface, node, entity));
+          world.write_message(AddUiMessage::new(surface, node, entity));
         }
       }
     }

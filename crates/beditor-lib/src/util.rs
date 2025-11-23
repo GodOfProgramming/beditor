@@ -162,7 +162,8 @@ impl WindowExtensions for Window {
   }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Reflect, Default)]
+#[reflect(Resource, Default)]
 pub struct GameRenderLayer(CameraLayer);
 
 #[derive(Component)]

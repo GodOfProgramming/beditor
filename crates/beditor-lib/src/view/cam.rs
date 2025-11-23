@@ -60,6 +60,7 @@ pub enum ActiveEditorCamera {
 }
 
 #[derive(Resource, Reflect, Deref)]
+#[reflect(Resource, Default)]
 pub struct GameCameraColor(Color);
 
 impl Default for GameCameraColor {
@@ -68,7 +69,8 @@ impl Default for GameCameraColor {
   }
 }
 
-#[derive(Resource, Default, Deref, DerefMut)]
+#[derive(Resource, Reflect, Default, Deref, DerefMut)]
+#[reflect(Resource, Default)]
 pub struct RenderCameras(bool);
 
 struct RenderCamerasSetting;

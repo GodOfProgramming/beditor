@@ -3,11 +3,7 @@ use crate::{
   util::vfs::{Vfs, VfsPath},
 };
 use bevy::{
-  ecs::{
-    component::{Component, ComponentId},
-    resource::Resource,
-    world::FromWorld,
-  },
+  ecs::{component::ComponentId, world::FromWorld},
   prelude::*,
   reflect::{GetTypeRegistration, Reflect, TypeRegistration},
   utils::TypeIdMap,

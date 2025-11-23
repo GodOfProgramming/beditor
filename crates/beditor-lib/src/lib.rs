@@ -270,6 +270,7 @@ struct EditorGlobalSystems;
 struct EditingSystems;
 
 #[derive(Resource, Reflect, Serialize, Deserialize)]
+#[reflect(Resource, Default)]
 struct EditorSettings {
   render_ui: bool,
   game_requires_mouse: bool,

@@ -12,8 +12,12 @@ impl RawUi for Hierarchy {
 
   fn init(app: &mut App) {
     app
-      .add_observer(SelectEntityEvent::handle)
-      .add_observer(ReparentEvent::handle);
+      .add_message::<SelectEntityMessage>()
+      .add_message::<ReparentMessage>()
+      .add_systems(
+        FixedUpdate,
+        (SelectEntityMessage::handle, ReparentMessage::handle),
+      );
   }
 
   fn spawn(_entity: Entity, _world: &mut World) -> Self {
@@ -62,11 +66,11 @@ impl Hierarchy {
     }
 
     if ui.button("Select").clicked() {
-      world.trigger(SelectEntityEvent(entity));
+      world.write_message(SelectEntityMessage(entity));
     }
 
     if ui.button("Reparent Selected").clicked() {
-      world.trigger(ReparentEvent(entity));
+      world.write_message(ReparentMessage(entity));
     }
 
     let mut entity_ref = world.entity_mut(entity);
@@ -77,23 +81,31 @@ impl Hierarchy {
   }
 }
 
-#[derive(EntityEvent)]
-struct SelectEntityEvent(Entity);
+#[derive(Message)]
+struct SelectEntityMessage(Entity);
 
-impl SelectEntityEvent {
-  fn handle(event: On<Self>, mut selection: ResMut<InspectorSelection>) {
-    select_entity(&mut selection, event.0);
+impl SelectEntityMessage {
+  fn handle(mut message_reader: MessageReader<Self>, mut selection: ResMut<InspectorSelection>) {
+    for msg in message_reader.read() {
+      select_entity(&mut selection, msg.0);
+    }
   }
 }
 
-#[derive(EntityEvent)]
-struct ReparentEvent(Entity);
+#[derive(Message)]
+struct ReparentMessage(Entity);
 
-impl ReparentEvent {
-  fn handle(event: On<Self>, mut commands: Commands, mut selection: ResMut<InspectorSelection>) {
-    if let InspectorSelection::Entities(selected) = &*selection {
-      commands.entity(event.0).add_children(selected.as_slice());
-      select_entity(&mut selection, event.0);
+impl ReparentMessage {
+  fn handle(
+    mut message_reader: MessageReader<Self>,
+    mut commands: Commands,
+    mut selection: ResMut<InspectorSelection>,
+  ) {
+    for msg in message_reader.read() {
+      if let InspectorSelection::Entities(selected) = &*selection {
+        commands.entity(msg.0).add_children(selected.as_slice());
+        select_entity(&mut selection, msg.0);
+      }
     }
   }
 }

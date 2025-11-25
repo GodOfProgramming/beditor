@@ -9,7 +9,7 @@ use super::{
 use crate::{
   Settings,
   misc::UiResourceState,
-  ui::prebuilt::menu_bar,
+  ui::prebuilt::{logs::Logs, menu_bar},
   util::storage::{LayoutInfo, Layouts},
 };
 use bevy::{ecs::system::SystemState, platform::collections::HashMap, prelude::*};
@@ -45,6 +45,7 @@ impl UiManager {
     this.register::<Inspector>(app);
     this.register::<Prefabs>(app);
     this.register::<Resources>(app);
+    this.register::<Logs>(app);
 
     let state = SystemState::<menu_bar::Params<'_, '_>>::new(app.world_mut());
     app.insert_resource(UiResourceState::new(state));

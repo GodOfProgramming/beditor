@@ -19,15 +19,17 @@ derive_more = "1.0.0"
 dotenvy = "0.15.7"
 egui = "0.33.2"
 egui-file-dialog = "0.12.0"
-egui_phosphor_icons = "0.2.0"
 egui-snarl = "0.9.0"
 egui_demo_lib = "0.33.2"
 egui_dock = "0.18.0"
+egui_phosphor_icons = "0.2.0"
+egui_tracing = { git = "https://github.com/GodOfProgramming/egui_tracing", branch = "egui/0.33.2" }
 include_dir = "0.7.4"
 inventory = "0.3.21"
 itertools = "0.14.0"
 lazy_static = "1.5.0"
 leafwing-input-manager = "0.19.0"
+log = "0.4.28"
 macros = { path = "./crates/macros" }
 parking_lot = "0.12.5"
 persistent-id = { path = "./crates/persistent-id" }

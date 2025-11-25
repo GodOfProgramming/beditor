@@ -8,6 +8,7 @@ pub mod editor_view;
 pub mod game_view;
 pub mod hierarchy;
 pub mod inspector;
+pub mod logs;
 pub mod menu_bar;
 pub mod prefabs;
 pub mod resources;

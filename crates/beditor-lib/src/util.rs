@@ -10,15 +10,24 @@ use bevy::{
   },
   log::{
     BoxedLayer, Level,
-    tracing_subscriber::{self, Layer as _, reload},
+    tracing::{self, Subscriber},
+    tracing_subscriber::{
+      self, Layer,
+      layer::{self, Filter, Layered, SubscriberExt},
+      registry::LookupSpan,
+      reload,
+    },
   },
   prelude::*,
   reflect::GetTypeRegistration,
   window::{CursorGrabMode, CursorIcon, CursorOptions},
 };
 use derive_new::new;
+use egui_tracing::EventCollector;
+use parking_lot::Mutex;
 use profiling::tracing::level_filters::LevelFilter;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[macro_export]
 macro_rules! here {
@@ -95,18 +104,94 @@ impl ChangeLogLevelEvent {
 #[derive(Event, Deref, DerefMut, new)]
 pub struct LogLevelChangedEvent(LogLevel);
 
-#[derive(Resource, Deref, DerefMut)]
+#[derive(Resource, Deref, DerefMut, Clone)]
 pub struct LogHandle(reload::Handle<LevelFilter, tracing_subscriber::Registry>);
+
+struct LevelFilterWrapper<S: Subscriber>(reload::Layer<LevelFilter, S>);
+
+impl<S: Subscriber> Filter<S> for LevelFilterWrapper<S> {
+  fn enabled(&self, meta: &tracing::Metadata<'_>, cx: &layer::Context<'_, S>) -> bool {
+    layer::Layer::enabled(&self.0, meta, cx.clone())
+  }
+
+  fn callsite_enabled(
+    &self,
+    meta: &'static tracing::Metadata<'static>,
+  ) -> tracing::subscriber::Interest {
+    layer::Filter::callsite_enabled(&self.0, meta)
+  }
+
+  #[inline]
+  fn event_enabled(&self, event: &tracing::Event<'_>, cx: &layer::Context<'_, S>) -> bool {
+    layer::Layer::<S>::event_enabled(&self.0, event, cx.clone())
+  }
+
+  fn max_level_hint(&self) -> Option<LevelFilter> {
+    layer::Layer::<S>::max_level_hint(&self.0)
+  }
+
+  fn on_new_span(
+    &self,
+    attrs: &tracing::span::Attributes<'_>,
+    id: &tracing::span::Id,
+    ctx: layer::Context<'_, S>,
+  ) {
+    layer::Layer::<S>::on_new_span(&self.0, attrs, id, ctx)
+  }
+
+  fn on_record(
+    &self,
+    id: &tracing::span::Id,
+    values: &tracing::span::Record<'_>,
+    ctx: layer::Context<'_, S>,
+  ) {
+    layer::Layer::<S>::on_record(&self.0, id, values, ctx)
+  }
+
+  fn on_enter(&self, id: &tracing::span::Id, ctx: layer::Context<'_, S>) {
+    layer::Layer::<S>::on_enter(&self.0, id, ctx)
+  }
+
+  fn on_exit(&self, id: &tracing::span::Id, ctx: layer::Context<'_, S>) {
+    layer::Layer::<S>::on_exit(&self.0, id, ctx)
+  }
+
+  fn on_close(&self, id: tracing::span::Id, ctx: layer::Context<'_, S>) {
+    layer::Layer::<S>::on_close(&self.0, id, ctx)
+  }
+}
+
+#[derive(Resource, Deref, DerefMut, Clone)]
+pub struct LogCollector(Arc<Mutex<EventCollector>>);
+
+impl<S> Layer<S> for LogCollector
+where
+  S: Subscriber + for<'a> LookupSpan<'a>,
+{
+  fn on_event(&self, event: &tracing::Event<'_>, ctx: layer::Context<'_, S>) {
+    self.0.lock().on_event(event, ctx);
+  }
+}
 
 pub fn dynamic_log_layer(app: &mut App) -> Option<BoxedLayer> {
   let mut system_state = SystemState::<Settings>::new(app.world_mut());
   let mut settings = system_state.get_mut(app.world_mut());
   let level = settings.get_or_default::<LogLevel>(LogLevelSetting);
-  let (filter, handle) = reload::Layer::new(level.into());
+
+  let (reload_layer, handle) = reload::Layer::new(level.into());
   app.insert_resource(LogHandle(handle));
   app.world_mut().trigger(LogLevelChangedEvent(level));
 
-  Some(filter.boxed())
+  let collector = EventCollector::default().with_level(level.into());
+  let shared_collector = Arc::new(Mutex::new(collector));
+  let log_collector = LogCollector(Arc::clone(&shared_collector));
+  app.insert_resource(log_collector);
+
+  // Cannot use this yet:
+  // https://github.com/tokio-rs/tracing/issues/2704
+  // let layer = log_collector.with_filter(LevelFilterWrapper(reload_layer));
+
+  Some(reload_layer.boxed())
 }
 
 struct LogLevelSetting;

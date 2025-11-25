@@ -1,12 +1,11 @@
 use crate::{
   EditorSettings,
   ui::Ui,
-  util::{ChangeLogLevelEvent, LogLevel, LogLevelChangedEvent},
+  util::LogLevel,
   view::cam::{RenderCameras, SyncRenderCamerasEvent},
 };
 use bevy::{diagnostic::DiagnosticsStore, ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContext, egui};
-use bevy_inspector_egui::reflect_inspector::ui_for_value;
 use uuid::uuid;
 
 #[derive(Default, Component, Reflect)]
@@ -16,20 +15,6 @@ pub struct DebugMenu {
 }
 
 impl DebugMenu {
-  fn log_level_selector(&self, ui: &mut egui::Ui, params: &mut Params) {
-    ui.push_id("log-level-selector", |ui| {
-      ui.horizontal(|ui| {
-        let type_registry = params.type_registry.as_ref().read();
-
-        ui.label("Log Level");
-        let mut log_level = self.log_level;
-        if ui_for_value(&mut log_level, ui, &type_registry) {
-          params.commands.trigger(ChangeLogLevelEvent::new(log_level));
-        }
-      });
-    });
-  }
-
   fn diagnostics(&self, ui: &mut egui::Ui, params: &Params) {
     egui::Grid::new("sys-diagnostics").show(ui, |ui| {
       for diagnostic in params.diagnostics.iter() {
@@ -46,12 +31,6 @@ impl DebugMenu {
     for mut ctx in &mut q_egui_ctx {
       let ctx = ctx.get_mut();
       ctx.set_debug_on_hover(event.0);
-    }
-  }
-
-  fn handle_log_level_changes(event: On<LogLevelChangedEvent>, mut q_self: Query<&mut Self>) {
-    for mut this in &mut q_self {
-      this.log_level = **event;
     }
   }
 }
@@ -72,9 +51,7 @@ impl Ui for DebugMenu {
   type Params<'w, 's> = Params<'w, 's>;
 
   fn init(app: &mut App) {
-    app
-      .add_observer(Self::handle_ui_debug)
-      .add_observer(Self::handle_log_level_changes);
+    app.add_observer(Self::handle_ui_debug);
   }
 
   fn spawn(_params: Self::Params<'_, '_>) -> Self {
@@ -87,10 +64,6 @@ impl Ui for DebugMenu {
 
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
     self.diagnostics(ui, &params);
-
-    ui.separator();
-
-    self.log_level_selector(ui, &mut params);
 
     ui.separator();
 

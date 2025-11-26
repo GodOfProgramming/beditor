@@ -1,5 +1,5 @@
 use crate::{
-  EditorState, Layouts, Settings, UiManager,
+  EditorState, Layouts, Settings, StartEditorInTestingSetting, UiManager,
   misc::{DockExtensions, MissingUi},
   ui::{
     EditorUi, InspectorSelection, components,
@@ -13,11 +13,6 @@ use egui::TextBuffer;
 use egui_dock::DockState;
 use persistent_id::PersistentId;
 use uuid::Uuid;
-
-#[derive(Default, Component, Reflect)]
-pub struct MenuBar {
-  save_layout_on_exit: bool,
-}
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
@@ -34,11 +29,16 @@ pub struct Params<'w, 's> {
   save_layout_dialog_state: ResMut<'w, SaveLayoutDialogState>,
   reset_layout_dialog_state: ResMut<'w, ResetLayoutDialogState>,
 
+  cached_settings: ResMut<'w, CachedSettings>,
   settings: Settings<'w>,
 
   q_transforms: Query<'w, 's, &'static Transform>,
+}
 
-  save_layout_on_exit: Local<'s, bool>,
+#[derive(Resource, Reflect, Default)]
+struct CachedSettings {
+  save_layout_on_exit: bool,
+  start_in_testing: bool,
 }
 
 #[derive(Resource, Default)]
@@ -54,11 +54,13 @@ struct ResetLayoutDialogState {
 
 pub fn init(app: &mut App) {
   app
+    .init_resource::<CachedSettings>()
     .init_resource::<SaveLayoutDialogState>()
     .init_resource::<ResetLayoutDialogState>()
     .add_message::<SaveLayoutMessage>()
     .add_message::<ResetLayoutMessage>()
     .add_message::<LoadLayoutMessage>()
+    .add_systems(Startup, startup)
     .add_systems(
       FixedUpdate,
       (
@@ -71,6 +73,11 @@ pub fn init(app: &mut App) {
       EguiPrimaryContextPass,
       (save_layout_dialog_display, reset_layout_dialog_display).after(EditorUi),
     );
+}
+
+fn startup(mut settings: Settings, mut cached_settings: ResMut<CachedSettings>) {
+  cached_settings.save_layout_on_exit = settings.get_or_default(SaveLayoutOnExitSetting);
+  cached_settings.start_in_testing = settings.get_or_default(StartEditorInTestingSetting);
 }
 
 pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
@@ -114,6 +121,19 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
     }
     _ => (),
   }
+
+  ui.label("Start In Testing");
+  if ui
+    .checkbox(&mut params.cached_settings.start_in_testing, ())
+    .clicked()
+    && let Err(err) = params.settings.set(
+      StartEditorInTestingSetting,
+      params.cached_settings.start_in_testing,
+    )
+  {
+    error!("{err}");
+  }
+  {}
 }
 
 fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
@@ -150,11 +170,12 @@ fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
     ui.horizontal(|ui| {
       ui.label("Save On Exit");
       if ui
-        .toggle_value(&mut params.save_layout_on_exit, ())
+        .checkbox(&mut params.cached_settings.save_layout_on_exit, ())
         .clicked()
-        && let Err(err) = params
-          .settings
-          .set(SaveLayoutOnExitSetting, *params.save_layout_on_exit)
+        && let Err(err) = params.settings.set(
+          SaveLayoutOnExitSetting,
+          params.cached_settings.save_layout_on_exit,
+        )
       {
         error!("{err}");
       }

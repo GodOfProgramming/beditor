@@ -52,6 +52,14 @@ pub enum EditorState {
   Exiting,
 }
 
+pub struct StartEditorInTestingSetting;
+
+impl AsRef<str> for StartEditorInTestingSetting {
+  fn as_ref(&self) -> &str {
+    "editor.start_in_testing"
+  }
+}
+
 pub struct EditorPlugin;
 
 impl Plugin for EditorPlugin {
@@ -244,7 +252,7 @@ impl Editor {
           set_picking_settings,
           initialize_prefabs,
           auto_register_components,
-          load_editor_settings,
+          load_settings,
         ),
       )
       .add_systems(PostStartup, show_window)
@@ -308,8 +316,18 @@ fn save_editor_settings(mut settings: Settings, editor_settings: Res<EditorSetti
   settings.set(EditorSettingsSetting, &*editor_settings)
 }
 
-fn load_editor_settings(mut settings: Settings, mut editor_settings: ResMut<EditorSettings>) {
+fn load_settings(
+  mut settings: Settings,
+  mut editor_settings: ResMut<EditorSettings>,
+  mut next_state: ResMut<NextState<EditorState>>,
+) {
   *editor_settings = settings.get_or_default(EditorSettingsSetting);
+
+  let start_in_testing = settings.get_or_default(StartEditorInTestingSetting);
+
+  if start_in_testing {
+    next_state.set(EditorState::Testing);
+  }
 }
 
 struct WindowMaximizedSetting;

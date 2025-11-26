@@ -1,0 +1,141 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug unit tests in library 'beditor_lib'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--package=beditor-lib"
+        ]
+      }
+    },
+    {
+      "name": "Debug unit tests in library 'persistent_id'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--package=persistent-id"
+        ]
+      }
+    },
+    {
+      "name": "Debug unit tests in library 'beditor'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--package=beditor"
+        ]
+      }
+    },
+    {
+      "name": "Debug example 'components'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "run",
+          "--example=components",
+          "--package=beditor"
+        ]
+      },
+      "args": []
+    },
+    {
+      "name": "Debug unit tests in example 'components'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--example=components",
+          "--package=beditor"
+        ]
+      }
+    },
+    {
+      "name": "Debug example 'custom_ui'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "run",
+          "--example=custom_ui",
+          "--package=beditor"
+        ]
+      },
+      "args": []
+    },
+    {
+      "name": "Debug unit tests in example 'custom_ui'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--example=custom_ui",
+          "--package=beditor"
+        ]
+      }
+    },
+    {
+      "name": "Debug example 'standard_2d_editor'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "run",
+          "--example=standard_2d_editor",
+          "--package=beditor"
+        ]
+      },
+      "args": []
+    },
+    {
+      "name": "Debug unit tests in example 'standard_2d_editor'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--example=standard_2d_editor",
+          "--package=beditor"
+        ]
+      }
+    },
+    {
+      "name": "Debug example 'standard_3d_editor'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "run",
+          "--example=standard_3d_editor",
+          "--package=beditor"
+        ]
+      },
+      "args": []
+    },
+    {
+      "name": "Debug unit tests in example 'standard_3d_editor'",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": [
+          "test",
+          "--example=standard_3d_editor",
+          "--package=beditor"
+        ]
+      }
+    }
+  ]
+}

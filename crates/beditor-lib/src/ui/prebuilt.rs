@@ -1,0 +1,20 @@
+use bevy::prelude::*;
+use std::any::TypeId;
+
+pub mod assets;
+pub mod components;
+pub mod debug;
+pub mod editor_view;
+pub mod game_view;
+pub mod hierarchy;
+pub mod inspector;
+pub mod logs;
+pub mod menu_bar;
+pub mod prefabs;
+pub mod resources;
+
+pub enum InspectorDnd {
+  AddComponent(TypeId),
+  #[allow(dead_code, clippy::complexity)]
+  Custom(Box<dyn Fn(&mut World, &[Entity]) + Send + Sync>),
+}

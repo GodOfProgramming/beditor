@@ -1,6 +1,5 @@
-use beditor::{Editor, assets::StaticPrefab};
+use beditor::{assets::StaticPrefab, prelude::*, uuid};
 use bevy::{ecs::system::SystemParam, prelude::*};
-use macros::Identifiable;
 
 fn main() {
   let mut editor = Editor::default();

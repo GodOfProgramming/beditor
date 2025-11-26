@@ -1,6 +1,6 @@
 use crate::{
   Ui,
-  util::{ChangeLogLevelEvent, LogCollector, LogLevel, LogLevelChangedEvent},
+  util::log::{ChangeLogLevelEvent, EventCollectorHandle, LogLevel, LogLevelChangedEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_inspector_egui::reflect_inspector::ui_for_value;
@@ -14,7 +14,7 @@ pub struct Logs {
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
   commands: Commands<'w, 's>,
-  log_collector: Res<'w, LogCollector>,
+  log_collector: Res<'w, EventCollectorHandle>,
   type_registry: Res<'w, AppTypeRegistry>,
 }
 

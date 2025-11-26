@@ -1,7 +1,7 @@
 use crate::{
   EditorSettings,
   ui::Ui,
-  util::LogLevel,
+  util::log::LogLevel,
   view::cam::{RenderCameras, SyncRenderCamerasEvent},
 };
 use bevy::{diagnostic::DiagnosticsStore, ecs::system::SystemParam, prelude::*};

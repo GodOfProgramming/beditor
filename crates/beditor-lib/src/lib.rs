@@ -12,7 +12,6 @@ use bevy::{
     EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
   },
   ecs::{entity_disabling::Disabled, query::QueryFilter, system::NonSendMarker},
-  log::LogPlugin,
   prelude::*,
   reflect::GetTypeRegistration,
   remote::{RemotePlugin, http::RemoteHttpPlugin},
@@ -24,10 +23,9 @@ pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
 use serde::{Deserialize, Serialize};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
-use util::{LogLevel, LoggingExtensionsPlugin};
 use view::EditorViewPlugin;
 
-use crate::ui::InspectorIntegrationPlugin;
+use crate::{ui::InspectorIntegrationPlugin, util::log::LogPlugin};
 
 pub mod prelude {
   pub use super::Editor;
@@ -199,7 +197,6 @@ impl Editor {
       .init_resource::<EditorSettings>()
       .init_resource::<GameRenderLayer>()
       .add_plugins((
-        LoggingExtensionsPlugin,
         default_plugins
           .set(WindowPlugin {
             primary_window: Some(Window {
@@ -211,11 +208,8 @@ impl Editor {
             close_when_requested: false,
             ..default()
           })
-          .set(LogPlugin {
-            level: LogLevel::Trace.into(),
-            custom_layer: util::dynamic_log_layer,
-            ..default()
-          }),
+          .disable::<bevy::log::LogPlugin>(),
+        LogPlugin,
         MeshPickingPlugin,
         FrameTimeDiagnosticsPlugin::default(),
         EntityCountDiagnosticsPlugin::default(),

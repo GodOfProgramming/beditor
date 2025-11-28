@@ -18,7 +18,7 @@ pub struct Components {
 impl Default for Components {
   fn default() -> Self {
     Self {
-      components_per_row: 10,
+      components_per_row: 20,
     }
   }
 }

@@ -1,5 +1,6 @@
 use bevy::platform::collections::{Equivalent, HashMap};
 use bevy::prelude::*;
+use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
@@ -136,6 +137,24 @@ where
 impl From<VfsPath<&str>> for VfsPath {
   fn from(value: VfsPath<&str>) -> Self {
     Self(value.0.into_iter().map(String::from).collect())
+  }
+}
+
+impl From<VfsPath<Cow<'_, str>>> for VfsPath {
+  fn from(value: VfsPath<Cow<'_, str>>) -> Self {
+    Self(value.0.into_iter().map(String::from).collect())
+  }
+}
+
+impl From<Vec<&'_ str>> for VfsPath {
+  fn from(value: Vec<&'_ str>) -> Self {
+    Self(value.into_iter().map(String::from).collect())
+  }
+}
+
+impl From<Vec<Cow<'_, str>>> for VfsPath {
+  fn from(value: Vec<Cow<'_, str>>) -> Self {
+    Self(value.into_iter().map(String::from).collect())
   }
 }
 

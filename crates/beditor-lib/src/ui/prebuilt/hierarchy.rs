@@ -1,6 +1,10 @@
-use crate::ui::{InspectorSelection, RawUi, SelectedEntities};
+use crate::ui::{
+  InspectorSelection, RawUi, SelectedEntities,
+  prebuilt::{HierarchyDnd, dnd_drop_ui},
+};
 use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector;
+use brefabs::Prefabs;
 use uuid::{Uuid, uuid};
 
 #[derive(Default, Component, Reflect)]
@@ -14,9 +18,16 @@ impl RawUi for Hierarchy {
     app
       .add_message::<SelectEntityMessage>()
       .add_message::<ReparentMessage>()
+      .add_message::<ClearSelectedMessage>()
+      .add_message::<DespawnEntityMessage>()
       .add_systems(
         FixedUpdate,
-        (SelectEntityMessage::handle, ReparentMessage::handle),
+        (
+          SelectEntityMessage::handle,
+          ReparentMessage::handle,
+          ClearSelectedMessage::handle,
+          DespawnEntityMessage::handle,
+        ),
       );
   }
 
@@ -57,14 +68,30 @@ impl Hierarchy {
       extra_state: &mut (),
     };
 
-    hierarchy.show_with_default_filter::<()>(ui)
+    let (resp, prefab) = dnd_drop_ui(ui, |ui| hierarchy.show_with_default_filter::<()>(ui));
+
+    if let Some(dnd) = prefab {
+      match &*dnd {
+        HierarchyDnd::AddPrefab(type_id, name) => {
+          world.resource_scope(|world, prefabs: Mut<Prefabs>| {
+            if selected.is_empty() {
+              prefabs.spawn_untyped(world, *type_id, name);
+            } else {
+              for parent in selected.iter() {
+                if let Some(child) = prefabs.spawn_untyped(world, *type_id, name) {
+                  world.entity_mut(parent).add_child(child);
+                }
+              }
+            }
+          });
+        }
+      }
+    }
+
+    resp.inner
   }
 
   fn context_menu(ui: &mut egui::Ui, entity: Entity, world: &mut World, _: &mut ()) {
-    if ui.button("Despawn").clicked() {
-      world.despawn(entity);
-    }
-
     if ui.button("Select").clicked() {
       world.write_message(SelectEntityMessage(entity));
     }
@@ -74,9 +101,16 @@ impl Hierarchy {
     }
 
     let mut entity_ref = world.entity_mut(entity);
-
     if entity_ref.get::<ChildOf>().is_some() && ui.button("Remove Parent").clicked() {
       entity_ref.remove::<ChildOf>();
+    }
+
+    if ui.button("Despawn").clicked() {
+      world.write_message(DespawnEntityMessage(entity));
+    }
+
+    if ui.button("Clear Selected").clicked() {
+      world.write_message(ClearSelectedMessage);
     }
   }
 }
@@ -114,4 +148,35 @@ fn select_entity(selection: &mut InspectorSelection, entity: Entity) {
   let mut entities = SelectedEntities::default();
   entities.0.select_replace(entity);
   *selection = InspectorSelection::Entities(entities)
+}
+
+#[derive(Message)]
+struct DespawnEntityMessage(Entity);
+
+impl DespawnEntityMessage {
+  fn handle(mut messages: MessageReader<Self>, mut commands: Commands) {
+    for msg in messages.read() {
+      commands.entity(msg.0).despawn();
+    }
+  }
+}
+
+#[derive(Message)]
+struct ClearSelectedMessage;
+
+impl ClearSelectedMessage {
+  fn handle(
+    mut messages: MessageReader<Self>,
+    mut inspector_selection: ResMut<InspectorSelection>,
+  ) {
+    if messages.is_empty() {
+      return;
+    }
+
+    messages.clear();
+
+    if let InspectorSelection::Entities(selected) = inspector_selection.as_mut() {
+      selected.clear();
+    }
+  }
 }

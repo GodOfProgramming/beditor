@@ -16,6 +16,7 @@ uuid = { workspace = true, features = ["serde"] }
 async-std = { workspace = true }
 bevy = { workspace = true, features = ["default", "serialize", "bevy_remote"] }
 bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
+brefabs = { workspace = true }
 derive-new = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 dotenvy = { workspace = true }

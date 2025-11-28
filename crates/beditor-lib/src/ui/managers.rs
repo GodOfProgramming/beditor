@@ -3,13 +3,13 @@ use super::{
   misc::{DockExtensions, MissingUi, UiComponentExtensions},
   prebuilt::{
     assets::Assets, components::Components, debug::DebugMenu, editor_view::EditorView,
-    hierarchy::Hierarchy, inspector::Inspector, prefabs::Prefabs, resources::Resources,
+    hierarchy::Hierarchy, inspector::Inspector, resources::Resources,
   },
 };
 use crate::{
   Settings,
   misc::UiResourceState,
-  ui::prebuilt::{logs::Logs, menu_bar},
+  ui::prebuilt::{logs::Logs, menu_bar, prefabs::PrefabsUi},
   util::storage::{LayoutInfo, Layouts},
 };
 use bevy::{ecs::system::SystemState, platform::collections::HashMap, prelude::*};
@@ -43,9 +43,9 @@ impl UiManager {
     this.register::<EditorView>(app);
     this.register::<Hierarchy>(app);
     this.register::<Inspector>(app);
-    this.register::<Prefabs>(app);
     this.register::<Resources>(app);
     this.register::<Logs>(app);
+    this.register::<PrefabsUi>(app);
 
     let state = SystemState::<menu_bar::Params<'_, '_>>::new(app.world_mut());
     app.insert_resource(UiResourceState::new(state));
@@ -197,7 +197,7 @@ impl UiManager {
     let [central_panel, _right_panel] = tree.split_right(central_panel, 4.0 / 5.0, tabs);
 
     let tabs = vec![
-      self.spawn_type::<Prefabs>(world),
+      self.spawn_type::<PrefabsUi>(world),
       self.spawn_type::<Components>(world),
       self.spawn_type::<Resources>(world),
       self.spawn_type::<Assets>(world),

@@ -6,7 +6,7 @@ use bevy::{
   camera::visibility::{Layer as CameraLayer, RenderLayers},
   ecs::{bundle::NoBundleEffect, system::SystemParam},
   prelude::*,
-  reflect::GetTypeRegistration,
+  reflect::{GetTypeRegistration, TypeRegistration},
   window::{CursorGrabMode, CursorIcon, CursorOptions},
 };
 
@@ -30,10 +30,11 @@ pub fn short_name_of<T>() -> &'static str
 where
   T: GetTypeRegistration,
 {
-  T::get_type_registration()
-    .type_info()
-    .type_path_table()
-    .short_path()
+  short_name_of_type(&T::get_type_registration())
+}
+
+pub fn short_name_of_type(registration: &TypeRegistration) -> &'static str {
+  registration.type_info().type_path_table().short_path()
 }
 
 pub fn show_cursor(cursor: &mut CursorOptions) {

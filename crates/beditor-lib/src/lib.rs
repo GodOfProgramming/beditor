@@ -1,11 +1,9 @@
-pub mod assets;
 mod input;
 mod registry;
 mod ui;
 mod util;
 mod view;
 
-use assets::{Prefab, PrefabPlugin, PrefabRegistrar, Prefabs, StaticPrefab};
 use bevy::{
   app::PluginGroupBuilder,
   diagnostic::{
@@ -18,6 +16,7 @@ use bevy::{
   window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
   winit::WINIT_WINDOWS,
 };
+use brefabs::PrefabPlugin;
 use input::InputPlugin;
 pub use prelude::*;
 use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
@@ -70,9 +69,9 @@ impl Plugin for EditorPlugin {
 pub struct Editor {
   #[deref]
   app: App,
-  prefab_registrar: PrefabRegistrar,
   ui_manager: UiManager,
   component_registry: ComponentRegistry,
+  prefabs: PrefabPlugin,
 }
 
 impl Default for Editor {
@@ -91,10 +90,14 @@ impl Editor {
 
     Self {
       app,
-      prefab_registrar: default(),
       component_registry: default(),
       ui_manager,
+      prefabs: PrefabPlugin::default(),
     }
+  }
+
+  pub fn prefabs(&mut self) -> &mut PrefabPlugin {
+    &mut self.prefabs
   }
 
   pub fn register_component<T: RegisterableComponent>(&mut self) -> &mut Self {
@@ -123,26 +126,6 @@ impl Editor {
     self
   }
 
-  pub fn register_static_prefab<T>(&mut self) -> &mut Self
-  where
-    T: StaticPrefab,
-  {
-    self.register_type::<T>();
-
-    self.prefab_registrar.register::<T>();
-
-    self
-  }
-
-  pub fn load_prefabs<T>(&mut self) -> &mut Self
-  where
-    T: Prefab,
-  {
-    self.register_type::<T>();
-    self.app.add_plugins(PrefabPlugin::<T>::default());
-    self
-  }
-
   pub fn register_pickable<F: QueryFilter + Send + Sync + 'static>(&mut self) -> &mut Self {
     self
       .app
@@ -160,14 +143,13 @@ impl Editor {
   pub fn to_app(self) -> App {
     let Self {
       mut app,
-      prefab_registrar,
       ui_manager,
       component_registry,
+      prefabs,
     } = self;
 
     app
-      .add_plugins(EditorPlugin)
-      .insert_resource(prefab_registrar)
+      .add_plugins((EditorPlugin, prefabs))
       .insert_resource(component_registry)
       .insert_resource(ui_manager);
 
@@ -244,7 +226,6 @@ impl Editor {
         (
           configure_windows,
           set_picking_settings,
-          initialize_prefabs,
           auto_register_components,
           load_settings,
         ),
@@ -267,9 +248,9 @@ impl From<App> for Editor {
 
     Self {
       app,
-      prefab_registrar: default(),
       component_registry: default(),
       ui_manager,
+      prefabs: PrefabPlugin::default(),
     }
   }
 }
@@ -370,16 +351,6 @@ fn configure_windows(
   let maximized = settings.get_or_default::<bool>(WindowMaximizedSetting);
   window.set_maximized(maximized);
   Ok(())
-}
-
-fn initialize_prefabs(world: &mut World) {
-  let Some(registrar) = world.remove_resource::<PrefabRegistrar>() else {
-    return;
-  };
-
-  let prefabs = Prefabs::new(world, registrar);
-
-  world.insert_resource(prefabs);
 }
 
 #[derive(Event)]

@@ -1,6 +1,6 @@
 use crate::{
   Editor,
-  util::vfs::{Vfs, VfsPath},
+  util::{short_name_of_type, vfs::Vfs},
 };
 use bevy::{
   ecs::{component::ComponentId, world::FromWorld},
@@ -64,56 +64,43 @@ impl ComponentRegistry {
       return;
     };
 
-    let name = type_registration.type_info().type_path();
+    let type_name = short_name_of_type(type_registration);
     let type_id = type_registration.type_id();
+    let Some(module_path) = type_registration
+      .type_info()
+      .type_path_table()
+      .module_path()
+    else {
+      unreachable!("Every type should have a module path");
+    };
+
     let component_id = reflect_component.register_component(world);
 
     self.mapping.insert(
       type_id,
       RegisteredComponent {
-        name,
         type_id,
         id: component_id,
       },
     );
 
-    let mut path = name.split("::");
-
-    let count = path.clone().count();
-
-    let (path, Some(name)) = (if count == 0 {
-      (Vec::new(), path.next())
-    } else {
-      (
-        path.clone().take(count - 1).collect::<Vec<_>>(),
-        path.nth(count - 1),
-      )
-    }) else {
+    let Some(path) = self.vfs.mkdir_p(module_path.split("::"), true) else {
       return;
     };
 
-    let path: VfsPath<&str> = path.into();
-    let dir = self.vfs.open(path);
-    dir.add_item(name, type_id);
+    self.vfs.new_item(path, Name::new(type_name), type_id);
 
-    for (p, d) in self.vfs.iter() {
-      debug!("Registered component path: {p:?}: {d:?}");
-    }
+    debug!(module_path, type_name, "Registered component");
   }
 }
 
 #[derive(Clone)]
 pub struct RegisteredComponent {
-  name: &'static str,
   type_id: TypeId,
   id: ComponentId,
 }
 
 impl RegisteredComponent {
-  pub fn name(&self) -> &str {
-    self.name
-  }
-
   pub fn spawn(&self, entity: Entity, world: &mut World) {
     let app_type_registry = world.resource::<AppTypeRegistry>().0.clone();
     let type_registry = app_type_registry.read();

@@ -6,12 +6,11 @@ use crate::{
   },
   util::{
     short_name_of_type,
-    vfs::{Vfs, VfsDir, VfsNode, VfsPath},
+    vfs::{Vfs, VfsNode, VfsPath},
   },
 };
 use bevy::prelude::*;
 use brefabs::Prefabs;
-use itertools::Itertools;
 use std::{any::TypeId, borrow::Cow};
 use uuid::{Uuid, uuid};
 
@@ -38,65 +37,63 @@ impl RawUi for PrefabsUi {
 
   fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
     world.resource_scope(|_, mut vfs_state: Mut<PrefabVfsState>| {
-      ui.horizontal(|ui| {
-        ui.text_edit_singleline(&mut vfs_state.filter);
+      let PrefabVfsState {
+        vfs,
+        current_path,
+        filter,
+      } = vfs_state.as_mut();
 
-        if vfs_state.current_path.has_parent()
+      let current_path = current_path.get_or_insert_with(|| vfs.root().clone());
+
+      ui.horizontal(|ui| {
+        ui.text_edit_singleline(&mut *filter);
+
+        if current_path.has_parent(vfs)
           && ui
             .button(egui_phosphor_icons::icons::ARROW_U_UP_LEFT.regular())
             .clicked()
-          && let Some(parent) = vfs_state.current_path.parent()
+          && let Some(parent) = current_path.parent(vfs)
         {
-          vfs_state.current_path = parent;
-          vfs_state.current_dir = None;
+          *current_path = parent.clone();
         }
       });
 
-      let full_path = vfs_state.current_path.iter().join("/");
-      ui.label(full_path);
+      ui.label(current_path.full_path());
 
-      if vfs_state.current_dir.is_none() {
-        vfs_state.set_cur_dir();
-      }
-
-      let PrefabVfsState {
-        current_dir,
-        current_path,
-        filter,
-        ..
-      } = &mut *vfs_state;
-
-      let Some(dir) = &current_dir else {
-        return;
-      };
-
-      let prefabs = dir.iter().filter(|node| {
+      let prefabs = vfs.iter(current_path).filter(|path| {
         filter.is_empty() || {
-          node
-            .name()
+          path
+            .basename()
             .to_lowercase()
             .contains(filter.to_lowercase().as_str())
         }
       });
 
-      let mut clicked = false;
+      let mut next_path = None;
+      let num_columns = 20;
 
-      horizontal_list(ui, 20, prefabs, |ui, i, node| {
+      horizontal_list(ui, num_columns, prefabs, |ui, i, path| {
         let card_width = ui.available_width();
         let card_height = card_width;
 
+        let Some(node) = vfs.read(path) else {
+          return;
+        };
+
         match node {
-          VfsNode::Dir(dir) => {
-            clicked |= ui_for_dir(current_path, ui, (card_width, card_height), dir, i);
+          VfsNode::Dir => {
+            if ui_for_dir(ui, (card_width, card_height), path.basename(), i) {
+              next_path = Some(path.clone());
+            }
           }
-          VfsNode::Item { name, value } => {
-            ui_for_item(ui, (card_width, card_height), name, value);
+          VfsNode::Item { value } => {
+            ui_for_item(ui, (card_width, card_height), path.basename(), value);
           }
         }
       });
 
-      if clicked {
-        *current_dir = None;
+      if let Some(path) = next_path {
+        *current_path = path;
       }
     });
   }
@@ -106,15 +103,8 @@ impl RawUi for PrefabsUi {
 struct PrefabVfsState {
   #[deref]
   vfs: Vfs<PrefabData>,
-  current_dir: Option<VfsDir<PrefabData>>,
-  current_path: VfsPath,
+  current_path: Option<VfsPath>,
   filter: String,
-}
-
-impl PrefabVfsState {
-  fn set_cur_dir(&mut self) {
-    self.current_dir = self.vfs.get_dir(&self.current_path).cloned();
-  }
 }
 
 #[derive(Clone)]
@@ -138,28 +128,28 @@ fn rebuild_vfs(
     };
 
     for variant in variants.map(|(variant, _)| variant) {
+      let type_name = short_name_of_type(type_registration);
       let Some(module_path) = type_registration
         .type_info()
         .type_path_table()
         .module_path()
       else {
-        warn!("Static prefab has no module path. It will not be found in the editor.");
-        continue;
+        unreachable!("Every type should have a module path");
       };
-
-      let path = Vec::from_iter(module_path.split("::").map(|p| Cow::Borrowed(p)));
-
-      let type_name = short_name_of_type(type_registration);
 
       let name = match variant {
         Some(name) => Cow::Owned(format!("{type_name}#{name}")),
         None => Cow::Borrowed(type_name),
       };
 
-      let path: VfsPath = path.into();
-      let dir = vfs.open(path);
-      dir.add_item(
-        name,
+      let Some(path) = vfs.mkdir_p(module_path.split("::"), true) else {
+        error!(type_name, "Already registered ");
+        return;
+      };
+
+      vfs.new_item(
+        path,
+        Name::new(name),
         PrefabData {
           type_id,
           variant: variant.clone(),
@@ -171,15 +161,9 @@ fn rebuild_vfs(
   prefab_vfs.vfs = vfs;
 }
 
-fn ui_for_dir(
-  current_path: &mut VfsPath,
-  ui: &mut egui::Ui,
-  size: impl Into<egui::Vec2>,
-  label: &str,
-  i: usize,
-) -> bool {
+fn ui_for_dir(ui: &mut egui::Ui, size: impl Into<egui::Vec2>, label: &str, i: usize) -> bool {
   let size = size.into();
-  let response = Card::new(size)
+  Card::new(size)
     .with_label(label)
     .show(ui, |ui| {
       ui.label(egui_phosphor_icons::icons::FOLDER.regular());
@@ -187,14 +171,8 @@ fn ui_for_dir(
       ui.interact(ui.min_rect(), ui.id().with(i), egui::Sense::click())
     })
     .inner
-    .on_hover_cursor(egui::CursorIcon::PointingHand);
-
-  if response.double_clicked() {
-    current_path.push(String::from(label));
-    true
-  } else {
-    false
-  }
+    .on_hover_cursor(egui::CursorIcon::PointingHand)
+    .double_clicked()
 }
 
 fn ui_for_item(

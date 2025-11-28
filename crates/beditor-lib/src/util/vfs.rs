@@ -1,266 +1,251 @@
-use bevy::platform::collections::{Equivalent, HashMap};
 use bevy::prelude::*;
-use std::borrow::Cow;
-use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use camino::Utf8PathBuf;
+use core::cmp::Ordering;
+use itertools::{FoldWhile, Itertools};
+use petgraph::Graph;
+use petgraph::graph::NodeIndex;
+use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::ops::Deref;
 
 pub struct Vfs<T> {
-  inner: HashMap<VfsPath, VfsDir<T>>,
+  inner: Graph<VfsNode<T>, Relationship>,
+  root: VfsPath,
 }
 
 impl<T> Default for Vfs<T> {
   fn default() -> Self {
-    Self { inner: default() }
+    let mut graph = Graph::new();
+    let root_index = graph.add_node(VfsNode::root());
+    Self {
+      inner: graph,
+      root: VfsPath {
+        cached: Name::new("/"),
+        name: Name::new("/"),
+        inner: Utf8PathBuf::from("/"),
+        index: root_index,
+      },
+    }
   }
 }
 
 impl<T> Vfs<T> {
   pub fn new() -> Self {
-    Self { inner: default() }
+    Self::default()
   }
 
-  pub fn open(&mut self, path: impl Into<VfsPath>) -> &mut VfsDir<T> {
-    let path = path.into();
-    if let Some((parent_ref, basename)) = path.parent_ref().zip(path.basename()) {
-      self.open(parent_ref).add_dir(basename);
-    }
-    self.inner.entry(path).or_default()
+  pub fn root(&self) -> &VfsPath {
+    &self.root
   }
 
-  pub fn get_dir<P>(&self, path: P) -> Option<&VfsDir<T>>
+  pub fn ls(&self, path: impl Borrow<VfsPath>) -> impl Iterator<Item = &VfsPath> {
+    self.inner.edges(path.borrow().index).filter_map(|e| {
+      if let Relationship::Child(dir) = e.weight() {
+        Some(dir)
+      } else {
+        None
+      }
+    })
+  }
+
+  pub fn new_item(
+    &mut self,
+    path: impl Borrow<VfsPath>,
+    name: impl Borrow<Name>,
+    item: T,
+  ) -> Option<&VfsPath> {
+    self.new_node(path, name, VfsNode::Item { value: item }, false)
+  }
+
+  pub fn mkdir(&mut self, path: impl Borrow<VfsPath>, name: impl Borrow<Name>) -> Option<&VfsPath> {
+    self.new_node(path, name, VfsNode::Dir, false)
+  }
+
+  /// Not very efficient due to lifetimes
+  pub fn mkdir_p<N>(&mut self, mut path: impl Iterator<Item = N>, force: bool) -> Option<VfsPath>
   where
-    P: Eq + Hash + Equivalent<VfsPath>,
+    N: Into<Name>,
   {
-    self.inner.get(&path)
+    let root = self.root().clone();
+    path
+      .fold_while(Some(root), |prev, next| {
+        if let Some(prev) = prev
+          && let Some(dir) = self
+            .new_node(prev, next.into(), VfsNode::Dir, force)
+            .cloned()
+        {
+          FoldWhile::Continue(Some(dir))
+        } else {
+          FoldWhile::Done(None)
+        }
+      })
+      .into_inner()
   }
 
-  pub fn get_node<P>(&self, path: P) -> Option<&VfsNode<T>>
-  where
-    P: AsRef<VfsPath>,
-  {
-    let path_ref = path.as_ref();
-    path_ref
-      .parent_ref()
-      .zip(path_ref.basename())
-      .and_then(|(parent, item)| self.inner.get(&parent).and_then(|dir| dir.get(item)))
+  pub fn read(&self, path: &VfsPath) -> Option<&VfsNode<T>> {
+    self.inner.node_weight(path.index)
   }
 
-  pub fn iter(&self) -> impl Iterator<Item = (&VfsPath, &VfsDir<T>)> {
-    self.inner.iter()
-  }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash)]
-pub struct VfsPath<T = String>(Vec<T>)
-where
-  T: Eq + Hash;
-
-impl<T> VfsPath<T>
-where
-  T: Eq + Hash,
-{
-  pub fn push(&mut self, item: T) {
-    self.0.push(item);
+  pub fn write(&mut self, path: &VfsPath) -> Option<&mut VfsNode<T>> {
+    self.inner.node_weight_mut(path.index)
   }
 
-  pub fn iter(&self) -> impl Iterator<Item = &T> {
-    self.0.iter()
-  }
-}
-
-impl<T> VfsPath<T>
-where
-  T: Eq + Hash + Clone,
-{
-  pub fn has_parent(&self) -> bool {
-    !self.0.is_empty()
+  pub fn rm(&mut self, path: &VfsPath) -> Option<VfsNode<T>> {
+    self.inner.remove_node(path.index)
   }
 
-  pub fn parent(&self) -> Option<Self> {
-    match self.0.len() {
-      0 => None,
-      1 => Some(Self(Vec::new())),
-      n => {
-        let slice = &self.0[0..n - 1];
-        Some(Self(Vec::from(slice)))
+  pub fn iter(&self, path: &VfsPath) -> impl Iterator<Item = &VfsPath> {
+    self.ls(path)
+  }
+
+  fn add_child(&mut self, parent: &VfsPath, child_name: &Name, node: VfsNode<T>) -> &VfsPath {
+    let child_path = parent.join(child_name);
+    let child_index = self.inner.add_node(node);
+
+    let path = VfsPath {
+      name: child_name.clone(),
+      cached: Name::new(child_path.to_string()),
+      inner: child_path,
+      index: child_index,
+    };
+
+    let child_weight = self
+      .inner
+      .add_edge(parent.index, child_index, Relationship::Child(path));
+
+    self.inner.add_edge(
+      child_index,
+      parent.index,
+      Relationship::Parent(parent.clone()),
+    );
+
+    &*self
+      .inner
+      .edge_weight(child_weight)
+      .expect("Edge was just added")
+  }
+
+  fn new_node(
+    &mut self,
+    path: impl Borrow<VfsPath>,
+    name: impl Borrow<Name>,
+    node: VfsNode<T>,
+    force: bool,
+  ) -> Option<&VfsPath> {
+    let path = path.borrow();
+    let name = name.borrow();
+
+    if let Some(child_path) = self.find_child_by_name(path, name) {
+      if force {
+        let path = child_path.clone();
+        self.rm(&path);
+      } else {
+        return None;
       }
     }
+
+    let child = self.add_child(path, name, node);
+
+    Some(child)
   }
+
+  fn find_child_by_name(&self, path: &VfsPath, name: &Name) -> Option<&VfsPath> {
+    self.inner.edges(path.index).find_map(|e| {
+      if e.weight().name == *name {
+        Some(e.weight().deref())
+      } else {
+        None
+      }
+    })
+  }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+enum Relationship {
+  /// This edge points to the node's parent
+  Parent(VfsPath),
+  /// This edge points to one of a node's children
+  Child(VfsPath),
+}
+
+impl Deref for Relationship {
+  type Target = VfsPath;
+
+  fn deref(&self) -> &Self::Target {
+    match self {
+      Relationship::Parent(vfs_path) => vfs_path,
+      Relationship::Child(vfs_path) => vfs_path,
+    }
+  }
+}
+
+#[derive(Clone, Debug, Eq, Hash)]
+pub struct VfsPath {
+  cached: Name,
+  name: Name,
+  inner: Utf8PathBuf,
+  index: NodeIndex,
 }
 
 impl VfsPath {
-  pub fn parent_ref(&self) -> Option<VfsPath<&str>> {
-    match self.0.len() {
-      0 => None,
-      1 => Some(VfsPath(Vec::new())),
-      n => {
-        let refs = self.0[0..n - 1]
-          .iter()
-          .map(String::as_str)
-          .collect::<Vec<_>>();
-        Some(VfsPath(refs))
+  pub fn join(&self, name: impl Borrow<Name>) -> Utf8PathBuf {
+    self.inner.join(name.borrow().as_str())
+  }
+
+  pub fn has_parent<T>(&self, vfs: &Vfs<T>) -> bool {
+    vfs
+      .inner
+      .edges(self.index)
+      .find(|e| matches!(e.weight(), Relationship::Parent(_)))
+      .is_some()
+  }
+
+  pub fn parent<'v, T>(&self, vfs: &'v Vfs<T>) -> Option<&'v Self> {
+    vfs.inner.edges(self.index).find_map(|e| {
+      if let Relationship::Parent(path) = e.weight() {
+        Some(path)
+      } else {
+        None
       }
-    }
+    })
+  }
+
+  pub fn full_path(&self) -> &str {
+    self.cached.as_str()
+  }
+
+  pub fn basename(&self) -> &str {
+    self.name.as_str()
   }
 }
 
-impl<T> Default for VfsPath<T>
-where
-  T: Eq + Hash,
-{
-  fn default() -> Self {
-    Self(Vec::new())
+impl PartialEq for VfsPath {
+  fn eq(&self, other: &Self) -> bool {
+    self.cached == other.cached && self.index == other.index
   }
 }
 
-impl AsRef<VfsPath> for VfsPath {
-  fn as_ref(&self) -> &VfsPath {
-    self
+impl PartialOrd for VfsPath {
+  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+    self.cached.partial_cmp(&other.cached)
   }
 }
 
-impl<S> VfsPath<S>
-where
-  S: Eq + Hash + AsRef<str>,
-{
-  pub fn basename(&self) -> Option<&str> {
-    if !self.0.is_empty() {
-      self.0.last().map(S::as_ref)
-    } else {
-      None
-    }
-  }
-}
-
-impl From<VfsPath<&str>> for VfsPath {
-  fn from(value: VfsPath<&str>) -> Self {
-    Self(value.0.into_iter().map(String::from).collect())
-  }
-}
-
-impl From<VfsPath<Cow<'_, str>>> for VfsPath {
-  fn from(value: VfsPath<Cow<'_, str>>) -> Self {
-    Self(value.0.into_iter().map(String::from).collect())
-  }
-}
-
-impl From<Vec<&'_ str>> for VfsPath {
-  fn from(value: Vec<&'_ str>) -> Self {
-    Self(value.into_iter().map(String::from).collect())
-  }
-}
-
-impl From<Vec<Cow<'_, str>>> for VfsPath {
-  fn from(value: Vec<Cow<'_, str>>) -> Self {
-    Self(value.into_iter().map(String::from).collect())
-  }
-}
-
-impl<const N: usize> From<[&str; N]> for VfsPath {
-  fn from(value: [&str; N]) -> Self {
-    Self(Vec::from(value.map(str::to_string)))
-  }
-}
-
-impl<'s, const N: usize> From<[&'s str; N]> for VfsPath<&'s str> {
-  fn from(value: [&'s str; N]) -> Self {
-    Self(Vec::from(value))
-  }
-}
-
-impl<'s> From<Vec<&'s str>> for VfsPath<&'s str> {
-  fn from(value: Vec<&'s str>) -> Self {
-    Self(value)
-  }
-}
-
-impl<const N: usize> Equivalent<VfsPath> for [&str; N] {
-  fn equivalent(&self, key: &VfsPath) -> bool {
-    key.0.as_slice() == self
-  }
-}
-
-impl Equivalent<VfsPath> for VfsPath<&str> {
-  fn equivalent(&self, key: &VfsPath) -> bool {
-    self.0 == key.0
-  }
-}
-
-impl Equivalent<VfsPath> for &VfsPath<&str> {
-  fn equivalent(&self, key: &VfsPath) -> bool {
-    self.0 == key.0
-  }
-}
-
-impl Equivalent<VfsPath> for &VfsPath {
-  fn equivalent(&self, key: &VfsPath) -> bool {
-    self.0 == key.0
+impl Ord for VfsPath {
+  fn cmp(&self, other: &Self) -> Ordering {
+    self.cached.cmp(&other.cached)
   }
 }
 
 pub enum VfsNode<T> {
-  Dir(String),
-  Item { name: String, value: T },
+  Dir,
+  Item { value: T },
 }
 
 impl<T> VfsNode<T> {
-  pub fn name(&self) -> &str {
-    match self {
-      VfsNode::Dir(name) => name,
-      VfsNode::Item { name, .. } => name,
-    }
-  }
-}
-
-impl<T> PartialEq for VfsNode<T> {
-  fn eq(&self, other: &Self) -> bool {
-    match (self, other) {
-      (VfsNode::Dir(name), VfsNode::Dir(other_name)) => name.eq(other_name),
-      (
-        VfsNode::Dir(dir_name),
-        VfsNode::Item {
-          name: item_name, ..
-        },
-      ) => dir_name.eq(item_name),
-      (
-        VfsNode::Item {
-          name: item_name, ..
-        },
-        VfsNode::Dir(dir_name),
-      ) => item_name.eq(dir_name),
-      (
-        VfsNode::Item { name, .. },
-        VfsNode::Item {
-          name: other_name, ..
-        },
-      ) => name.eq(other_name),
-    }
-  }
-}
-
-impl<T> Eq for VfsNode<T> {}
-
-impl<T> PartialOrd for VfsNode<T> {
-  fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    Some(self.cmp(other))
-  }
-}
-
-impl<T> Ord for VfsNode<T> {
-  fn cmp(&self, other: &Self) -> Ordering {
-    match (self, other) {
-      (VfsNode::Dir(name), VfsNode::Dir(other_name)) => name.cmp(other_name),
-      (VfsNode::Dir(..), VfsNode::Item { .. }) => Ordering::Less,
-      (VfsNode::Item { .. }, VfsNode::Dir(..)) => Ordering::Greater,
-      (
-        VfsNode::Item { name, .. },
-        VfsNode::Item {
-          name: other_name, ..
-        },
-      ) => name.cmp(other_name),
-    }
+  pub fn root() -> Self {
+    Self::Dir
   }
 }
 
@@ -270,9 +255,8 @@ where
 {
   fn clone(&self) -> Self {
     match self {
-      Self::Dir(dir) => Self::Dir(dir.clone()),
-      Self::Item { name, value } => Self::Item {
-        name: name.clone(),
+      Self::Dir => Self::Dir,
+      Self::Item { value } => Self::Item {
         value: value.clone(),
       },
     }
@@ -285,105 +269,11 @@ where
 {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      VfsNode::Dir(dir) => f
-        .debug_tuple(std::any::type_name::<Self>())
-        .field(&dir)
-        .finish(),
-      VfsNode::Item { name, value } => f
+      VfsNode::Dir => f.debug_tuple(std::any::type_name::<Self>()).finish(),
+      VfsNode::Item { value } => f
         .debug_struct(std::any::type_name::<Self>())
-        .field("name", name)
         .field("value", value)
         .finish(),
     }
-  }
-}
-
-pub struct VfsDir<T> {
-  nodes: BTreeSet<VfsNode<T>>,
-}
-
-impl<T> Default for VfsDir<T> {
-  fn default() -> Self {
-    Self { nodes: default() }
-  }
-}
-
-impl<T> VfsDir<T> {
-  pub fn add(&mut self, node: impl Into<VfsNode<T>>) {
-    self.nodes.insert(node.into());
-  }
-
-  pub fn add_dir(&mut self, name: impl Into<String>) {
-    self.add(VfsNode::Dir(name.into()));
-  }
-
-  pub fn add_item(&mut self, name: impl Into<String>, item: T) {
-    self.add(VfsNode::Item {
-      name: name.into(),
-      value: item,
-    });
-  }
-
-  pub fn get(&self, item_name: &str) -> Option<&VfsNode<T>> {
-    self.nodes.iter().find(|n| n.name() == item_name)
-  }
-
-  pub fn iter(&self) -> impl Iterator<Item = &VfsNode<T>> {
-    self.nodes.iter()
-  }
-}
-
-impl<T> Clone for VfsDir<T>
-where
-  T: Clone,
-{
-  fn clone(&self) -> Self {
-    Self {
-      nodes: self.nodes.clone(),
-    }
-  }
-}
-
-impl<T> Debug for VfsDir<T>
-where
-  T: Debug,
-{
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    f.debug_struct(std::any::type_name::<Self>())
-      .field("nodes", &self.nodes)
-      .finish()
-  }
-}
-
-#[cfg(test)]
-mod tests {
-  use super::{Vfs, VfsNode, VfsPath};
-
-  #[test]
-  fn vfs_add_dir() {
-    let mut vfs = Vfs::new();
-
-    vfs.open(["dir"]).add_item("item", 1);
-    vfs.open(["dir2"]);
-
-    let VfsNode::Item { value, .. } = vfs.get_node(VfsPath::from(["dir", "item"])).unwrap() else {
-      panic!("Item not an item");
-    };
-
-    assert_eq!(*value, 1);
-
-    let root = vfs.get_dir([]).unwrap();
-
-    let VfsNode::Dir(dir) = root.get("dir").unwrap() else {
-      panic!("Dir is not a dir")
-    };
-
-    assert_eq!(dir, "dir");
-
-    let VfsNode::Dir(dir) = root.get("dir2").unwrap() else {
-      panic!("Dir is not a dir")
-    };
-
-    assert_eq!(dir, "dir2");
   }
 }

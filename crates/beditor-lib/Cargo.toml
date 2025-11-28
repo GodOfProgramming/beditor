@@ -17,6 +17,7 @@ async-std = { workspace = true }
 bevy = { workspace = true, features = ["default", "serialize", "bevy_remote"] }
 bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
 brefabs = { workspace = true }
+camino = { workspace = true }
 derive-new = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 dotenvy = { workspace = true }
@@ -31,6 +32,7 @@ itertools = { workspace = true }
 leafwing-input-manager = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
+petgraph = { workspace = true }
 platform-dirs = { workspace = true }
 postcard = { workspace = true, features = ["use-std"] }
 profiling = { workspace = true, features = ["profile-with-tracing"] }

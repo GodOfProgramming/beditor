@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use crate::{
   registry::components::ComponentRegistry,
-  ui::{InspectorSelection, RawUi},
+  ui::{InspectorSelection, RawUi, prebuilt::dnd_drop_ui},
 };
 use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector::{
@@ -17,24 +17,11 @@ use super::InspectorDnd;
 pub struct Inspector;
 
 impl Inspector {
-  fn dnd_drop_ui<F>(
-    entities: impl AsRef<[Entity]>,
-    world: &mut World,
-    ui: &mut egui::Ui,
-    render_fn: F,
-  ) where
+  fn inner_ui<F>(entities: impl AsRef<[Entity]>, world: &mut World, ui: &mut egui::Ui, render_fn: F)
+  where
     F: FnOnce(&mut World, &mut egui::Ui),
   {
-    // makes the whole pane droppable
-    let frame = egui::Frame::default();
-    let available_size = ui.available_size();
-
-    // fixes weird highlighting on background
-    let bg_fill = ui.style().visuals.window_fill();
-    ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
-
-    let (_, component_id) = ui.dnd_drop_zone::<InspectorDnd, ()>(frame, |ui| {
-      ui.set_min_size(available_size);
+    let (_, component_id) = dnd_drop_ui(ui, |ui| {
       render_fn(world, ui);
     });
 
@@ -42,9 +29,6 @@ impl Inspector {
       match &*dnd {
         InspectorDnd::AddComponent(type_id) => {
           Self::spawn_component_on(type_id, entities.as_ref(), world);
-        }
-        InspectorDnd::Custom(f) => {
-          (f)(world, entities.as_ref());
         }
       }
     }
@@ -87,12 +71,12 @@ impl RawUi for Inspector {
       |world, selection: Mut<InspectorSelection>| match selection.as_ref() {
         InspectorSelection::Entities(selected_entities) => match selected_entities.as_slice() {
           &[entity] => {
-            Self::dnd_drop_ui([entity], world, ui, |world, ui| {
+            Self::inner_ui([entity], world, ui, |world, ui| {
               ui_for_entity(world, entity, ui);
             });
           }
           entities => {
-            Self::dnd_drop_ui(entities, world, ui, |world, ui| {
+            Self::inner_ui(entities, world, ui, |world, ui| {
               ui_for_entities_shared_components(world, entities, ui);
             });
           }

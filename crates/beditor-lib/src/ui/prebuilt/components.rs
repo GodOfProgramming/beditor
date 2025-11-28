@@ -151,7 +151,6 @@ fn ui_for_dir(
 
   if response.double_clicked() {
     current_path.push(String::from(label));
-    info!("here????");
     true
   } else {
     false

@@ -33,30 +33,38 @@ impl RawUi for TypeEditor {
 
     let m = arc.lock();
 
-    let mut tuple = m.borrow_mut();
+    let mut info = m.borrow_mut();
 
-    ui.heading(&tuple.0);
+    ui.heading(&info.label);
 
     ui.separator();
 
-    bevy_inspector_egui::bevy_inspector::ui_for_value(&mut *tuple.1, ui, world);
+    bevy_inspector_egui::bevy_inspector::ui_for_value(&mut *info.reflected, ui, world);
   }
 }
 
 #[derive(Component)]
-struct EditingType(Arc<Mutex<RefCell<(String, Box<dyn Reflect>)>>>);
+struct EditingType(Arc<Mutex<RefCell<EditingInfo>>>);
 
 impl EditingType {
   fn new(label: String, value: Box<dyn Reflect>) -> Self {
-    Self(Arc::new(Mutex::new(RefCell::new((label, value)))))
+    Self(Arc::new(Mutex::new(RefCell::new(EditingInfo {
+      label,
+      reflected: value,
+    }))))
   }
+}
+
+struct EditingInfo {
+  label: String,
+  reflected: Box<dyn Reflect>,
 }
 
 #[derive(new, Message)]
 pub struct OpenTypeEditor(String, Box<dyn Reflect>);
 
 impl Command for OpenTypeEditor {
-  fn apply(self, world: &mut World) -> () {
+  fn apply(self, world: &mut World) {
     world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
       let entity = ui_manager.spawn_type::<TypeEditor>(world);
       world

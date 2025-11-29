@@ -63,7 +63,7 @@ impl RawUi for PrefabsUi {
         }
       });
 
-      ui.label(current_path.full_path());
+      ui.label(current_path.display());
 
       let prefabs = vfs.iter(current_path).filter(|path| {
         filter.is_empty() || {
@@ -123,6 +123,8 @@ fn rebuild_vfs(
   prefabs: Res<Prefabs>,
   app_type_regsitry: Res<AppTypeRegistry>,
 ) {
+  info!("Rebuilding prefab VFS");
+
   let mut vfs = Vfs::default();
 
   let type_registry = app_type_regsitry.0.read();
@@ -163,6 +165,12 @@ fn rebuild_vfs(
     }
   }
 
+  prefab_vfs.current_path = prefab_vfs
+    .current_path
+    .as_ref()
+    .and_then(|path| vfs.find(path.full_path()))
+    .cloned();
+
   prefab_vfs.vfs = vfs;
 }
 
@@ -189,7 +197,7 @@ fn ui_for_item(
 ) {
   let size = size.into();
 
-  let id = egui::Id::new(path.full_path());
+  let id = egui::Id::new(path.display());
 
   let response = ui
     .dnd_drag_source(
@@ -205,8 +213,13 @@ fn ui_for_item(
 
   let response = ui.interact(response.rect, id, egui::Sense::click());
 
+  let is_editable_prefab = world
+    .resource::<Prefabs>()
+    .meta(prefab_data.type_id, &prefab_data.variant)
+    .is_some();
+
   response.context_menu(|ui| {
-    if ui.button("Edit").clicked() {
+    if is_editable_prefab && ui.button("Edit").clicked() {
       world.write_message(EditPrefabDescriptorMessage(
         prefab_data.type_id,
         path.basename().to_string(),
@@ -222,7 +235,7 @@ struct EditPrefabDescriptorMessage(TypeId, String, Option<Name>);
 impl EditPrefabDescriptorMessage {
   fn handle(mut messages: MessageReader<Self>, mut commands: Commands) {
     for msg in messages.read() {
-      let type_id = msg.0.clone();
+      let type_id = msg.0;
       let name = msg.1.clone();
       let variant = msg.2.clone();
 

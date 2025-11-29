@@ -1,4 +1,4 @@
-use beditor::{assets::StaticPrefab, prelude::*, uuid};
+use beditor::{brefabs::StaticPrefab, prelude::*, uuid};
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 fn main() {
@@ -6,8 +6,9 @@ fn main() {
 
   editor
     .register_game_camera::<GameCamera>()
-    .register_static_prefab::<Cube>()
     .add_systems(Startup, startup);
+
+  editor.prefabs().add_static_prefab::<Cube>();
 
   editor.run();
 }
@@ -53,8 +54,12 @@ fn startup(
   ));
 }
 
-#[derive(Reflect)]
-struct Cube;
+#[derive(Bundle, Reflect)]
+struct Cube {
+  mesh: Mesh3d,
+  material: MeshMaterial3d<StandardMaterial>,
+  transform: Transform,
+}
 
 struct Spiral {
   theta: f32,
@@ -82,7 +87,7 @@ struct CubeParams<'w, 's> {
 impl StaticPrefab for Cube {
   type Params<'w, 's> = CubeParams<'w, 's>;
 
-  fn spawn(_id: Entity, mut params: Self::Params<'_, '_>) -> impl Bundle {
+  fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
     let offset = Vec2::new(
       params.spiral.r * params.spiral.theta.cos(),
       params.spiral.r * params.spiral.theta.sin(),
@@ -91,10 +96,10 @@ impl StaticPrefab for Cube {
     params.spiral.theta += 30.0f32.to_radians();
     params.spiral.h += 0.5;
 
-    (
-      Mesh3d(params.meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-      MeshMaterial3d(params.materials.add(Color::srgb_u8(124, 144, 255))),
-      Transform::from_xyz(offset.x, params.spiral.h, offset.y),
-    )
+    Self {
+      mesh: Mesh3d(params.meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+      material: MeshMaterial3d(params.materials.add(Color::srgb_u8(124, 144, 255))),
+      transform: Transform::from_xyz(offset.x, params.spiral.h, offset.y),
+    }
   }
 }

@@ -71,7 +71,7 @@ impl Ui for Components {
       }
     });
 
-    ui.label(current_path.full_path());
+    ui.label(current_path.display());
 
     let components = component_registry.vfs().iter(current_path).filter(|path| {
       filter.is_empty() || {

@@ -39,6 +39,20 @@ impl<T> Vfs<T> {
     &self.root
   }
 
+  pub fn find(&self, path: impl Borrow<Name>) -> Option<&VfsPath> {
+    let path = path.borrow();
+    self.inner.edge_weights().find_map(|edge| match edge {
+      Relationship::Parent(_) => None,
+      Relationship::Child(vfs_path) => {
+        if vfs_path.cached == *path {
+          Some(vfs_path)
+        } else {
+          None
+        }
+      }
+    })
+  }
+
   pub fn ls(&self, path: impl Borrow<VfsPath>) -> impl Iterator<Item = &VfsPath> {
     self.inner.edges(path.borrow().index).filter_map(|e| {
       if let Relationship::Child(dir) = e.weight() {
@@ -120,7 +134,7 @@ impl<T> Vfs<T> {
       Relationship::Parent(parent.clone()),
     );
 
-    &*self
+    self
       .inner
       .edge_weight(child_weight)
       .expect("Edge was just added")
@@ -180,7 +194,7 @@ impl Deref for Relationship {
   }
 }
 
-#[derive(Clone, Debug, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VfsPath {
   cached: Name,
   name: Name,
@@ -197,8 +211,7 @@ impl VfsPath {
     vfs
       .inner
       .edges(self.index)
-      .find(|e| matches!(e.weight(), Relationship::Parent(_)))
-      .is_some()
+      .any(|e| matches!(e.weight(), Relationship::Parent(_)))
   }
 
   pub fn parent<'v, T>(&self, vfs: &'v Vfs<T>) -> Option<&'v Self> {
@@ -211,7 +224,11 @@ impl VfsPath {
     })
   }
 
-  pub fn full_path(&self) -> &str {
+  pub fn full_path(&self) -> &Name {
+    &self.cached
+  }
+
+  pub fn display(&self) -> &str {
     self.cached.as_str()
   }
 
@@ -220,15 +237,9 @@ impl VfsPath {
   }
 }
 
-impl PartialEq for VfsPath {
-  fn eq(&self, other: &Self) -> bool {
-    self.cached == other.cached && self.index == other.index
-  }
-}
-
 impl PartialOrd for VfsPath {
   fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-    self.cached.partial_cmp(&other.cached)
+    Some(self.cmp(other))
   }
 }
 

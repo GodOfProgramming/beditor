@@ -6,7 +6,7 @@ use bevy::{
   camera::visibility::{Layer as CameraLayer, RenderLayers},
   ecs::{bundle::NoBundleEffect, system::SystemParam},
   prelude::*,
-  reflect::{GetTypeRegistration, TypeRegistration},
+  reflect::TypeRegistration,
   window::{CursorGrabMode, CursorIcon, CursorOptions},
 };
 
@@ -24,13 +24,6 @@ macro_rules! here {
     std::io::stdout().flush().ok();
     println!($($arg)*);
   }};
-}
-
-pub fn short_name_of<T>() -> &'static str
-where
-  T: GetTypeRegistration,
-{
-  short_name_of_type(&T::get_type_registration())
 }
 
 pub fn short_name_of_type(registration: &TypeRegistration) -> &'static str {

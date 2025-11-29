@@ -1,3 +1,6 @@
+//! For queries that may actually be more readable without abstraction
+#![allow(clippy::type_complexity)]
+
 mod input;
 mod registry;
 mod ui;
@@ -36,6 +39,7 @@ pub mod prelude {
     },
   };
   pub use bevy_egui;
+  pub use brefabs;
   pub use macros::{self, Identifiable};
   pub use persistent_id::{self, Identifiable};
   pub use serde;

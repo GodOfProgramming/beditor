@@ -323,7 +323,7 @@ pub fn apply_dock_style_to_egui_style(dock: &egui_dock::Style, es: &mut egui::St
   visuals.widgets.active.corner_radius = visuals.window_corner_radius;
   visuals.widgets.hovered.corner_radius = visuals.window_corner_radius;
 
-  spacing.window_margin = dock.tab.tab_body.inner_margin.into();
+  spacing.window_margin = dock.tab.tab_body.inner_margin;
   spacing.item_spacing = egui::Vec2::new(
     dock.tab.spacing,
     dock.tab.tab_body.inner_margin.top.to_f64() as f32,

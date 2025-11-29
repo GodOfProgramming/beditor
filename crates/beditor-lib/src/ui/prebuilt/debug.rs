@@ -75,7 +75,7 @@ impl Ui for DebugMenu {
     }
 
     if ui
-      .checkbox(&mut **params.render_cameras, "Render Cameras")
+      .checkbox(&mut params.render_cameras, "Render Cameras")
       .clicked()
     {
       params.commands.trigger(SyncRenderCamerasEvent);

@@ -32,7 +32,7 @@ use crate::{ui::InspectorIntegrationPlugin, util::log::LogPlugin};
 pub mod prelude {
   pub use super::Editor;
   pub use crate::{
-    ui::{EditorUi, EditorUiBundle, misc},
+    ui::{EditorUi, EditorUiBundle, misc, prebuilt::*},
     util::{
       EntityManager, GameEntity, GameRenderLayer,
       storage::{Layouts, Settings, Storage},

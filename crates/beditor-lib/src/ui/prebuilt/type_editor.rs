@@ -1,17 +1,13 @@
 use crate::{EditorUiBundle, ui::managers::UiManager, util::reflection};
-use bevy::{
-  platform::collections::HashMap,
-  prelude::*,
-  reflect::{TypeRegistry, serde::TypedReflectDeserializer},
-};
+use bevy::{platform::collections::HashMap, prelude::*, reflect::TypeRegistry};
 use derive_new::new;
 use egui_file_dialog::{DialogState, FileDialog};
 use parking_lot::Mutex;
 use std::{
-  any::TypeId,
   borrow::Cow,
   cell::RefCell,
   ffi::OsStr,
+  io::Write,
   path::{Path, PathBuf},
   sync::Arc,
 };
@@ -37,9 +33,13 @@ impl EditorUiBundle for TypeEditor {
 
   fn init(app: &mut App) {
     app
+      .add_message::<SaveFileMessage>()
       .add_message::<OpenFileMessage>()
-      .init_resource::<TypeLoaders>()
-      .add_systems(FixedUpdate, OpenFileMessage::handle)
+      .init_resource::<SerdeRegistry>()
+      .add_systems(
+        FixedUpdate,
+        (SaveFileMessage::handle, OpenFileMessage::handle),
+      )
       .add_systems(bevy_egui::EguiPrimaryContextPass, show_dialogs);
   }
 
@@ -65,6 +65,8 @@ impl EditorUiBundle for TypeEditor {
       return;
     };
 
+    let mut message = None;
+
     ui.horizontal(|ui| {
       ui.heading(&state.label);
 
@@ -74,10 +76,13 @@ impl EditorUiBundle for TypeEditor {
             state.dialog.save_file();
           }
 
-          if let Some(_opened_file) = &state.opened_file
+          if let Some(opened_file) = &state.opened_file
             && ui.button("Save").clicked()
           {
-            // TODO save file
+            message = Some(SaveFileMessage {
+              entity,
+              file: opened_file.clone(),
+            });
           }
         });
       }
@@ -89,6 +94,10 @@ impl EditorUiBundle for TypeEditor {
     let mut value = m.borrow_mut();
 
     bevy_inspector_egui::bevy_inspector::ui_for_value(&mut **value, ui, world);
+
+    if let Some(msg) = message {
+      world.write_message(msg);
+    }
   }
 }
 
@@ -135,67 +144,71 @@ impl Command for OpenTypeEditor {
   }
 }
 
-type LoadFn = fn(bytes: &[u8], type_registry: &TypeRegistry) -> Result<Box<dyn Reflect>>;
-type SaveFn = fn(value: &dyn Reflect, type_id: TypeId, type_registry: &TypeRegistry) -> Result;
+type DeserializeFn = fn(bytes: &[u8], type_registry: &TypeRegistry) -> Result<Box<dyn Reflect>>;
+type SerializeFn = fn(value: &dyn Reflect, type_registry: &TypeRegistry) -> Result<Vec<u8>>;
 
 #[derive(Resource)]
-pub struct TypeLoaders {
-  unknown: Option<IoVtable>,
-  mapping: HashMap<Cow<'static, OsStr>, IoVtable>,
+pub struct SerdeRegistry {
+  unknown: Option<SerdeVtable>,
+  mapping: HashMap<Cow<'static, OsStr>, SerdeVtable>,
 }
 
-impl Default for TypeLoaders {
+impl Default for SerdeRegistry {
   fn default() -> Self {
     Self {
       unknown: default(),
       mapping: default(),
     }
-    .with_registration(OsStr::new("ron"), ron_loader, ron_saver)
+    .with_registration(
+      OsStr::new("ron"),
+      reflection::serde::ron_serializer,
+      reflection::serde::ron_deserializer,
+    )
   }
 }
 
-impl TypeLoaders {
-  pub fn with_unknown(mut self, loader: LoadFn, saver: SaveFn) -> Self {
-    self.unknown = Some(IoVtable::new(loader, saver));
+impl SerdeRegistry {
+  pub fn with_unknown(mut self, ser: SerializeFn, de: DeserializeFn) -> Self {
+    self.unknown = Some(SerdeVtable::new(ser, de));
     self
   }
 
-  pub fn add_unknown(&mut self, loader: LoadFn, saver: SaveFn) -> &mut Self {
-    self.unknown = Some(IoVtable::new(loader, saver));
+  pub fn add_unknown(&mut self, ser: SerializeFn, de: DeserializeFn) -> &mut Self {
+    self.unknown = Some(SerdeVtable::new(ser, de));
     self
   }
 
   pub fn with_registration(
     mut self,
     extension: impl Into<Cow<'static, OsStr>>,
-    loader: LoadFn,
-    saver: SaveFn,
+    ser: SerializeFn,
+    de: DeserializeFn,
   ) -> Self {
-    self.add_registration(extension, loader, saver);
+    self.add_registration(extension, ser, de);
     self
   }
 
   pub fn add_registration(
     &mut self,
     extension: impl Into<Cow<'static, OsStr>>,
-    loader: LoadFn,
-    saver: SaveFn,
+    ser: SerializeFn,
+    de: DeserializeFn,
   ) -> &mut Self {
     self
       .mapping
-      .insert(extension.into(), IoVtable::new(loader, saver));
+      .insert(extension.into(), SerdeVtable::new(ser, de));
     self
   }
 
-  fn loader_for(&self, path: &Path) -> Option<LoadFn> {
-    self.vtable_for(path).map(|vtable| vtable.load)
+  fn serializer_for(&self, path: &Path) -> Option<SerializeFn> {
+    self.vtable_for(path).map(|vtable| vtable.ser)
   }
 
-  fn saver_for(&self, path: &Path) -> Option<SaveFn> {
-    self.vtable_for(path).map(|vtable| vtable.save)
+  fn deserializer_for(&self, path: &Path) -> Option<DeserializeFn> {
+    self.vtable_for(path).map(|vtable| vtable.de)
   }
 
-  fn vtable_for(&self, path: &Path) -> Option<&IoVtable> {
+  fn vtable_for(&self, path: &Path) -> Option<&SerdeVtable> {
     if let Some(extension) = path.extension() {
       self.mapping.get(extension)
     } else {
@@ -205,9 +218,9 @@ impl TypeLoaders {
 }
 
 #[derive(new)]
-struct IoVtable {
-  load: LoadFn,
-  save: SaveFn,
+struct SerdeVtable {
+  ser: SerializeFn,
+  de: DeserializeFn,
 }
 
 fn show_dialogs(
@@ -222,7 +235,15 @@ fn show_dialogs(
   for (entity, mut state) in &mut q_states {
     state.dialog.update(ctx);
     if let Some(file) = state.dialog.take_picked() {
-      commands.write_message(OpenFileMessage::new(entity, file.to_path_buf()));
+      match state.dialog.mode() {
+        egui_file_dialog::DialogMode::PickFile => {
+          commands.write_message(OpenFileMessage::new(entity, file.to_path_buf()));
+        }
+        egui_file_dialog::DialogMode::SaveFile => {
+          commands.write_message(SaveFileMessage::new(entity, file.to_path_buf()));
+        }
+        _ => (),
+      }
     }
   }
 }
@@ -237,14 +258,14 @@ impl OpenFileMessage {
   fn handle(
     mut messages: MessageReader<Self>,
     mut q_states: Query<&mut TypeEditorState>,
-    loaders: Res<TypeLoaders>,
+    loaders: Res<SerdeRegistry>,
     app_type_registry: Res<AppTypeRegistry>,
   ) -> Result {
     for msg in messages.read() {
-      let Some(loader) = loaders.loader_for(&msg.file) else {
+      let Some(de) = loaders.deserializer_for(&msg.file) else {
         warn!(
           path = msg.file.display().to_string(),
-          "No loader registered for file type"
+          "No deserializer registered for file type"
         );
         continue;
       };
@@ -262,7 +283,7 @@ impl OpenFileMessage {
 
       let bytes = std::fs::read(&msg.file)?;
 
-      let value = (loader)(&bytes, &type_registry)?;
+      let value = (de)(&bytes, &type_registry)?;
 
       state.opened_file = Some(msg.file.clone());
 
@@ -273,30 +294,62 @@ impl OpenFileMessage {
   }
 }
 
-fn ron_loader(bytes: &[u8], type_registry: &TypeRegistry) -> Result<Box<dyn Reflect>> {
-  use serde::de::DeserializeSeed;
-  // have to use short names until this is resolved https://github.com/ron-rs/ron/issues/302
-
-  let Some(output) = reflection::ron::newtype_name(bytes) else {
-    return Err(String::from("Name of ron struct not found"))?;
-  };
-
-  let Some(registration) = type_registry.get_with_short_type_path(&output) else {
-    return Err(format!("Type registration of '{output}' not found"))?;
-  };
-
-  let reflect_de = TypedReflectDeserializer::new(registration, type_registry);
-  let mut ron_de = ron::Deserializer::from_bytes(bytes)?;
-
-  let partial_reflect = reflect_de.deserialize(&mut ron_de)?;
-
-  let Ok(reflect) = partial_reflect.try_into_reflect() else {
-    return Err(format!("'{output}' is not Reflect"))?;
-  };
-
-  Ok(reflect)
+#[derive(new, Message)]
+struct SaveFileMessage {
+  entity: Entity,
+  file: PathBuf,
 }
 
-fn ron_saver(value: &dyn Reflect, type_id: TypeId, type_registry: &TypeRegistry) -> Result {
-  Ok(())
+impl SaveFileMessage {
+  fn handle(
+    mut messages: MessageReader<Self>,
+    mut q_states: Query<&mut TypeEditorState>,
+    loaders: Res<SerdeRegistry>,
+    app_type_registry: Res<AppTypeRegistry>,
+  ) -> Result {
+    for msg in messages.read() {
+      let Some(ser) = loaders.serializer_for(&msg.file) else {
+        warn!(
+          path = msg.file.display().to_string(),
+          "No loader registered for file type"
+        );
+        continue;
+      };
+
+      let Ok(mut state) = q_states.get_mut(msg.entity) else {
+        warn!(
+          entity = msg.entity.to_string(),
+          "Failed to get type editor state for entity"
+        );
+
+        continue;
+      };
+
+      state.opened_file = Some(msg.file.clone());
+
+      let Some(value) = &state.value else {
+        warn!("Tried to save None value");
+        continue;
+      };
+
+      let type_registry = app_type_registry.read();
+
+      let value = value.lock();
+      let value = value.borrow();
+      let value = &**value;
+
+      let bytes = (ser)(value, &type_registry)?;
+      let path = msg.file.clone();
+
+      let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)?;
+
+      file.write_all(&bytes)?;
+    }
+
+    Ok(())
+  }
 }

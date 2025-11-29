@@ -2,7 +2,7 @@ use crate::{
   ui::{
     RawUi,
     components::{Card, horizontal_list},
-    prebuilt::HierarchyDnd,
+    prebuilt::{HierarchyDnd, type_editor::OpenTypeEditor},
   },
   util::{
     short_name_of_type,
@@ -10,7 +10,7 @@ use crate::{
   },
 };
 use bevy::prelude::*;
-use brefabs::Prefabs;
+use brefabs::{Prefabs, WorldExtensions};
 use std::{any::TypeId, borrow::Cow};
 use uuid::{Uuid, uuid};
 
@@ -24,7 +24,14 @@ impl RawUi for PrefabsUi {
   fn init(app: &mut App) {
     app
       .init_resource::<PrefabVfsState>()
-      .add_systems(FixedUpdate, rebuild_vfs.run_if(resource_changed::<Prefabs>));
+      .add_message::<EditPrefabDescriptorMessage>()
+      .add_systems(
+        FixedUpdate,
+        (
+          EditPrefabDescriptorMessage::handle,
+          rebuild_vfs.run_if(resource_changed::<Prefabs>),
+        ),
+      );
   }
 
   fn spawn(_entity: Entity, _world: &mut World) -> Self {
@@ -36,7 +43,7 @@ impl RawUi for PrefabsUi {
   }
 
   fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
-    world.resource_scope(|_, mut vfs_state: Mut<PrefabVfsState>| {
+    world.resource_scope(|world, mut vfs_state: Mut<PrefabVfsState>| {
       let PrefabVfsState {
         vfs,
         current_path,
@@ -87,7 +94,7 @@ impl RawUi for PrefabsUi {
             }
           }
           VfsNode::Item { value } => {
-            ui_for_item(ui, (card_width, card_height), path.basename(), value);
+            ui_for_item(ui, (card_width, card_height), path, value, world);
           }
         }
       });
@@ -178,18 +185,52 @@ fn ui_for_dir(ui: &mut egui::Ui, size: impl Into<egui::Vec2>, label: &str, i: us
 fn ui_for_item(
   ui: &mut egui::Ui,
   size: impl Into<egui::Vec2>,
-  label: &str,
+  path: &VfsPath,
   prefab_data: &PrefabData,
+  world: &mut World,
 ) {
   let size = size.into();
 
-  ui.dnd_drag_source(
-    egui::Id::new(&label),
-    HierarchyDnd::AddPrefab(prefab_data.type_id, prefab_data.variant.clone()),
-    |ui| {
-      Card::new(size).with_label(label).show(ui, |ui| {
-        ui.label(egui_phosphor_icons::icons::PUZZLE_PIECE.regular());
+  let id = egui::Id::new(path.full_path());
+
+  let response = ui
+    .dnd_drag_source(
+      id,
+      HierarchyDnd::AddPrefab(prefab_data.type_id, prefab_data.variant.clone()),
+      |ui| {
+        Card::new(size).with_label(path.basename()).show(ui, |ui| {
+          ui.label(egui_phosphor_icons::icons::CUBE.regular());
+        });
+      },
+    )
+    .response;
+
+  let response = ui.interact(response.rect, id, egui::Sense::click());
+
+  response.context_menu(|ui| {
+    if ui.button("Edit").clicked() {
+      world.write_message(EditPrefabDescriptorMessage(
+        prefab_data.type_id,
+        prefab_data.variant.clone(),
+      ));
+    }
+  });
+}
+
+#[derive(Message)]
+struct EditPrefabDescriptorMessage(TypeId, Option<Name>);
+
+impl EditPrefabDescriptorMessage {
+  fn handle(mut messages: MessageReader<Self>, mut commands: Commands) {
+    for msg in messages.read() {
+      let type_id = msg.0.clone();
+      let variant = msg.1.clone();
+
+      commands.queue(move |world: &mut World| {
+        if let Some(desc) = world.spawn_prefab_descriptor(type_id, variant) {
+          world.commands().queue(OpenTypeEditor::new(desc));
+        }
       });
-    },
-  );
+    }
+  }
 }

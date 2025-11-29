@@ -10,17 +10,7 @@ impl AddUiMessage {
   pub fn handle(mut messages: MessageReader<Self>, mut ui_manager: ResMut<UiManager>) {
     for msg in messages.read() {
       let AddUiMessage(surface, node, tab) = *msg;
-
-      let Some(surface) = ui_manager.surface_mut(surface) else {
-        return;
-      };
-
-      let Some(nodes) = surface.node_tree_mut() else {
-        return;
-      };
-
-      let node = &mut nodes[node];
-      node.append_tab(tab);
+      ui_manager.add_tab(surface, node, tab);
     }
   }
 }

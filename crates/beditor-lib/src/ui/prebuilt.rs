@@ -15,6 +15,7 @@ pub mod logs;
 pub mod menu_bar;
 pub mod prefabs;
 pub mod resources;
+pub mod type_editor;
 
 pub enum InspectorDnd {
   AddComponent(TypeId),

@@ -9,12 +9,12 @@ use super::{
 use crate::{
   Settings,
   misc::UiResourceState,
-  ui::prebuilt::{logs::Logs, menu_bar, prefabs::PrefabsUi},
+  ui::prebuilt::{logs::Logs, menu_bar, prefabs::PrefabsUi, type_editor::TypeEditor},
   util::storage::{LayoutInfo, Layouts},
 };
 use bevy::{ecs::system::SystemState, platform::collections::HashMap, prelude::*};
 use derive_new::new;
-use egui_dock::{DockArea, DockState, NodeIndex, Surface, SurfaceIndex};
+use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
 use persistent_id::PersistentId;
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
 
@@ -46,6 +46,7 @@ impl UiManager {
     this.register::<Resources>(app);
     this.register::<Logs>(app);
     this.register::<PrefabsUi>(app);
+    this.register::<TypeEditor>(app);
 
     let state = SystemState::<menu_bar::Params<'_, '_>>::new(app.world_mut());
     app.insert_resource(UiResourceState::new(state));
@@ -151,8 +152,28 @@ impl UiManager {
     self.state.decouple(self, q_uuids, q_missing)
   }
 
-  pub fn surface_mut(&mut self, index: SurfaceIndex) -> Option<&mut Surface<Entity>> {
-    self.state.get_surface_mut(index)
+  pub fn add_tab(&mut self, surface: SurfaceIndex, node: NodeIndex, tab: Entity) -> bool {
+    let Some(surface) = self.state.get_surface_mut(surface) else {
+      return false;
+    };
+
+    let Some(nodes) = surface.node_tree_mut() else {
+      return false;
+    };
+
+    let node = &mut nodes[node];
+
+    node.append_tab(tab);
+
+    true
+  }
+
+  pub fn add_tab_to_focused(&mut self, tab: Entity) -> bool {
+    let Some((surface, node)) = self.state.focused_leaf() else {
+      return false;
+    };
+
+    self.add_tab(surface, node, tab)
   }
 
   pub(crate) fn vtables(&self) -> &HashMap<PersistentId, VTable> {
@@ -207,7 +228,7 @@ impl UiManager {
     state
   }
 
-  fn spawn_type<T: RawUi>(&self, world: &mut World) -> Entity {
+  pub fn spawn_type<T: RawUi>(&self, world: &mut World) -> Entity {
     self.spawn(PersistentId(T::ID), world)
   }
 

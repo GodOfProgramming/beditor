@@ -548,6 +548,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     });
   }
 
+  #[profiling::function]
   fn add_popup(&mut self, ui: &mut egui::Ui, surface: SurfaceIndex, node: NodeIndex) {
     ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
     let unique_tabs = self

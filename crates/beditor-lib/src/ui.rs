@@ -33,7 +33,7 @@ use std::{any::TypeId, cell::RefCell, marker::PhantomData};
 use uuid::Uuid;
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct EditorUi;
+struct EditorUiSystems;
 
 #[derive(Default, Component, Reflect)]
 #[require(
@@ -78,7 +78,7 @@ impl Plugin for UiPlugin {
       .init_resource::<LayoutManager>()
       .init_state::<KeyboardFocus>()
       .add_message::<AddUiMessage>()
-      .configure_sets(EguiPrimaryContextPass, EditorUi)
+      .configure_sets(EguiPrimaryContextPass, EditorUiSystems)
       .add_observer(RemoveUiEvent::on_event)
       .add_systems(Startup, Self::init_resources)
       .add_systems(OnEnter(EditorState::Exiting), Self::on_app_exit)
@@ -96,7 +96,7 @@ impl Plugin for UiPlugin {
             .chain()
             .run_if(should_render_ui),
         )
-          .in_set(EditorUi),
+          .in_set(EditorUiSystems),
       );
 
     prebuilt::menu_bar::init(app);
@@ -205,7 +205,9 @@ impl UiPlugin {
   }
 }
 
-pub trait RawUi: Component + GetTypeRegistration + Send + Sync + Sized {
+pub trait EditorUiBundle: Bundle + GetTypeRegistration + Send + Sync + Sized {
+  type PrimaryComponent: Component;
+
   const NAME: &str;
   const ID: Uuid;
 
@@ -260,7 +262,7 @@ pub trait RawUi: Component + GetTypeRegistration + Send + Sync + Sized {
   fn handle_tab_response(entity: Entity, world: &mut World, response: &egui::Response) {}
 }
 
-pub trait Ui: RawUi {
+pub trait EditorUi: EditorUiBundle + Component {
   const NAME: &str;
   const ID: Uuid;
 
@@ -290,7 +292,7 @@ pub trait Ui: RawUi {
 
   #[allow(unused_variables)]
   fn title(&mut self, params: Self::Params<'_, '_>) -> egui::WidgetText {
-    <Self as Ui>::NAME.into()
+    <Self as EditorUi>::NAME.into()
   }
 
   fn render(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>);
@@ -318,38 +320,40 @@ pub trait Ui: RawUi {
   fn on_despawn(&mut self, params: Self::Params<'_, '_>) {}
 }
 
-impl<T> RawUi for T
+impl<T> EditorUiBundle for T
 where
-  Self: Component<Mutability = Mutable> + Ui + 'static,
+  Self: Component<Mutability = Mutable> + EditorUi + 'static,
 {
-  const NAME: &str = <Self as Ui>::NAME;
-  const ID: Uuid = <T as Ui>::ID;
+  type PrimaryComponent = Self;
 
-  const HIDDEN: bool = <Self as Ui>::HIDDEN;
+  const NAME: &str = <Self as EditorUi>::NAME;
+  const ID: Uuid = <T as EditorUi>::ID;
 
-  const CLOSEABLE: bool = <Self as Ui>::CLOSEABLE;
+  const HIDDEN: bool = <Self as EditorUi>::HIDDEN;
 
-  const CAN_CLEAR: bool = <Self as Ui>::CAN_CLEAR;
+  const CLOSEABLE: bool = <Self as EditorUi>::CLOSEABLE;
 
-  const SCROLL_BARS: [bool; 2] = <Self as Ui>::SCROLL_BARS;
+  const CAN_CLEAR: bool = <Self as EditorUi>::CAN_CLEAR;
 
-  const UNIQUE: bool = <Self as Ui>::UNIQUE;
+  const SCROLL_BARS: [bool; 2] = <Self as EditorUi>::SCROLL_BARS;
 
-  const POPOUT: bool = <Self as Ui>::POPOUT;
+  const UNIQUE: bool = <Self as EditorUi>::UNIQUE;
 
-  const REOPEN_ON_STARTUP: bool = <Self as Ui>::REOPEN_ON_STARTUP;
+  const POPOUT: bool = <Self as EditorUi>::POPOUT;
+
+  const REOPEN_ON_STARTUP: bool = <Self as EditorUi>::REOPEN_ON_STARTUP;
 
   fn init(app: &mut App) {
-    <Self as Ui>::init(app)
+    <Self as EditorUi>::init(app)
   }
 
   fn spawn(entity: Entity, world: &mut World) -> Self {
     Self::register_params(entity, world);
-    Self::with_params(entity, world, Ui::spawn)
+    Self::with_params(entity, world, EditorUi::spawn)
   }
 
   fn title(entity: Entity, world: &mut World) -> egui::WidgetText {
-    Self::get_entity_mut(entity, world, Ui::title)
+    Self::get_entity_mut(entity, world, EditorUi::title)
   }
 
   fn render(entity: Entity, ui: &mut egui::Ui, world: &mut World) {
@@ -359,11 +363,11 @@ where
   }
 
   fn when_rendered(entity: Entity, world: &mut World) {
-    Self::get_entity_mut(entity, world, <Self as Ui>::when_rendered)
+    Self::get_entity_mut(entity, world, <Self as EditorUi>::when_rendered)
   }
 
   fn when_not_rendered(entity: Entity, world: &mut World) {
-    Self::get_entity_mut(entity, world, <Self as Ui>::when_not_rendered)
+    Self::get_entity_mut(entity, world, <Self as EditorUi>::when_not_rendered)
   }
 
   fn context_menu(
@@ -379,7 +383,7 @@ where
   }
 
   fn on_despawn(entity: Entity, world: &mut World) {
-    Self::get_entity_mut(entity, world, <Self as Ui>::on_despawn)
+    Self::get_entity_mut(entity, world, <Self as EditorUi>::on_despawn)
   }
 
   fn handle_tab_response(entity: Entity, world: &mut World, response: &egui::Response) {
@@ -413,7 +417,7 @@ pub(crate) struct VTable {
 impl VTable {
   const fn new<T>() -> Self
   where
-    T: RawUi,
+    T: EditorUiBundle,
   {
     Self {
       name: T::NAME,
@@ -436,7 +440,7 @@ impl VTable {
     }
   }
 
-  fn spawn<T: RawUi>(world: &mut World) -> Entity {
+  fn spawn<T: EditorUiBundle>(world: &mut World) -> Entity {
     info!("Spawning UI component {}", T::NAME);
     let entity = world
       .spawn((Name::new(T::NAME), PersistentId(T::ID), UiState::default()))
@@ -453,14 +457,14 @@ impl VTable {
     world.entity_mut(entity).insert(instance).id()
   }
 
-  fn despawn<T: RawUi>(entity: Entity, world: &mut World) {
+  fn despawn<T: EditorUiBundle>(entity: Entity, world: &mut World) {
     info!("Despawning UI component {}", T::NAME);
-    <T as RawUi>::on_despawn(entity, world);
+    <T as EditorUiBundle>::on_despawn(entity, world);
     world.trigger(RemoveUiEvent::new(entity));
   }
 
-  fn count<T: RawUi>(world: &mut World) -> usize {
-    let mut q_uis = world.query::<&T>();
+  fn count<T: EditorUiBundle>(world: &mut World) -> usize {
+    let mut q_uis = world.query::<&T::PrimaryComponent>();
     q_uis.iter(world).len()
   }
 }

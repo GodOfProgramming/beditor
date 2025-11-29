@@ -2,7 +2,7 @@ use std::any::TypeId;
 
 use crate::{
   registry::components::ComponentRegistry,
-  ui::{InspectorSelection, RawUi, prebuilt::dnd_drop_ui},
+  ui::{EditorUiBundle, InspectorSelection, prebuilt::dnd_drop_ui},
 };
 use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector::{
@@ -13,7 +13,7 @@ use uuid::{Uuid, uuid};
 
 use super::InspectorDnd;
 
-#[derive(Default, Component, Reflect)]
+#[derive(Component, Reflect, Default)]
 pub struct Inspector;
 
 impl Inspector {
@@ -51,7 +51,9 @@ impl Inspector {
   }
 }
 
-impl RawUi for Inspector {
+impl EditorUiBundle for Inspector {
+  type PrimaryComponent = Self;
+
   const NAME: &str = stringify!(Inspector);
   const ID: Uuid = uuid!("10bb68b8-c247-4792-89e9-61d1b9682a72");
 

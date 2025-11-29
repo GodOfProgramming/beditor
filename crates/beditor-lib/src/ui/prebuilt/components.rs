@@ -1,6 +1,6 @@
 use super::InspectorDnd;
 use crate::{
-  Ui,
+  EditorUi,
   registry::components::{ComponentRegistry, RegisteredComponent},
   ui::components::{Card, horizontal_list},
   util::vfs::{VfsNode, VfsPath},
@@ -33,7 +33,7 @@ pub struct Params<'w, 's> {
   _pd: PhantomData<&'s ()>,
 }
 
-impl Ui for Components {
+impl EditorUi for Components {
   const NAME: &str = "Components";
 
   const ID: uuid::Uuid = uuid!("5b376389-2acf-4945-807b-94ee16c09088");

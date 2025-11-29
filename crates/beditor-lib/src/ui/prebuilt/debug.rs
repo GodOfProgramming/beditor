@@ -1,6 +1,6 @@
 use crate::{
   EditorSettings,
-  ui::Ui,
+  ui::EditorUi,
   util::log::LogLevel,
   view::cam::{RenderCameras, SyncRenderCamerasEvent},
 };
@@ -44,7 +44,7 @@ pub struct Params<'w, 's> {
   editor_settings: ResMut<'w, EditorSettings>,
 }
 
-impl Ui for DebugMenu {
+impl EditorUi for DebugMenu {
   const NAME: &str = "Debug Menu";
   const ID: uuid::Uuid = uuid!("9473f6e1-a595-41e2-8e29-a4f041580fa6");
 

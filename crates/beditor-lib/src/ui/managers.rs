@@ -1,5 +1,5 @@
 use super::{
-  RawUi, TabViewer, VTable,
+  EditorUiBundle, TabViewer, VTable,
   misc::{DockExtensions, MissingUi, UiComponentExtensions},
   prebuilt::{
     assets::Assets, components::Components, debug::DebugMenu, editor_view::EditorView,
@@ -92,7 +92,7 @@ impl UiManager {
     Ok(())
   }
 
-  pub fn register<T: RawUi>(&mut self, app: &mut App) {
+  pub fn register<T: EditorUiBundle>(&mut self, app: &mut App) {
     T::init(app);
     app.register_type::<T>();
     self.vtables.insert(PersistentId(T::ID), T::VTABLE);
@@ -236,7 +236,7 @@ impl UiManager {
     state
   }
 
-  pub fn spawn_type<T: RawUi>(&self, world: &mut World) -> Entity {
+  pub fn spawn_type<T: EditorUiBundle>(&self, world: &mut World) -> Entity {
     self.spawn(PersistentId(T::ID), world)
   }
 

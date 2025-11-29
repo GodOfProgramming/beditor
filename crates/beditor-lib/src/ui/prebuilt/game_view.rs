@@ -1,4 +1,4 @@
-use crate::{DisableGameUiEvent, EnableGameUiEvent, misc::ShrinkableViewport, ui::Ui};
+use crate::{DisableGameUiEvent, EnableGameUiEvent, misc::ShrinkableViewport, ui::EditorUi};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use persistent_id::Identifiable;
 use std::marker::PhantomData;
@@ -46,7 +46,7 @@ pub struct Params<'w, 's, C: Component> {
   title: Local<'s, String>,
 }
 
-impl<C> Ui for GameView<C>
+impl<C> EditorUi for GameView<C>
 where
   C: Component + Reflect + TypePath + Identifiable,
 {

@@ -1,4 +1,4 @@
-use crate::ui::{InspectorSelection, Ui};
+use crate::ui::{InspectorSelection, EditorUi};
 use bevy::{asset::ReflectAsset, ecs::system::SystemParam, prelude::*};
 use uuid::uuid;
 
@@ -11,7 +11,7 @@ pub struct Params<'w, 's> {
   filter: Local<'s, String>,
 }
 
-impl Ui for Assets {
+impl EditorUi for Assets {
   const NAME: &str = stringify!(Assets);
   const ID: uuid::Uuid = uuid!("4bfee754-f9bc-4695-b215-2a88d9377dfb");
 

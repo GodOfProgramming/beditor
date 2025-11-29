@@ -1,5 +1,5 @@
 use crate::{
-  Ui,
+  EditorUi,
   util::log::{ChangeLogLevelEvent, EventCollectorHandle, LogLevel, LogLevelChangedEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -18,7 +18,7 @@ pub struct Params<'w, 's> {
   type_registry: Res<'w, AppTypeRegistry>,
 }
 
-impl Ui for Logs {
+impl EditorUi for Logs {
   const NAME: &str = stringify!(Logs);
   const ID: Uuid = uuid!("22329413-2eff-4b95-85ad-d9b6656c9d76");
 

@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use crate::{EditorSettings, UiManager, util::storage::LayoutInfo};
 
-use super::{RawUi, Ui, VTable};
+use super::{EditorUi, EditorUiBundle, VTable};
 use bevy::{
   camera::Viewport,
   ecs::{
@@ -45,17 +45,17 @@ pub(super) trait UiComponentExtensions {
 
 impl<T> UiComponentExtensions for T
 where
-  T: RawUi,
+  T: EditorUiBundle,
 {
   const VTABLE: VTable = VTable::new::<Self>();
 }
 
-type UiParams<'w, 's, T> = UiComponentState<<T as Ui>::Params<'w, 's>>;
+type UiParams<'w, 's, T> = UiComponentState<<T as EditorUi>::Params<'w, 's>>;
 
 /// # Safety
 /// Cannot access the world mutably in the system params
 /// Though it is on the user to not query for a mutable reference to themselves when they also have a self reference
-pub unsafe trait UiExtensions: Ui {
+pub unsafe trait UiExtensions: EditorUi {
   fn get_entity<T>(
     entity: Entity,
     world: &mut World,
@@ -64,7 +64,7 @@ pub unsafe trait UiExtensions: Ui {
     let mut q = world.query::<(&Self, &mut UiParams<Self>)>();
     let world_cell = world.as_unsafe_world_cell();
     let Ok((this, mut params)) = q.get_mut(unsafe { world_cell.world_mut() }, entity) else {
-      panic!("Failed to query {}", <Self as Ui>::NAME);
+      panic!("Failed to query {}", <Self as EditorUi>::NAME);
     };
 
     let items = params.get_mut(unsafe { world_cell.world_mut() });
@@ -84,7 +84,7 @@ pub unsafe trait UiExtensions: Ui {
     let mut q = world.query::<(&mut Self, &mut UiParams<Self>)>();
     let world_cell = world.as_unsafe_world_cell();
     let Ok((mut this, mut params)) = q.get_mut(unsafe { world_cell.world_mut() }, entity) else {
-      panic!("Failed to query {}", <Self as Ui>::NAME);
+      panic!("Failed to query {}", <Self as EditorUi>::NAME);
     };
 
     let items = params.get_mut(unsafe { world_cell.world_mut() });
@@ -95,7 +95,7 @@ pub unsafe trait UiExtensions: Ui {
 
   fn register_params(entity: Entity, world: &mut World) {
     if !world.entity(entity).contains::<UiParams<Self>>() {
-      let state = SystemState::<<Self as Ui>::Params<'_, '_>>::new(world);
+      let state = SystemState::<<Self as EditorUi>::Params<'_, '_>>::new(world);
       world.entity_mut(entity).insert(UiComponentState(state));
     }
   }
@@ -113,7 +113,7 @@ pub unsafe trait UiExtensions: Ui {
   }
 }
 
-unsafe impl<T> UiExtensions for T where T: Ui {}
+unsafe impl<T> UiExtensions for T where T: EditorUi {}
 
 #[derive(Component, Deref, DerefMut)]
 struct UiComponentState<P>(SystemState<P>)
@@ -147,7 +147,7 @@ impl MissingUi {
   }
 }
 
-impl Ui for MissingUi {
+impl EditorUi for MissingUi {
   const NAME: &str = "Missing Ui";
   const ID: Uuid = uuid!("d0f32ae1-2851-4bcd-a0c9-f83ae030d85f");
 
@@ -205,7 +205,7 @@ pub(super) trait DockExtensions:
       .filter_map_tabs(|layout_info| {
         let Some(vtable) = vtables.get(&layout_info.id()) else {
           let name = layout_info.name();
-          let state = SystemState::<<MissingUi as Ui>::Params<'_, '_>>::new(world);
+          let state = SystemState::<<MissingUi as EditorUi>::Params<'_, '_>>::new(world);
 
           warn!(
             "Failed to find ui component {name} with uuid {}",
@@ -214,9 +214,9 @@ pub(super) trait DockExtensions:
 
           let entity = world
             .spawn((
-              Name::new(<MissingUi as RawUi>::NAME),
+              Name::new(<MissingUi as EditorUiBundle>::NAME),
               MissingUi::new(name, layout_info.id()),
-              PersistentId(<MissingUi as RawUi>::ID),
+              PersistentId(<MissingUi as EditorUiBundle>::ID),
               UiState::default(),
               UiComponentState(state),
             ))

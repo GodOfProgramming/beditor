@@ -32,7 +32,7 @@ use crate::{ui::InspectorIntegrationPlugin, util::log::LogPlugin};
 pub mod prelude {
   pub use super::Editor;
   pub use crate::{
-    ui::{RawUi, Ui, misc},
+    ui::{EditorUi, EditorUiBundle, misc},
     util::{
       EntityManager, GameEntity, GameRenderLayer,
       storage::{Layouts, Settings, Storage},
@@ -124,7 +124,7 @@ impl Editor {
     self.register_ui::<GameView<C>>()
   }
 
-  pub fn register_ui<U: RawUi>(&mut self) -> &mut Self {
+  pub fn register_ui<U: EditorUiBundle>(&mut self) -> &mut Self {
     self.ui_manager.register::<U>(&mut self.app);
     self.register_type::<U>();
     self

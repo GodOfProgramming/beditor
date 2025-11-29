@@ -1,5 +1,5 @@
 use crate::ui::{
-  InspectorSelection, RawUi, SelectedEntities,
+  EditorUiBundle, InspectorSelection, SelectedEntities,
   prebuilt::{HierarchyDnd, dnd_drop_ui},
 };
 use bevy::prelude::*;
@@ -7,10 +7,12 @@ use bevy_inspector_egui::bevy_inspector;
 use brefabs::Prefabs;
 use uuid::{Uuid, uuid};
 
-#[derive(Default, Component, Reflect)]
+#[derive(Component, Reflect, Default)]
 pub struct Hierarchy;
 
-impl RawUi for Hierarchy {
+impl EditorUiBundle for Hierarchy {
+  type PrimaryComponent = Self;
+
   const NAME: &str = stringify!(Hierarchy);
   const ID: Uuid = uuid!("860ac319-5c6e-4a2e-83ae-8bb0000d5cb4");
 

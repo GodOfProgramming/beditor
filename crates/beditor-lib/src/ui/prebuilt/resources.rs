@@ -1,4 +1,4 @@
-use crate::ui::{InspectorSelection, Ui};
+use crate::ui::{InspectorSelection, EditorUi};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::marker::PhantomData;
 use uuid::uuid;
@@ -16,7 +16,7 @@ pub struct Params<'w, 's> {
   _pd: PhantomData<&'s ()>,
 }
 
-impl Ui for Resources {
+impl EditorUi for Resources {
   const NAME: &str = stringify!(Resources);
   const ID: uuid::Uuid = uuid!("54248a54-9544-4e93-9382-3677b8722952");
 

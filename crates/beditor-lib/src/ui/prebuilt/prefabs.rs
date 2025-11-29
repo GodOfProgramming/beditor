@@ -1,6 +1,6 @@
 use crate::{
   ui::{
-    RawUi,
+    EditorUiBundle,
     components::{Card, horizontal_list},
     prebuilt::{HierarchyDnd, type_editor::OpenTypeEditor},
   },
@@ -14,10 +14,12 @@ use brefabs::{Prefabs, WorldExtensions};
 use std::{any::TypeId, borrow::Cow};
 use uuid::{Uuid, uuid};
 
-#[derive(Default, Component, Reflect)]
+#[derive(Component, Reflect, Default)]
 pub struct PrefabsUi;
 
-impl RawUi for PrefabsUi {
+impl EditorUiBundle for PrefabsUi {
+  type PrimaryComponent = Self;
+
   const NAME: &str = stringify!(Prefabs);
   const ID: Uuid = uuid!("fa977fad-ed99-4842-bab4-7c00641b39b0");
 

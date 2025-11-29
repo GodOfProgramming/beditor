@@ -1,4 +1,4 @@
-use crate::{misc::ShrinkableViewport, ui::Ui, view::cam::EditorCamera};
+use crate::{misc::ShrinkableViewport, ui::EditorUi, view::cam::EditorCamera};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use uuid::uuid;
 
@@ -23,7 +23,7 @@ pub struct Params<'w, 's> {
   q_cameras: Query<'w, 's, &'static mut Camera, With<EditorCamera>>,
 }
 
-impl Ui for EditorView {
+impl EditorUi for EditorView {
   const NAME: &str = "Editor View";
   const ID: uuid::Uuid = uuid!("c910a397-a017-4a29-99bc-6282b4b1a214");
 

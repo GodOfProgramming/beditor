@@ -2,7 +2,7 @@ use crate::{
   EditorState, Layouts, Settings, StartEditorInTestingSetting, UiManager,
   misc::{DockExtensions, MissingUi},
   ui::{
-    EditorUi, InspectorSelection, components,
+    EditorUiSystems, InspectorSelection, components,
     managers::{LayoutManager, SaveLayoutOnExitSetting},
   },
   view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
@@ -71,7 +71,7 @@ pub fn init(app: &mut App) {
     )
     .add_systems(
       EguiPrimaryContextPass,
-      (save_layout_dialog_display, reset_layout_dialog_display).after(EditorUi),
+      (save_layout_dialog_display, reset_layout_dialog_display).after(EditorUiSystems),
     );
 }
 

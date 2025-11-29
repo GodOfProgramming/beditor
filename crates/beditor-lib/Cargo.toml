@@ -31,6 +31,7 @@ include_dir = { workspace = true }
 itertools = { workspace = true }
 leafwing-input-manager = { workspace = true }
 log = { workspace = true }
+maplit = { workspace = true }
 parking_lot = { workspace = true }
 petgraph = { workspace = true }
 platform-dirs = { workspace = true }

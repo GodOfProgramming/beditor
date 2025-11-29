@@ -209,6 +209,21 @@ pub trait RawUi: Component + GetTypeRegistration + Send + Sync + Sized {
   const NAME: &str;
   const ID: Uuid;
 
+  /// Used to prevent this Ui from appearing in the view menu
+  const HIDDEN: bool = false;
+
+  const CLOSEABLE: bool = true;
+
+  const CAN_CLEAR: bool = true;
+
+  const SCROLL_BARS: [bool; 2] = [true, true];
+
+  const UNIQUE: bool = false;
+
+  const POPOUT: bool = true;
+
+  const REOPEN_ON_STARTUP: bool = true;
+
   /// Add systems or resources that this UI needs in order to function
   #[allow(unused_variables)]
   fn init(app: &mut App) {}
@@ -243,41 +258,25 @@ pub trait RawUi: Component + GetTypeRegistration + Send + Sync + Sized {
 
   #[allow(unused_variables)]
   fn handle_tab_response(entity: Entity, world: &mut World, response: &egui::Response) {}
-
-  #[allow(unused_variables)]
-  fn closeable(entity: Entity, world: &mut World) -> bool {
-    true
-  }
-
-  /// Used to prevent this Ui from appearing in the view menu
-  ///
-  /// Typically for Ui's that are programmatically created
-  fn hidden() -> bool {
-    false
-  }
-
-  #[allow(unused_variables)]
-  fn can_clear(entity: Entity, world: &mut World) -> bool {
-    true
-  }
-
-  #[allow(unused_variables)]
-  fn scroll_bars(entity: Entity, world: &mut World) -> [bool; 2] {
-    [true, true]
-  }
-
-  fn unique() -> bool {
-    false
-  }
-
-  fn popout() -> bool {
-    true
-  }
 }
 
 pub trait Ui: RawUi {
   const NAME: &str;
   const ID: Uuid;
+
+  const HIDDEN: bool = false;
+
+  const CLOSEABLE: bool = true;
+
+  const CAN_CLEAR: bool = true;
+
+  const SCROLL_BARS: [bool; 2] = [true, true];
+
+  const UNIQUE: bool = false;
+
+  const POPOUT: bool = true;
+
+  const REOPEN_ON_STARTUP: bool = true;
 
   type Params<'w, 's>: for<'world, 'system> SystemParam<
     Item<'world, 'system> = Self::Params<'world, 'system>,
@@ -316,45 +315,29 @@ pub trait Ui: RawUi {
   fn handle_tab_response(&mut self, params: Self::Params<'_, '_>, response: &egui::Response) {}
 
   #[allow(unused_variables)]
-  fn closeable(&self, params: Self::Params<'_, '_>) -> bool {
-    true
-  }
-
-  #[allow(unused_variables)]
   fn on_despawn(&mut self, params: Self::Params<'_, '_>) {}
-
-  /// Used to prevent this Ui from appearing in the view menu
-  ///
-  /// Typically for Ui's that are programmatically created
-  fn hidden() -> bool {
-    false
-  }
-
-  #[allow(unused_variables)]
-  fn can_clear(&self, params: Self::Params<'_, '_>) -> bool {
-    true
-  }
-
-  #[allow(unused_variables)]
-  fn scroll_bars(&self, params: Self::Params<'_, '_>) -> [bool; 2] {
-    [true, true]
-  }
-
-  fn unique() -> bool {
-    false
-  }
-
-  fn popout() -> bool {
-    true
-  }
 }
 
 impl<T> RawUi for T
 where
-  T: Component<Mutability = Mutable> + Ui + 'static,
+  Self: Component<Mutability = Mutable> + Ui + 'static,
 {
   const NAME: &str = <Self as Ui>::NAME;
   const ID: Uuid = <T as Ui>::ID;
+
+  const HIDDEN: bool = <Self as Ui>::HIDDEN;
+
+  const CLOSEABLE: bool = <Self as Ui>::CLOSEABLE;
+
+  const CAN_CLEAR: bool = <Self as Ui>::CAN_CLEAR;
+
+  const SCROLL_BARS: [bool; 2] = <Self as Ui>::SCROLL_BARS;
+
+  const UNIQUE: bool = <Self as Ui>::UNIQUE;
+
+  const POPOUT: bool = <Self as Ui>::POPOUT;
+
+  const REOPEN_ON_STARTUP: bool = <Self as Ui>::REOPEN_ON_STARTUP;
 
   fn init(app: &mut App) {
     <Self as Ui>::init(app)
@@ -395,10 +378,6 @@ where
     })
   }
 
-  fn closeable(entity: Entity, world: &mut World) -> bool {
-    Self::get_entity(entity, world, Ui::closeable)
-  }
-
   fn on_despawn(entity: Entity, world: &mut World) {
     Self::get_entity_mut(entity, world, <Self as Ui>::on_despawn)
   }
@@ -408,32 +387,18 @@ where
       this.handle_tab_response(params, response);
     });
   }
-
-  fn hidden() -> bool {
-    <Self as Ui>::hidden()
-  }
-
-  fn can_clear(entity: Entity, world: &mut World) -> bool {
-    Self::get_entity(entity, world, Ui::can_clear)
-  }
-
-  #[allow(unused_variables)]
-  fn scroll_bars(entity: Entity, world: &mut World) -> [bool; 2] {
-    Self::get_entity(entity, world, Ui::scroll_bars)
-  }
-
-  fn unique() -> bool {
-    <Self as Ui>::unique()
-  }
-
-  fn popout() -> bool {
-    <Self as Ui>::popout()
-  }
 }
 
 #[derive(Clone)]
 pub(crate) struct VTable {
   name: &'static str,
+  closeable: bool,
+  hidden: bool,
+  can_clear: bool,
+  scroll_bars: [bool; 2],
+  unique: bool,
+  popout: bool,
+  reopen_on_startup: bool,
   spawn: fn(&mut World) -> Entity,
   despawn: fn(Entity, &mut World),
   title: fn(Entity, &mut World) -> egui::WidgetText,
@@ -442,12 +407,6 @@ pub(crate) struct VTable {
   when_not_rendered: fn(Entity, &mut World),
   context_menu: fn(Entity, &mut egui::Ui, &mut World, SurfaceIndex, NodeIndex),
   handle_tab_response: fn(Entity, &mut World, &egui::Response),
-  closeable: fn(Entity, &mut World) -> bool,
-  hidden: fn() -> bool,
-  can_clear: fn(Entity, &mut World) -> bool,
-  scroll_bars: fn(Entity, &mut World) -> [bool; 2],
-  unique: fn() -> bool,
-  popout: fn() -> bool,
   count: fn(&mut World) -> usize,
 }
 
@@ -458,6 +417,13 @@ impl VTable {
   {
     Self {
       name: T::NAME,
+      closeable: T::CLOSEABLE,
+      hidden: T::HIDDEN,
+      can_clear: T::CAN_CLEAR,
+      scroll_bars: T::SCROLL_BARS,
+      unique: T::UNIQUE,
+      popout: T::POPOUT,
+      reopen_on_startup: T::REOPEN_ON_STARTUP,
       spawn: Self::spawn::<T>,
       despawn: Self::despawn::<T>,
       title: T::title,
@@ -466,12 +432,6 @@ impl VTable {
       when_not_rendered: T::when_not_rendered,
       context_menu: T::context_menu,
       handle_tab_response: T::handle_tab_response,
-      closeable: T::closeable,
-      hidden: T::hidden,
-      can_clear: T::can_clear,
-      scroll_bars: T::scroll_bars,
-      unique: T::unique,
-      popout: T::popout,
       count: Self::count::<T>,
     }
   }
@@ -554,7 +514,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     let unique_tabs = self
       .vtables
       .iter()
-      .filter(|(_, vtable)| (vtable.unique)() && !(vtable.hidden)())
+      .filter(|(_, vtable)| vtable.unique && !vtable.hidden)
       .map(|(id, vtable)| (id, vtable.name))
       .sorted_by(|(_, a), (_, b)| a.cmp(b));
 
@@ -577,7 +537,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
     let spawnable_tables = self
       .vtables
       .iter()
-      .filter(|(_, vtable)| !(vtable.unique)())
+      .filter(|(_, vtable)| !vtable.unique)
       .map(|(id, vtable)| (id, vtable.name))
       .sorted_by(|(_, a), (_, b)| a.cmp(b));
 
@@ -611,7 +571,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
   fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
     let vtable = self.vtable_of(*tab);
-    (vtable.closeable)(*tab, &mut self.world.borrow_mut())
+    vtable.closeable
   }
 
   fn on_close(&mut self, tab: &mut Self::Tab) -> egui_dock::tab_viewer::OnCloseResponse {
@@ -622,12 +582,12 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
   fn clear_background(&self, tab: &Self::Tab) -> bool {
     let vtable = self.vtable_of(*tab);
-    (vtable.can_clear)(*tab, &mut self.world.borrow_mut())
+    vtable.can_clear
   }
 
   fn allowed_in_windows(&self, tab: &mut Self::Tab) -> bool {
     let vtable = self.vtable_of(*tab);
-    (vtable.popout)()
+    vtable.popout
   }
 
   fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
@@ -636,7 +596,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
   fn scroll_bars(&self, tab: &Self::Tab) -> [bool; 2] {
     let vtable = self.vtable_of(*tab);
-    (vtable.scroll_bars)(*tab, &mut self.world.borrow_mut())
+    vtable.scroll_bars
   }
 }
 

@@ -22,6 +22,8 @@ impl Ui for Logs {
   const NAME: &str = stringify!(Logs);
   const ID: Uuid = uuid!("22329413-2eff-4b95-85ad-d9b6656c9d76");
 
+  const UNIQUE: bool = true;
+
   type Params<'w, 's> = Params<'w, 's>;
 
   fn init(app: &mut App) {
@@ -38,10 +40,6 @@ impl Ui for Logs {
     ui.separator();
 
     ui.add(egui_tracing::Logs::new(params.log_collector.lock().clone()));
-  }
-
-  fn unique() -> bool {
-    true
   }
 }
 

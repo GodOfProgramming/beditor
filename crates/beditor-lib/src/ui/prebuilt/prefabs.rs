@@ -21,6 +21,8 @@ impl RawUi for PrefabsUi {
   const NAME: &str = stringify!(Prefabs);
   const ID: Uuid = uuid!("fa977fad-ed99-4842-bab4-7c00641b39b0");
 
+  const UNIQUE: bool = true;
+
   fn init(app: &mut App) {
     app
       .init_resource::<PrefabVfsState>()
@@ -36,10 +38,6 @@ impl RawUi for PrefabsUi {
 
   fn spawn(_entity: Entity, _world: &mut World) -> Self {
     default()
-  }
-
-  fn unique() -> bool {
-    true
   }
 
   fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
@@ -211,6 +209,7 @@ fn ui_for_item(
     if ui.button("Edit").clicked() {
       world.write_message(EditPrefabDescriptorMessage(
         prefab_data.type_id,
+        path.basename().to_string(),
         prefab_data.variant.clone(),
       ));
     }
@@ -218,17 +217,18 @@ fn ui_for_item(
 }
 
 #[derive(Message)]
-struct EditPrefabDescriptorMessage(TypeId, Option<Name>);
+struct EditPrefabDescriptorMessage(TypeId, String, Option<Name>);
 
 impl EditPrefabDescriptorMessage {
   fn handle(mut messages: MessageReader<Self>, mut commands: Commands) {
     for msg in messages.read() {
       let type_id = msg.0.clone();
-      let variant = msg.1.clone();
+      let name = msg.1.clone();
+      let variant = msg.2.clone();
 
       commands.queue(move |world: &mut World| {
         if let Some(desc) = world.spawn_prefab_descriptor(type_id, variant) {
-          world.commands().queue(OpenTypeEditor::new(desc));
+          world.commands().queue(OpenTypeEditor::new(name, desc));
         }
       });
     }

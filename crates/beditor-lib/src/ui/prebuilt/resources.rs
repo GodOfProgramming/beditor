@@ -20,14 +20,12 @@ impl Ui for Resources {
   const NAME: &str = stringify!(Resources);
   const ID: uuid::Uuid = uuid!("54248a54-9544-4e93-9382-3677b8722952");
 
+  const UNIQUE: bool = true;
+
   type Params<'w, 's> = Params<'w, 's>;
 
   fn spawn(_params: Self::Params<'_, '_>) -> Self {
     default()
-  }
-
-  fn unique() -> bool {
-    true
   }
 
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {

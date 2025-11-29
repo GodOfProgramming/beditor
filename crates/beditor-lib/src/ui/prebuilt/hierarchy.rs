@@ -14,6 +14,8 @@ impl RawUi for Hierarchy {
   const NAME: &str = stringify!(Hierarchy);
   const ID: Uuid = uuid!("860ac319-5c6e-4a2e-83ae-8bb0000d5cb4");
 
+  const UNIQUE: bool = true;
+
   fn init(app: &mut App) {
     app
       .add_message::<SelectEntityMessage>()
@@ -33,10 +35,6 @@ impl RawUi for Hierarchy {
 
   fn spawn(_entity: Entity, _world: &mut World) -> Self {
     default()
-  }
-
-  fn unique() -> bool {
-    true
   }
 
   fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {

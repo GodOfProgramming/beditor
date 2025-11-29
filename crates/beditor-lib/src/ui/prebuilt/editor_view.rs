@@ -27,6 +27,12 @@ impl Ui for EditorView {
   const NAME: &str = "Editor View";
   const ID: uuid::Uuid = uuid!("c910a397-a017-4a29-99bc-6282b4b1a214");
 
+  const CAN_CLEAR: bool = false;
+
+  const UNIQUE: bool = true;
+
+  const POPOUT: bool = false;
+
   type Params<'w, 's> = Params<'w, 's>;
 
   fn init(app: &mut App) {
@@ -61,17 +67,5 @@ impl Ui for EditorView {
     for mut camera in &mut params.q_cameras {
       camera.is_active = false;
     }
-  }
-
-  fn can_clear(&self, _params: Self::Params<'_, '_>) -> bool {
-    false
-  }
-
-  fn unique() -> bool {
-    true
-  }
-
-  fn popout() -> bool {
-    false
   }
 }

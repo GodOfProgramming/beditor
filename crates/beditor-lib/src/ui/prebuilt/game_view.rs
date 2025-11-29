@@ -53,6 +53,12 @@ where
   const NAME: &str = <C as Identifiable>::TYPE_NAME;
   const ID: uuid::Uuid = <C as Identifiable>::ID;
 
+  const CAN_CLEAR: bool = false;
+
+  const UNIQUE: bool = true;
+
+  const POPOUT: bool = false;
+
   type Params<'w, 's> = Params<'w, 's, C>;
 
   fn title(&mut self, params: Self::Params<'_, '_>) -> egui::WidgetText {
@@ -103,17 +109,5 @@ where
       params.commands.trigger(DisableGameUiEvent);
       camera.is_active = false;
     }
-  }
-
-  fn can_clear(&self, _params: Self::Params<'_, '_>) -> bool {
-    false
-  }
-
-  fn unique() -> bool {
-    true
-  }
-
-  fn popout() -> bool {
-    false
   }
 }

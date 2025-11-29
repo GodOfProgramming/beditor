@@ -48,6 +48,8 @@ impl Ui for DebugMenu {
   const NAME: &str = "Debug Menu";
   const ID: uuid::Uuid = uuid!("9473f6e1-a595-41e2-8e29-a4f041580fa6");
 
+  const UNIQUE: bool = true;
+
   type Params<'w, 's> = Params<'w, 's>;
 
   fn init(app: &mut App) {
@@ -56,10 +58,6 @@ impl Ui for DebugMenu {
 
   fn spawn(_params: Self::Params<'_, '_>) -> Self {
     Self::default()
-  }
-
-  fn unique() -> bool {
-    true
   }
 
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {

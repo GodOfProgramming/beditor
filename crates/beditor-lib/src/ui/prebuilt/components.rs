@@ -38,6 +38,10 @@ impl Ui for Components {
 
   const ID: uuid::Uuid = uuid!("5b376389-2acf-4945-807b-94ee16c09088");
 
+  const UNIQUE: bool = true;
+
+  const SCROLL_BARS: [bool; 2] = [false, true];
+
   type Params<'w, 's> = Params<'w, 's>;
 
   fn spawn(_params: Self::Params<'_, '_>) -> Self {
@@ -106,14 +110,6 @@ impl Ui for Components {
     if let Some(path) = next_path {
       *current_path = path;
     }
-  }
-
-  fn unique() -> bool {
-    true
-  }
-
-  fn scroll_bars(&self, _params: Self::Params<'_, '_>) -> [bool; 2] {
-    [false, true]
   }
 }
 

@@ -68,7 +68,7 @@ impl UiManager {
       BTreeSet::from_iter(layouts.list()?)
     };
 
-    let dock = match current_layout_name {
+    let mut dock = match current_layout_name {
       Some(name) => {
         let mut layouts = params.p1();
         let layout = layouts.get_layout(name)?;
@@ -76,6 +76,14 @@ impl UiManager {
       }
       None => self.default_dock_state(world),
     };
+
+    // resets any surfaces that have an active
+    // tab that does not not reopen on startup
+    for (_, leaf) in dock.iter_leaves_mut() {
+      if leaf.active_focused().is_none() {
+        leaf.set_active_tab(0);
+      }
+    }
 
     self.state = dock;
 

@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use crate::{EditorSettings, UiManager, util::storage::LayoutInfo};
 
 use super::{RawUi, Ui, VTable};
@@ -155,44 +157,27 @@ impl Ui for MissingUi {
     default()
   }
 
-  fn hidden() -> bool {
-    true
-  }
+  const HIDDEN: bool = true;
+
+  const UNIQUE: bool = true;
 
   fn render(&mut self, ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {
     let mut job = LayoutJob::single_section(self.message.to_owned(), egui::TextFormat::default());
     job.wrap = egui::text::TextWrapping::default();
     ui.label(job);
   }
-
-  fn unique() -> bool {
-    true // prevents this from showing up in the spawn ui menu
-  }
 }
 
-pub(super) trait DockExtensions {
-  fn decouple(
-    &self,
-    ui_manager: &UiManager,
-    q_uuids: &Query<&PersistentId, Without<MissingUi>>,
-    q_missing: &Query<&MissingUi>,
-  ) -> DockState<LayoutInfo>;
-
-  fn restore(
-    dock: &DockState<LayoutInfo>,
-    vtables: &HashMap<PersistentId, VTable>,
-    world: &mut World,
-  ) -> Self;
-}
-
-impl DockExtensions for DockState<Entity> {
+pub(super) trait DockExtensions:
+  Borrow<DockState<Entity>> + From<DockState<Entity>>
+{
   fn decouple(
     &self,
     ui_manager: &UiManager,
     q_persistent_ids: &Query<&PersistentId, Without<MissingUi>>,
     q_missing: &Query<&MissingUi>,
   ) -> DockState<LayoutInfo> {
-    self.map_tabs(|tab| {
+    self.borrow().map_tabs(|tab| {
       let id;
       let name;
 
@@ -216,11 +201,9 @@ impl DockExtensions for DockState<Entity> {
     vtables: &HashMap<PersistentId, VTable>,
     world: &mut World,
   ) -> Self {
-    dock.map_tabs(|layout_info| {
-      vtables
-        .get(&layout_info.id())
-        .map(|vtable| (vtable.spawn)(world))
-        .unwrap_or_else(|| {
+    dock
+      .filter_map_tabs(|layout_info| {
+        let Some(vtable) = vtables.get(&layout_info.id()) else {
           let name = layout_info.name();
           let state = SystemState::<<MissingUi as Ui>::Params<'_, '_>>::new(world);
 
@@ -229,7 +212,7 @@ impl DockExtensions for DockState<Entity> {
             *layout_info.id()
           );
 
-          world
+          let entity = world
             .spawn((
               Name::new(<MissingUi as RawUi>::NAME),
               MissingUi::new(name, layout_info.id()),
@@ -237,11 +220,22 @@ impl DockExtensions for DockState<Entity> {
               UiState::default(),
               UiComponentState(state),
             ))
-            .id()
-        })
-    })
+            .id();
+
+          return Some(entity);
+        };
+
+        if vtable.reopen_on_startup {
+          Some((vtable.spawn)(world))
+        } else {
+          None
+        }
+      })
+      .into()
   }
 }
+
+impl DockExtensions for DockState<Entity> {}
 
 pub(crate) trait ShrinkableViewport: Component + Sized {
   type Marker: Component;

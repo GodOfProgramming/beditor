@@ -55,12 +55,10 @@ impl RawUi for Inspector {
   const NAME: &str = stringify!(Inspector);
   const ID: Uuid = uuid!("10bb68b8-c247-4792-89e9-61d1b9682a72");
 
+  const UNIQUE: bool = true;
+
   fn spawn(_entity: Entity, _world: &mut World) -> Self {
     default()
-  }
-
-  fn unique() -> bool {
-    true
   }
 
   fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {

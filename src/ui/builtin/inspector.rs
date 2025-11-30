@@ -1,70 +1,27 @@
-use std::any::TypeId;
-
-use crate::{
-	ui::{EditorUiBundle, InspectorSelection, builtin::dnd_drop_ui},
-	util::components::ComponentRegistry,
-};
+use super::BundleDnd;
+use crate::ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui};
 use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector::{
 	by_type_id::{ui_for_asset, ui_for_resource},
 	ui_for_entities_shared_components, ui_for_entity,
 };
-use brefabs::Prefabs;
 use uuid::{Uuid, uuid};
-
-use super::InspectorDnd;
 
 #[derive(Component, Reflect, Default)]
 pub struct Inspector;
 
 impl Inspector {
-	fn inner_ui<F>(entities: impl AsRef<[Entity]>, world: &mut World, ui: &mut egui::Ui, render_fn: F)
+	fn dnd_ui<F>(entities: impl AsRef<[Entity]>, world: &mut World, ui: &mut egui::Ui, render_fn: F)
 	where
 		F: FnOnce(&mut World, &mut egui::Ui),
 	{
-		let (_, component_id) = dnd_drop_ui(ui, |ui| {
+		let (_, component_id) = panel_dnd_drop_ui::<BundleDnd, ()>(ui, |ui| {
 			render_fn(world, ui);
 		});
 
 		if let Some(dnd) = component_id {
-			match &*dnd {
-				InspectorDnd::AddComponent(type_id) => {
-					Self::spawn_component_on(type_id, entities.as_ref(), world);
-				}
-				InspectorDnd::AddPrefab(type_id, name) => {
-					Self::spawn_prefab_on(entities.as_ref(), world, *type_id, name);
-				}
-			}
+			dnd.spawn_on(entities.as_ref().iter().cloned(), world);
 		}
-	}
-
-	fn spawn_component_on(component_id: &TypeId, entities: &[Entity], world: &mut World) {
-		let cr = world.resource::<ComponentRegistry>();
-		let Some(component) = cr.get(component_id).cloned() else {
-			warn!("Failed to lookup component");
-			return;
-		};
-
-		let component_id = component.id();
-
-		for entity in entities {
-			if world.get_by_id(*entity, component_id).is_none() {
-				component.spawn(*entity, world);
-			}
-		}
-	}
-
-	fn spawn_prefab_on(
-		entities: &[Entity],
-		world: &mut World,
-		type_id: TypeId,
-		variant: &Option<Name>,
-	) {
-		world.resource_scope(|world, prefabs: Mut<Prefabs>| {
-			for entity in entities {
-				prefabs.apply_untyped_to(world, type_id, variant, *entity);
-			}
-		});
 	}
 }
 
@@ -88,12 +45,12 @@ impl EditorUiBundle for Inspector {
 			|world, selection: Mut<InspectorSelection>| match selection.as_ref() {
 				InspectorSelection::Entities(selected_entities) => match selected_entities.as_slice() {
 					&[entity] => {
-						Self::inner_ui([entity], world, ui, |world, ui| {
+						Self::dnd_ui([entity], world, ui, |world, ui| {
 							ui_for_entity(world, entity, ui);
 						});
 					}
 					entities => {
-						Self::inner_ui(entities, world, ui, |world, ui| {
+						Self::dnd_ui(entities, world, ui, |world, ui| {
 							ui_for_entities_shared_components(world, entities, ui);
 						});
 					}
@@ -108,5 +65,14 @@ impl EditorUiBundle for Inspector {
 				}
 			},
 		);
+	}
+
+	fn context_menu(
+		entity: Entity,
+		ui: &mut egui::Ui,
+		world: &mut World,
+		surface: egui_dock::SurfaceIndex,
+		node: egui_dock::NodeIndex,
+	) {
 	}
 }

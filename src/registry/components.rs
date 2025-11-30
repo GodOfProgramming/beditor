@@ -1,4 +1,4 @@
-use crate::{Editor, util::vfs::Vfs};
+use crate::util::vfs::Vfs;
 use bevy::{
   ecs::{component::ComponentId, world::FromWorld},
   prelude::*,
@@ -18,13 +18,6 @@ macro_rules! impl_reg_comp {
         $head::register(world, component_registry);
         $(
           $tail::register(world, component_registry);
-        )*
-      }
-
-      fn register_types(editor: &mut Editor) {
-        editor.register_type::<$head>();
-        $(
-          editor.register_type::<$tail>();
         )*
       }
     }
@@ -143,7 +136,6 @@ where
 
 pub trait RegisterableComponents {
   fn register_components(world: &mut World, component_registry: &mut ComponentRegistry);
-  fn register_types(editor: &mut Editor);
 }
 
 impl_reg_comp!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12);

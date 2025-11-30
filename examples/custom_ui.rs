@@ -7,11 +7,9 @@ use bevy::prelude::*;
 use egui_demo_lib::{View, WidgetGallery};
 
 fn main() {
-  let mut editor = Editor::default();
-
-  editor.register_ui::<CustomPanel>();
-
-  editor.run();
+  App::new()
+    .add_plugins(EditorPlugin::new().register_ui::<CustomPanel>())
+    .run();
 }
 
 #[derive(Reflect, Component, Default)]

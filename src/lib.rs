@@ -14,7 +14,6 @@ use bevy::{
   },
   ecs::{entity_disabling::Disabled, query::QueryFilter, system::NonSendMarker},
   prelude::*,
-  reflect::GetTypeRegistration,
   remote::{RemotePlugin, http::RemoteHttpPlugin},
   window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
   winit::WINIT_WINDOWS,
@@ -29,12 +28,12 @@ use view::EditorViewPlugin;
 
 use crate::{
   ui::InspectorIntegrationPlugin,
-  util::{log::LogPlugin, reflection::ReflectionExtensionsPlugin},
+  util::{AppExtensions, log::LogPlugin, reflection::ReflectionExtensionsPlugin},
 };
 
 pub mod prelude {
-  pub use super::Editor;
   pub use crate::{
+    EditorPlugin,
     ui::{EditorUi, EditorUiBundle, misc, prebuilt::*},
     util::{
       EntityManager, GameEntity, GameRenderLayer,
@@ -65,147 +64,152 @@ impl AsRef<str> for StartEditorInTestingSetting {
   }
 }
 
-pub struct EditorPlugin;
+type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
+type PrefabConfigFn = Box<dyn Fn(&mut App, &mut PrefabPlugin) + Send + Sync>;
+type UiRegistrationFn = Box<dyn Fn(&mut App, &mut UiManager) + Send + Sync>;
+type ComponentRegistrationFn = Box<dyn Fn(&mut App, &mut ComponentRegistry) + Send + Sync>;
 
-impl Plugin for EditorPlugin {
-  fn build(&self, _: &mut App) {
-    // Do nothing, this is a marker plugin
-  }
+#[derive(Default)]
+pub struct EditorPlugin {
+  default_plugins: Option<AppRegistrationFn>,
+  generic_registrations: Vec<AppRegistrationFn>,
+  prefab_config_fn: Option<PrefabConfigFn>,
+  ui_registrations: Vec<UiRegistrationFn>,
+  component_registrations: Vec<ComponentRegistrationFn>,
 }
 
-#[derive(Deref, DerefMut)]
-pub struct Editor {
-  #[deref]
-  app: App,
-  ui_manager: UiManager,
-  component_registry: ComponentRegistry,
-  prefabs: PrefabPlugin,
-}
-
-impl Default for Editor {
-  fn default() -> Self {
-    Self::from(App::new())
-  }
-}
-
-impl Editor {
-  pub fn configure_defaults(f: impl FnOnce(DefaultPlugins) -> PluginGroupBuilder) -> Self {
-    let mut app = App::new();
-
-    Self::init_app(&mut app, Some(f));
-
-    let ui_manager = UiManager::new(&mut app);
-
-    Self {
-      app,
-      component_registry: default(),
-      ui_manager,
-      prefabs: PrefabPlugin::default(),
-    }
+impl EditorPlugin {
+  pub fn new() -> Self {
+    Self::default()
   }
 
-  pub fn prefabs(&mut self) -> &mut PrefabPlugin {
-    &mut self.prefabs
-  }
-
-  pub fn register_component<T: RegisterableComponent>(&mut self) -> &mut Self {
-    T::register(self.app.world_mut(), &mut self.component_registry);
-    self.register_type::<T>();
+  pub fn configure_defaults<P, M, F>(mut self, f: F) -> Self
+  where
+    F: Fn(&mut App, DefaultPlugins) -> P + Send + Sync + 'static,
+    P: Into<PluginGroupBuilder> + 'static,
+  {
+    self.default_plugins = Some(Box::new(move |app| {
+      let plugins = (f)(app, DefaultPlugins).into();
+      app.add_plugins(Self::override_defaults(plugins));
+    }));
     self
   }
 
-  pub fn register_components<T: RegisterableComponents>(&mut self) -> &mut Self {
-    T::register_components(self.app.world_mut(), &mut self.component_registry);
-    T::register_types(self);
+  pub fn configure_prefabs<F>(mut self, f: F) -> Self
+  where
+    F: Fn(&mut App, &mut PrefabPlugin) + Send + Sync + 'static,
+  {
+    self.prefab_config_fn = Some(Box::new(f));
     self
   }
 
-  pub fn register_game_camera<C>(&mut self) -> &mut Self
+  pub fn register_component<T: RegisterableComponent>(mut self) -> Self {
+    self
+      .component_registrations
+      .push(Box::new(|app, component_registry| {
+        T::register(app.world_mut(), component_registry);
+      }));
+    self
+  }
+
+  pub fn register_components<T: RegisterableComponents>(mut self) -> Self {
+    self
+      .component_registrations
+      .push(Box::new(|app, component_registry| {
+        T::register_components(app.world_mut(), component_registry);
+      }));
+    self
+  }
+
+  pub fn register_game_camera<C>(mut self) -> Self
   where
     C: Component + Reflect + TypePath + Identifiable,
   {
-    view::add_game_camera::<C>(&mut self.app);
-    self.register_ui::<GameView<C>>()
-  }
-
-  pub fn register_ui<U: EditorUiBundle>(&mut self) -> &mut Self {
-    self.ui_manager.register::<U>(&mut self.app);
-    self.register_type::<U>();
+    self.ui_registrations.push(Box::new(|app, ui_manager| {
+      view::add_game_camera::<C>(app);
+      ui_manager.register::<GameView<C>>(app);
+    }));
     self
   }
 
-  pub fn register_pickable<F: QueryFilter + Send + Sync + 'static>(&mut self) -> &mut Self {
-    self
-      .app
-      .add_plugins(InspectorIntegrationPlugin::<F>::default());
+  pub fn register_ui<U: EditorUiBundle>(mut self) -> Self {
+    self.ui_registrations.push(Box::new(|app, ui_manager| {
+      ui_manager.register::<U>(app);
+    }));
     self
   }
 
-  fn register_type<T>(&mut self)
-  where
-    T: GetTypeRegistration,
-  {
-    self.app.register_type::<T>();
+  pub fn register_pickable<F: QueryFilter + Send + Sync + 'static>(mut self) -> Self {
+    self.generic_registrations.push(Box::new(|app| {
+      app.add_plugins(InspectorIntegrationPlugin::<F>::default());
+    }));
+    self
   }
 
-  pub fn to_app(self) -> App {
-    let Self {
-      mut app,
-      ui_manager,
-      component_registry,
-      prefabs,
-    } = self;
+  fn override_defaults(builder: PluginGroupBuilder) -> PluginGroupBuilder {
+    builder
+      .set(WindowPlugin {
+        primary_window: Some(Window {
+          title: String::from("Beditor"),
+          mode: WindowMode::Windowed,
+          visible: false,
+          ..default()
+        }),
+        close_when_requested: false,
+        ..default()
+      })
+      .disable::<bevy::log::LogPlugin>()
+  }
+
+  fn configure<'a>(&self, app: &'a mut App) -> &'a mut App {
+    app.insert_resource(Storage::new().unwrap());
+
+    if let Some(config_fn) = &self.default_plugins {
+      (config_fn)(app);
+    } else {
+      app.add_plugins(Self::override_defaults(DefaultPlugins.build()));
+    }
+
+    for f in &self.generic_registrations {
+      (f)(app);
+    }
+
+    let mut prefabs = PrefabPlugin::default();
+    if let Some(prefab_config_fn) = &self.prefab_config_fn {
+      (prefab_config_fn)(app, &mut prefabs);
+    }
+
+    let mut ui_manager = UiManager::new(app);
+    for f in &self.ui_registrations {
+      (f)(app, &mut ui_manager);
+    }
+
+    let mut component_registry = ComponentRegistry::default();
+    for f in &self.component_registrations {
+      (f)(app, &mut component_registry);
+    }
 
     app
-      .add_plugins((EditorPlugin, prefabs))
+      .add_plugins(prefabs)
       .insert_resource(component_registry)
-      .insert_resource(ui_manager);
-
-    app
+      .insert_resource(ui_manager)
   }
+}
 
-  pub fn run(self) -> AppExit {
-    self.to_app().run()
-  }
-
-  fn init_app<F>(app: &mut App, inspector_fn: Option<F>)
-  where
-    F: FnOnce(DefaultPlugins) -> PluginGroupBuilder,
-  {
+impl Plugin for EditorPlugin {
+  fn build(&self, app: &mut App) {
     dotenvy::dotenv().ok();
 
-    let default_plugins = DefaultPlugins;
-
-    let default_plugins = if let Some(inspector_fn) = inspector_fn {
-      (inspector_fn)(default_plugins)
-    } else {
-      default_plugins.build()
-    };
-
-    app
-      .insert_resource(Storage::new().unwrap())
+    self
+      .configure(app)
       .init_resource::<EditorSettings>()
       .init_resource::<GameRenderLayer>()
-      .add_plugins((
-        default_plugins
-          .set(WindowPlugin {
-            primary_window: Some(Window {
-              title: String::from("Beditor"),
-              mode: WindowMode::Windowed,
-              visible: false,
-              ..default()
-            }),
-            close_when_requested: false,
-            ..default()
-          })
-          .disable::<bevy::log::LogPlugin>(),
-        MeshPickingPlugin,
-        FrameTimeDiagnosticsPlugin::default(),
-        EntityCountDiagnosticsPlugin::default(),
-        SystemInformationDiagnosticsPlugin,
-        RemotePlugin::default(),
-        RemoteHttpPlugin::default(),
-      ))
+      .add_plugin_if_not_present(MeshPickingPlugin)
+      .add_plugin_if_not_present(FrameTimeDiagnosticsPlugin::default())
+      .add_plugin_if_not_present(EntityCountDiagnosticsPlugin::default())
+      .add_plugin_if_not_present(SystemInformationDiagnosticsPlugin)
+      .add_plugin_if_not_present(RemotePlugin::default())
+      .add_plugin_if_not_present(RemoteHttpPlugin::default())
       .add_plugins((
         EditorViewPlugin,
         InputPlugin,
@@ -250,21 +254,6 @@ impl Editor {
         OnEnter(EditorState::Exiting),
         (save_editor_settings, finish_exit).in_set(EditorGlobalSystems),
       );
-  }
-}
-
-impl From<App> for Editor {
-  fn from(mut app: App) -> Self {
-    Self::init_app::<fn(DefaultPlugins) -> PluginGroupBuilder>(&mut app, None);
-
-    let ui_manager = UiManager::new(&mut app);
-
-    Self {
-      app,
-      component_registry: default(),
-      ui_manager,
-      prefabs: PrefabPlugin::default(),
-    }
   }
 }
 

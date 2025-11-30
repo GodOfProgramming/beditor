@@ -1,16 +1,16 @@
 use beditor::{
-  Editor,
   brefabs::{NoParams, Prefab},
+  prelude::*,
 };
 use bevy::prelude::*;
 use serde_derive::Deserialize;
 
 fn main() {
-  let mut editor = Editor::default();
-
-  editor.prefabs().add_prefab::<SamplePrefab>();
-
-  editor.run();
+  App::new()
+    .add_plugins(EditorPlugin::new().configure_prefabs(|_, prefabs| {
+      prefabs.add_prefab::<SamplePrefab>();
+    }))
+    .run();
 }
 
 #[derive(Bundle, Reflect)]

@@ -1,29 +1,29 @@
-use beditor::Editor;
+use beditor::prelude::*;
 use bevy::prelude::*;
 
 fn main() {
-  let mut editor = Editor::default();
-
-  editor
-    .register_components::<(SpinComponent, GrowthComponent)>()
-    .register_components::<(
-      ExampleComponent<i8>,
-      ExampleComponent<i16>,
-      ExampleComponent<i32>,
-      ExampleComponent<i64>,
-    )>()
-    .register_components::<(
-      ExampleComponent<u8>,
-      ExampleComponent<u16>,
-      ExampleComponent<u32>,
-      ExampleComponent<u64>,
-    )>()
-    .register_components::<(ExampleComponent<f32>, ExampleComponent<f64>)>()
-    .register_components::<(ExampleComponent<isize>, ExampleComponent<usize>)>()
+  App::new()
+    .add_plugins(
+      EditorPlugin::new()
+        .register_components::<(SpinComponent, GrowthComponent)>()
+        .register_components::<(
+          ExampleComponent<i8>,
+          ExampleComponent<i16>,
+          ExampleComponent<i32>,
+          ExampleComponent<i64>,
+        )>()
+        .register_components::<(
+          ExampleComponent<u8>,
+          ExampleComponent<u16>,
+          ExampleComponent<u32>,
+          ExampleComponent<u64>,
+        )>()
+        .register_components::<(ExampleComponent<f32>, ExampleComponent<f64>)>()
+        .register_components::<(ExampleComponent<isize>, ExampleComponent<usize>)>(),
+    )
     .add_systems(Startup, startup)
-    .add_systems(Update, (spin, grow));
-
-  editor.run();
+    .add_systems(Update, (spin, grow))
+    .run();
 }
 
 fn startup(

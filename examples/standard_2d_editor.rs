@@ -2,13 +2,10 @@ use beditor::prelude::*;
 use bevy::{color::palettes::css::PURPLE, prelude::*};
 
 fn main() {
-  let mut editor = Editor::default();
-
-  editor
-    .register_game_camera::<GameCamera>()
-    .add_systems(Startup, startup);
-
-  editor.run();
+  App::new()
+    .add_plugins(EditorPlugin::new().register_game_camera::<GameCamera>())
+    .add_systems(Startup, startup)
+    .run();
 }
 
 #[derive(Component, Reflect, Identifiable)]

@@ -4,6 +4,8 @@ pub mod reflection;
 pub mod storage;
 pub mod vfs;
 
+use std::borrow::BorrowMut;
+
 use bevy::{
   camera::visibility::{Layer as CameraLayer, RenderLayers},
   ecs::{bundle::NoBundleEffect, system::SystemParam},
@@ -70,3 +72,15 @@ impl EntityManager<'_, '_> {
       .spawn_batch(batch.into_iter().map(|bundle| (GameEntity, bundle)));
   }
 }
+
+pub trait AppExtensions: BorrowMut<App> {
+  fn add_plugin_if_not_present<P: Plugin>(&mut self, plugin: P) -> &mut Self {
+    let app = self.borrow_mut();
+    if !app.is_plugin_added::<P>() {
+      app.add_plugins(plugin);
+    }
+    self
+  }
+}
+
+impl AppExtensions for App {}

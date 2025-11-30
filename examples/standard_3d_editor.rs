@@ -2,15 +2,16 @@ use beditor::{brefabs::StaticPrefab, prelude::*, uuid};
 use bevy::{ecs::system::SystemParam, prelude::*};
 
 fn main() {
-  let mut editor = Editor::default();
-
-  editor
-    .register_game_camera::<GameCamera>()
-    .add_systems(Startup, startup);
-
-  editor.prefabs().add_static_prefab::<Cube>();
-
-  editor.run();
+  App::new()
+    .add_plugins(
+      EditorPlugin::new()
+        .configure_prefabs(|_, prefabs| {
+          prefabs.add_static_prefab::<Cube>();
+        })
+        .register_game_camera::<GameCamera>(),
+    )
+    .add_systems(Startup, startup)
+    .run();
 }
 
 #[derive(Component, Reflect, Default, Identifiable)]

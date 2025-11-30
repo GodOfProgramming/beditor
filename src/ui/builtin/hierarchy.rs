@@ -1,6 +1,6 @@
 use crate::ui::{
   EditorUiBundle, InspectorSelection, SelectedEntities,
-  prebuilt::{HierarchyDnd, dnd_drop_ui},
+  builtin::{HierarchyDnd, dnd_drop_ui},
 };
 use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector;

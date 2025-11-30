@@ -6,7 +6,7 @@ use crate::{
   EditorState, input,
   ui::{
     misc::UiState,
-    prebuilt::{editor_view::EditorView, game_view::GameView},
+    builtin::{editor_view::EditorView, game_view::GameView},
   },
   view::cam::{ActiveEditorCamera, EditorCamPlugin},
 };

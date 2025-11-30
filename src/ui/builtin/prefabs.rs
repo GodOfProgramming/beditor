@@ -1,7 +1,7 @@
 use crate::{
   ui::{
     EditorUiBundle,
-    prebuilt::{HierarchyDnd, type_editor::OpenTypeEditor},
+    builtin::{HierarchyDnd, type_editor::OpenTypeEditor},
     widgets::{Card, horizontal_list},
   },
   util::vfs::{Vfs, VfsNode, VfsPath},

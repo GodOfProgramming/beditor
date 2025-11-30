@@ -21,7 +21,7 @@ use brefabs::PrefabPlugin;
 use input::InputPlugin;
 pub use prelude::*;
 use serde::{Deserialize, Serialize};
-use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
+use ui::{UiPlugin, managers::UiManager, builtin::game_view::GameView};
 use view::EditorViewPlugin;
 
 use crate::{
@@ -37,7 +37,7 @@ use crate::{
 pub mod prelude {
   pub use crate::{
     EditorPlugin,
-    ui::{EditorUi, EditorUiBundle, misc, prebuilt::*},
+    ui::{EditorUi, EditorUiBundle, misc, builtin::*},
     util::{
       EntityManager, GameEntity, GameRenderLayer,
       reflection::{ReflectDefaultCache, serde::SerdeRegistry},

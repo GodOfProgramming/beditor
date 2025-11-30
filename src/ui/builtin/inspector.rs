@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use crate::{
-  ui::{EditorUiBundle, InspectorSelection, prebuilt::dnd_drop_ui},
+  ui::{EditorUiBundle, InspectorSelection, builtin::dnd_drop_ui},
   util::components::ComponentRegistry,
 };
 use bevy::prelude::*;

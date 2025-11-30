@@ -1,7 +1,7 @@
 use super::{
   EditorUiBundle, TabViewer, VTable,
   misc::{DockExtensions, MissingUi, UiComponentExtensions},
-  prebuilt::{
+  builtin::{
     assets::Assets, components::Components, debug::DebugMenu, editor_view::EditorView,
     hierarchy::Hierarchy, inspector::Inspector, resources::Resources,
   },
@@ -9,7 +9,7 @@ use super::{
 use crate::{
   Settings,
   misc::UiResourceState,
-  ui::prebuilt::{logs::Logs, menu_bar, prefabs::PrefabsUi, type_editor::TypeEditor},
+  ui::builtin::{logs::Logs, menu_bar, prefabs::PrefabsUi, type_editor::TypeEditor},
   util::storage::{LayoutInfo, Layouts},
 };
 use bevy::{ecs::system::SystemState, platform::collections::HashMap, prelude::*};

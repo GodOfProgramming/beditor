@@ -1,7 +1,7 @@
+pub mod builtin;
 pub mod events;
 pub mod managers;
 pub mod misc;
-pub mod prebuilt;
 pub mod widgets;
 
 use crate::{
@@ -99,7 +99,7 @@ impl Plugin for UiPlugin {
           .in_set(EditorUiSystems),
       );
 
-    prebuilt::menu_bar::init(app);
+    builtin::menu_bar::init(app);
   }
 }
 

@@ -34,7 +34,7 @@ impl Storage {
       .file_stem()
       .expect("failed to get current executable file stem");
 
-    let filename = format!("{}_beditor_settings.sqlite", stem.display());
+    let filename = format!("{}.{}.sqlite", stem.display(), env!("CARGO_PKG_NAME"));
     current_exe.parent().unwrap().to_path_buf().join(filename)
   }
 }

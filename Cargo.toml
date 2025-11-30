@@ -6,7 +6,7 @@ rust-version = "1.91.0"
 publish = false
 
 [workspace]
-members = ["crates/beditor-lib", "crates/macros", "crates/persistent-id"]
+members = [".", "crates/macros", "crates/persistent-id"]
 
 [workspace.dependencies]
 anyhow = "1.0.100"
@@ -64,7 +64,54 @@ walkdir = "2.5.0"
 xml-rs = "1.0.0"
 
 [dependencies]
-beditor-lib = { path = "crates/beditor-lib" }
+
+# exports
+bevy_egui = { workspace = true }
+macros = { workspace = true }
+persistent-id = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+uuid = { workspace = true, features = ["serde"] }
+
+# internal
+async-std = { workspace = true }
+bevy = { workspace = true, features = ["default", "serialize", "bevy_remote"] }
+bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
+brefabs = { workspace = true }
+camino = { workspace = true }
+derive-new = { workspace = true }
+derive_more = { workspace = true, features = ["full"] }
+dotenvy = { workspace = true }
+egui = { workspace = true }
+egui-file-dialog = { workspace = true }
+egui_dock = { workspace = true, features = ["serde"] }
+egui_logger = { workspace = true }
+egui_phosphor_icons = { workspace = true }
+egui_tracing = { workspace = true }
+include_dir = { workspace = true }
+itertools = { workspace = true }
+leafwing-input-manager = { workspace = true }
+log = { workspace = true }
+maplit = { workspace = true }
+parking_lot = { workspace = true }
+petgraph = { workspace = true }
+platform-dirs = { workspace = true }
+postcard = { workspace = true, features = ["use-std"] }
+profiling = { workspace = true, features = ["profile-with-tracing"] }
+ron = { workspace = true }
+rusqlite = { workspace = true, features = ["bundled"] }
+rusqlite_migration = { workspace = true, features = ["from-directory"] }
+serde_json = { workspace = true }
+static_assertions = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-log = { workspace = true }
+tracing-tracy = { workspace = true, optional = true }
+variadics_please = { workspace = true }
+
+
+[features]
+profiling = ["bevy/trace_tracy", "dep:tracing-tracy"]
+watch = ["bevy/file_watcher"]
 
 [dev-dependencies]
 egui_demo_lib = { workspace = true }
@@ -77,7 +124,3 @@ opt-level = 0
 
 [profile.dev.package."*"]
 opt-level = 3
-
-[features]
-profiling = ["beditor-lib/profiling"]
-watch = ["beditor-lib/watch"]

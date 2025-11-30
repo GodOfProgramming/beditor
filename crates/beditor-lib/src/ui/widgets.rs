@@ -1,33 +1,37 @@
-use derive_new::new;
+use bevy::ecs::name::Name;
+use egui::WidgetText;
 use itertools::Itertools;
 
-#[derive(new)]
-pub struct Dialog<T>
-where
-  T: Into<egui::WidgetText>,
-{
-  title: T,
+#[derive(Default)]
+pub struct Dialog {
+  title: egui::WidgetText,
+  pub open: bool,
 }
 
-impl<T> Dialog<T>
-where
-  T: Into<egui::WidgetText>,
-{
-  pub fn open<R>(
-    self,
+impl Dialog {
+  pub fn new(title: impl Into<WidgetText>) -> Self {
+    Self {
+      title: title.into(),
+      open: false,
+    }
+  }
+}
+
+impl Dialog {
+  /// See [`egui::Window::show`]
+  pub fn show<R>(
+    &mut self,
     ctx: &egui::Context,
-    state: &mut bool,
     contents: impl FnOnce(&mut egui::Ui) -> R,
-  ) -> Option<R> {
-    egui::Window::new(self.title)
-      .open(state)
+  ) -> Option<egui::InnerResponse<Option<R>>> {
+    egui::Window::new(self.title.clone())
+      .open(&mut self.open)
       .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
       .title_bar(true)
       .resizable(false)
       .movable(false)
       .collapsible(false)
       .show(ctx, contents)
-      .and_then(|resp| resp.inner)
   }
 }
 
@@ -141,5 +145,33 @@ pub fn horizontal_list<I, T>(
         index += 1;
       }
     });
+  }
+}
+
+#[derive(Default)]
+pub struct SelectableList {
+  selected: Option<Name>,
+}
+
+impl SelectableList {
+  pub fn ui(&mut self, ui: &mut egui::Ui, items: &[Name]) -> Option<egui::Response> {
+    let text_style = egui::TextStyle::Body;
+    let row_height = ui.text_style_height(&text_style);
+
+    egui::ScrollArea::vertical()
+      .show_rows(ui, row_height, items.len(), |ui, range| {
+        let mut value = None;
+
+        for item in &items[range] {
+          let response = ui.selectable_label(self.selected.as_ref() == Some(item), item.as_str());
+          if response.clicked() {
+            self.selected = Some(item.clone());
+            value = Some(response);
+          }
+        }
+
+        value
+      })
+      .inner
   }
 }

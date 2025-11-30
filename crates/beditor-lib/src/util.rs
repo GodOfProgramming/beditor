@@ -1,3 +1,4 @@
+pub mod debug;
 pub mod log;
 pub mod reflection;
 pub mod storage;
@@ -7,29 +8,8 @@ use bevy::{
   camera::visibility::{Layer as CameraLayer, RenderLayers},
   ecs::{bundle::NoBundleEffect, system::SystemParam},
   prelude::*,
-  reflect::TypeRegistration,
   window::{CursorGrabMode, CursorIcon, CursorOptions},
 };
-
-#[macro_export]
-macro_rules! here {
-  () => {{
-    use std::io::Write;
-    println!("{}({})", file!(), line!());
-    std::io::stdout().flush().ok();
-  }};
-
-  ($($arg:tt)*) => {{
-    use std::io::Write;
-    print!("{}({}): ", file!(), line!());
-    std::io::stdout().flush().ok();
-    println!($($arg)*);
-  }};
-}
-
-pub fn short_name_of_type(registration: &TypeRegistration) -> &'static str {
-  registration.type_info().type_path_table().short_path()
-}
 
 pub fn show_cursor(cursor: &mut CursorOptions) {
   cursor.visible = true;

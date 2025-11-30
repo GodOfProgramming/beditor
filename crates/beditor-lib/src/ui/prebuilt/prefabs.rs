@@ -1,13 +1,10 @@
 use crate::{
   ui::{
     EditorUiBundle,
-    components::{Card, horizontal_list},
     prebuilt::{HierarchyDnd, type_editor::OpenTypeEditor},
+    widgets::{Card, horizontal_list},
   },
-  util::{
-    short_name_of_type,
-    vfs::{Vfs, VfsNode, VfsPath},
-  },
+  util::vfs::{Vfs, VfsNode, VfsPath},
 };
 use bevy::prelude::*;
 use brefabs::{Prefabs, WorldExtensions};
@@ -137,7 +134,7 @@ fn rebuild_vfs(
     };
 
     for variant in variants.map(|(variant, _)| variant) {
-      let type_name = short_name_of_type(type_registration);
+      let type_name = type_registration.type_info().type_path_table().short_path();
       let Some(module_path) = type_registration
         .type_info()
         .type_path_table()

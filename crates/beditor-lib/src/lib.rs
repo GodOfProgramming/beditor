@@ -27,7 +27,10 @@ use serde::{Deserialize, Serialize};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
 use view::EditorViewPlugin;
 
-use crate::{ui::InspectorIntegrationPlugin, util::log::LogPlugin};
+use crate::{
+  ui::InspectorIntegrationPlugin,
+  util::{log::LogPlugin, reflection::ReflectionExtensionsPlugin},
+};
 
 pub mod prelude {
   pub use super::Editor;
@@ -35,6 +38,7 @@ pub mod prelude {
     ui::{EditorUi, EditorUiBundle, misc, prebuilt::*},
     util::{
       EntityManager, GameEntity, GameRenderLayer,
+      reflection::{ReflectDefaultCache, serde::SerdeRegistry},
       storage::{Layouts, Settings, Storage},
     },
   };
@@ -195,7 +199,6 @@ impl Editor {
             ..default()
           })
           .disable::<bevy::log::LogPlugin>(),
-        LogPlugin,
         MeshPickingPlugin,
         FrameTimeDiagnosticsPlugin::default(),
         EntityCountDiagnosticsPlugin::default(),
@@ -203,7 +206,13 @@ impl Editor {
         RemotePlugin::default(),
         RemoteHttpPlugin::default(),
       ))
-      .add_plugins((EditorViewPlugin, InputPlugin, UiPlugin))
+      .add_plugins((
+        EditorViewPlugin,
+        InputPlugin,
+        UiPlugin,
+        LogPlugin,
+        ReflectionExtensionsPlugin,
+      ))
       .insert_state(EditorState::Editing)
       .configure_sets(
         Update,

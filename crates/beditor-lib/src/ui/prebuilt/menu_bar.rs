@@ -2,8 +2,9 @@ use crate::{
   EditorState, Layouts, Settings, StartEditorInTestingSetting, UiManager,
   misc::{DockExtensions, MissingUi},
   ui::{
-    EditorUiSystems, InspectorSelection, components,
+    EditorUiSystems, InspectorSelection,
     managers::{LayoutManager, SaveLayoutOnExitSetting},
+    widgets,
   },
   view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
@@ -41,15 +42,32 @@ struct CachedSettings {
   start_in_testing: bool,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 struct SaveLayoutDialogState {
-  open: bool,
+  dialog: widgets::Dialog,
   error: Option<String>,
 }
 
-#[derive(Resource, Default)]
+impl Default for SaveLayoutDialogState {
+  fn default() -> Self {
+    Self {
+      dialog: widgets::Dialog::new("Save Layout"),
+      error: None,
+    }
+  }
+}
+
+#[derive(Resource)]
 struct ResetLayoutDialogState {
-  open: bool,
+  dialog: widgets::Dialog,
+}
+
+impl Default for ResetLayoutDialogState {
+  fn default() -> Self {
+    Self {
+      dialog: widgets::Dialog::new("Reset Layout?"),
+    }
+  }
 }
 
 pub fn init(app: &mut App) {
@@ -138,15 +156,16 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 
 fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
   ui.menu_button("Layouts", |ui| {
-    ui.add_enabled_ui(!params.save_layout_dialog_state.open, |ui| {
+    ui.add_enabled_ui(!params.save_layout_dialog_state.dialog.open, |ui| {
       if ui.button("Save Layout").clicked() {
-        params.save_layout_dialog_state.open = true;
+        params.save_layout_dialog_state.dialog.open = true;
       }
     });
 
     if !params.layout_manager.is_empty() {
       ui.add_enabled_ui(
-        !params.save_layout_dialog_state.open && !params.reset_layout_dialog_state.open,
+        !params.save_layout_dialog_state.dialog.open
+          && !params.reset_layout_dialog_state.dialog.open,
         |ui| {
           ui.menu_button("Restore", |ui| {
             for layout in params.layout_manager.iter() {
@@ -161,9 +180,9 @@ fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
       );
     }
 
-    ui.add_enabled_ui(!params.reset_layout_dialog_state.open, |ui| {
+    ui.add_enabled_ui(!params.reset_layout_dialog_state.dialog.open, |ui| {
       if ui.button("Restore Default").clicked() {
-        params.reset_layout_dialog_state.open = true;
+        params.reset_layout_dialog_state.dialog.open = true;
       }
     });
 
@@ -276,13 +295,14 @@ fn save_layout_dialog_display(
   mut ctx: Single<&mut bevy_egui::EguiContext>,
   mut layout_name: Local<String>,
 ) {
-  if !state.open {
+  if !state.dialog.open {
     layout_name.clear();
     return;
   }
 
-  let mut open = state.open;
-  components::Dialog::new("Save Layout").open(ctx.get_mut(), &mut open, |ui| {
+  let SaveLayoutDialogState { dialog, error } = &mut *state;
+
+  dialog.show(ctx.get_mut(), |ui| {
     ui.horizontal(|ui| {
       ui.label("Name");
       ui.text_edit_singleline(&mut *layout_name);
@@ -293,13 +313,11 @@ fn save_layout_dialog_display(
         commands.write_message(SaveLayoutMessage(layout_name.take()));
       }
 
-      if let Some(error) = &state.error {
+      if let Some(error) = &error {
         ui.colored_label(egui::Color32::RED, error);
       }
     });
   });
-
-  state.open = open;
 }
 
 fn reset_layout_dialog_display(
@@ -307,13 +325,11 @@ fn reset_layout_dialog_display(
   mut ctx: Single<&mut bevy_egui::EguiContext>,
   mut state: ResMut<ResetLayoutDialogState>,
 ) {
-  if !state.open {
+  if !state.dialog.open {
     return;
   }
 
-  let mut open = state.open;
-
-  components::Dialog::new("Confirm Layout Reset?").open(ctx.get_mut(), &mut open, |ui| {
+  state.dialog.show(ctx.get_mut(), |ui| {
     ui.label("This will reset your layout to the default configuration. Continue?");
     ui.horizontal(|ui| {
       if ui.button("Ok").clicked() {
@@ -321,8 +337,6 @@ fn reset_layout_dialog_display(
       }
     });
   });
-
-  state.open = open;
 }
 
 #[derive(Message)]
@@ -347,7 +361,7 @@ impl SaveLayoutMessage {
         state.error = Some(err.to_string());
       } else {
         layout_manager.insert(msg.0.clone());
-        state.open = false;
+        state.dialog.open = false;
       }
     }
   }
@@ -393,7 +407,7 @@ impl ResetLayoutMessage {
         let default_state = ui_manager.default_dock_state(world);
         ui_manager.switch_state(default_state, world);
         let mut state = world.resource_mut::<ResetLayoutDialogState>();
-        state.open = false;
+        state.dialog.open = false;
       });
     });
   }

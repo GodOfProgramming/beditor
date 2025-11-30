@@ -1,7 +1,4 @@
-use crate::{
-  Editor,
-  util::{short_name_of_type, vfs::Vfs},
-};
+use crate::{Editor, util::vfs::Vfs};
 use bevy::{
   ecs::{component::ComponentId, world::FromWorld},
   prelude::*,
@@ -64,7 +61,7 @@ impl ComponentRegistry {
       return;
     };
 
-    let type_name = short_name_of_type(type_registration);
+    let type_name = type_registration.type_info().type_path_table().short_path();
     let type_id = type_registration.type_id();
     let Some(module_path) = type_registration
       .type_info()

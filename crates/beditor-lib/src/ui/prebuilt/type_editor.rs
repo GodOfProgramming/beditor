@@ -1,20 +1,18 @@
-use crate::{EditorUiBundle, ui::managers::UiManager, util::reflection};
-use bevy::{platform::collections::HashMap, prelude::*, reflect::TypeRegistry};
+use crate::{
+  EditorUiBundle,
+  ui::{managers::UiManager, widgets},
+  util::reflection::{ReflectDefaultCache, serde::SerdeRegistry},
+};
+use bevy::prelude::*;
 use derive_new::new;
 use egui_file_dialog::{DialogState, FileDialog};
 use parking_lot::Mutex;
-use std::{
-  borrow::Cow,
-  cell::RefCell,
-  ffi::OsStr,
-  io::Write,
-  path::{Path, PathBuf},
-  sync::Arc,
-};
+use std::{cell::RefCell, io::Write, path::PathBuf, sync::Arc};
 use uuid::{Uuid, uuid};
 
 #[derive(Bundle, Reflect, Default)]
 pub struct TypeEditor {
+  #[reflect(ignore)]
   state: TypeEditorState,
   _marker: TypeEditorMarker,
 }
@@ -33,9 +31,9 @@ impl EditorUiBundle for TypeEditor {
 
   fn init(app: &mut App) {
     app
+      .add_observer(on_editor_state_insert)
       .add_message::<SaveFileMessage>()
       .add_message::<OpenFileMessage>()
-      .init_resource::<SerdeRegistry>()
       .add_systems(
         FixedUpdate,
         (SaveFileMessage::handle, OpenFileMessage::handle),
@@ -54,14 +52,23 @@ impl EditorUiBundle for TypeEditor {
     };
 
     let can_open_file_dialog = matches!(
-      state.dialog.state(),
+      state.file_dialog.state(),
       DialogState::Closed | DialogState::Cancelled
     );
 
     let Some(arc) = state.value.as_ref().map(Arc::clone) else {
-      if can_open_file_dialog && ui.button("Open").clicked() {
-        state.dialog.pick_file();
+      if can_open_file_dialog {
+        if ui.button("Open File").clicked() {
+          state.file_dialog.pick_file();
+        }
+
+        if ui.button("Select...").clicked() {
+          state.type_selection_dialog.open = true;
+        }
       }
+
+      ui.separator();
+
       return;
     };
 
@@ -73,7 +80,7 @@ impl EditorUiBundle for TypeEditor {
       if can_open_file_dialog {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
           if ui.button("Save As").clicked() {
-            state.dialog.save_file();
+            state.file_dialog.save_file();
           }
 
           if let Some(opened_file) = &state.opened_file
@@ -101,17 +108,20 @@ impl EditorUiBundle for TypeEditor {
   }
 }
 
-#[derive(Component, Reflect, Default)]
+#[derive(Component, Default)]
 struct TypeEditorState {
   label: String,
 
   opened_file: Option<PathBuf>,
 
-  #[reflect(ignore)]
   value: Option<Arc<Mutex<RefCell<Box<dyn Reflect>>>>>,
 
-  #[reflect(ignore)]
-  dialog: FileDialog,
+  file_dialog: FileDialog,
+
+  type_selection_dialog: widgets::Dialog,
+  type_list: widgets::SelectableList,
+  type_filter: String,
+  type_list_cache: Vec<Name>,
 }
 
 impl TypeEditorState {
@@ -119,8 +129,12 @@ impl TypeEditorState {
     Self {
       label,
       opened_file: None,
-      dialog: FileDialog::default(),
       value: Some(Arc::new(Mutex::new(RefCell::new(value)))),
+      file_dialog: FileDialog::default(),
+      type_selection_dialog: widgets::Dialog::new("Select Type"),
+      type_list: default(),
+      type_filter: default(),
+      type_list_cache: default(),
     }
   }
 
@@ -144,98 +158,44 @@ impl Command for OpenTypeEditor {
   }
 }
 
-type DeserializeFn = fn(bytes: &[u8], type_registry: &TypeRegistry) -> Result<Box<dyn Reflect>>;
-type SerializeFn = fn(value: &dyn Reflect, type_registry: &TypeRegistry) -> Result<Vec<u8>>;
+fn on_editor_state_insert(
+  event: On<Add, TypeEditorState>,
+  mut q_states: Query<&mut TypeEditorState>,
+  cache: Res<ReflectDefaultCache>,
+) {
+  let Ok(mut state) = q_states.get_mut(event.event_target()) else {
+    return;
+  };
 
-#[derive(Resource)]
-pub struct SerdeRegistry {
-  unknown: Option<SerdeVtable>,
-  mapping: HashMap<Cow<'static, OsStr>, SerdeVtable>,
-}
-
-impl Default for SerdeRegistry {
-  fn default() -> Self {
-    Self {
-      unknown: default(),
-      mapping: default(),
-    }
-    .with_registration(
-      OsStr::new("ron"),
-      reflection::serde::ron_serializer,
-      reflection::serde::ron_deserializer,
-    )
-  }
-}
-
-impl SerdeRegistry {
-  pub fn with_unknown(mut self, ser: SerializeFn, de: DeserializeFn) -> Self {
-    self.unknown = Some(SerdeVtable::new(ser, de));
-    self
-  }
-
-  pub fn add_unknown(&mut self, ser: SerializeFn, de: DeserializeFn) -> &mut Self {
-    self.unknown = Some(SerdeVtable::new(ser, de));
-    self
-  }
-
-  pub fn with_registration(
-    mut self,
-    extension: impl Into<Cow<'static, OsStr>>,
-    ser: SerializeFn,
-    de: DeserializeFn,
-  ) -> Self {
-    self.add_registration(extension, ser, de);
-    self
-  }
-
-  pub fn add_registration(
-    &mut self,
-    extension: impl Into<Cow<'static, OsStr>>,
-    ser: SerializeFn,
-    de: DeserializeFn,
-  ) -> &mut Self {
-    self
-      .mapping
-      .insert(extension.into(), SerdeVtable::new(ser, de));
-    self
-  }
-
-  fn serializer_for(&self, path: &Path) -> Option<SerializeFn> {
-    self.vtable_for(path).map(|vtable| vtable.ser)
-  }
-
-  fn deserializer_for(&self, path: &Path) -> Option<DeserializeFn> {
-    self.vtable_for(path).map(|vtable| vtable.de)
-  }
-
-  fn vtable_for(&self, path: &Path) -> Option<&SerdeVtable> {
-    if let Some(extension) = path.extension() {
-      self.mapping.get(extension)
-    } else {
-      self.unknown.as_ref()
-    }
-  }
-}
-
-#[derive(new)]
-struct SerdeVtable {
-  ser: SerializeFn,
-  de: DeserializeFn,
+  state.type_list_cache = cache
+    .iter()
+    .map(|type_info| Name::new(type_info.type_path()))
+    .collect();
 }
 
 fn show_dialogs(
   mut commands: Commands,
   mut q_states: Query<(Entity, &mut TypeEditorState)>,
   mut contexts: bevy_egui::EguiContexts,
+  cache: Res<ReflectDefaultCache>,
 ) {
   let Ok(ctx) = contexts.ctx_mut() else {
     return;
   };
 
   for (entity, mut state) in &mut q_states {
-    state.dialog.update(ctx);
-    if let Some(file) = state.dialog.take_picked() {
-      match state.dialog.mode() {
+    let TypeEditorState {
+      ref mut file_dialog,
+      ref mut type_selection_dialog,
+      ref mut type_list,
+      ref mut type_filter,
+      ref mut type_list_cache,
+      ..
+    } = *state;
+
+    file_dialog.update(ctx);
+    if let Some(file) = file_dialog.take_picked() {
+      match file_dialog.mode() {
         egui_file_dialog::DialogMode::PickFile => {
           commands.write_message(OpenFileMessage::new(entity, file.to_path_buf()));
         }
@@ -245,6 +205,22 @@ fn show_dialogs(
         _ => (),
       }
     }
+
+    type_selection_dialog.show(ctx, |ui| {
+      if ui.text_edit_singleline(type_filter).changed() || cache.is_changed() {
+        let filter = type_filter.to_lowercase();
+
+        *type_list_cache = cache
+          .iter()
+          .filter_map(|type_info| {
+            let full_path = type_info.type_path();
+            full_path.contains(&filter).then(|| Name::new(full_path))
+          })
+          .collect();
+      }
+
+      type_list.ui(ui, type_list_cache);
+    });
   }
 }
 
@@ -304,11 +280,11 @@ impl SaveFileMessage {
   fn handle(
     mut messages: MessageReader<Self>,
     mut q_states: Query<&mut TypeEditorState>,
-    loaders: Res<SerdeRegistry>,
+    registry: Res<SerdeRegistry>,
     app_type_registry: Res<AppTypeRegistry>,
   ) -> Result {
     for msg in messages.read() {
-      let Some(ser) = loaders.serializer_for(&msg.file) else {
+      let Some(ser) = registry.serializer_for(&msg.file) else {
         warn!(
           path = msg.file.display().to_string(),
           "No loader registered for file type"

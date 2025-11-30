@@ -73,7 +73,7 @@ pub fn global_input_actions(
     }
 
     if action_state.just_pressed(&EditorActions::ToggleUi) {
-      editor_settings.render_ui = !editor_settings.render_ui;
+      editor_settings.render_ui ^= true;
     }
   }
 }

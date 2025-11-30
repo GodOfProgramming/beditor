@@ -1,8 +1,8 @@
-pub mod components;
 pub mod events;
 pub mod managers;
 pub mod misc;
 pub mod prebuilt;
+pub mod widgets;
 
 use crate::{
   EditorSettings, EditorState, Settings,

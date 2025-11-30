@@ -2,7 +2,7 @@ use super::InspectorDnd;
 use crate::{
   EditorUi,
   registry::components::{ComponentRegistry, RegisteredComponent},
-  ui::components::{Card, horizontal_list},
+  ui::widgets::{Card, horizontal_list},
   util::vfs::{VfsNode, VfsPath},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};

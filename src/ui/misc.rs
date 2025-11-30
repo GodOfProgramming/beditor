@@ -113,7 +113,7 @@ pub unsafe trait UiExtensions: EditorUi {
   }
 }
 
-unsafe impl<T> UiExtensions for T where T: EditorUi {}
+unsafe impl<T> UiExtensions for T where Self: EditorUi {}
 
 #[derive(Component, Deref, DerefMut)]
 struct UiComponentState<P>(SystemState<P>)
@@ -331,5 +331,53 @@ pub fn apply_dock_style_to_egui_style(dock: &egui_dock::Style, es: &mut egui::St
 
   if dock.tab_bar.hline_color.a() != 0 {
     visuals.window_stroke.color = dock.tab_bar.hline_color;
+  }
+}
+
+pub fn make_dock_style_square(dock_style: &mut egui_dock::Style) {
+  let egui_dock::Style {
+    main_surface_border_rounding,
+    tab_bar,
+    tab,
+    ..
+  } = dock_style;
+
+  let egui_dock::TabBarStyle {
+    corner_radius: tab_bar_corner_radius,
+    ..
+  } = tab_bar;
+
+  let egui_dock::TabStyle {
+    active,
+    inactive,
+    focused,
+    hovered,
+    inactive_with_kb_focus,
+    active_with_kb_focus,
+    focused_with_kb_focus,
+    tab_body,
+    ..
+  } = tab;
+
+  let egui_dock::TabBodyStyle { corner_radius, .. } = tab_body;
+
+  for cr in [
+    main_surface_border_rounding,
+    tab_bar_corner_radius,
+    corner_radius,
+  ] {
+    *cr = egui::CornerRadius::ZERO;
+  }
+
+  for interaction in [
+    active,
+    inactive,
+    focused,
+    hovered,
+    inactive_with_kb_focus,
+    active_with_kb_focus,
+    focused_with_kb_focus,
+  ] {
+    interaction.corner_radius = egui::CornerRadius::ZERO;
   }
 }

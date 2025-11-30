@@ -7,6 +7,7 @@ mod systems;
 
 use crate::{
   EditorSettings, EditorState, Settings,
+  misc::make_dock_style_square,
   ui::{
     events::AddUiMessage,
     misc::{DockExtensions, EditorUiExtensions, UiResourceState},
@@ -385,8 +386,8 @@ impl UiManager {
     let style = ctx.style();
 
     let mut dock_style = egui_dock::Style::from_egui(&style);
-    dock_style.main_surface_border_rounding = egui::CornerRadius::ZERO;
-    dock_style.tab_bar.corner_radius = egui::CornerRadius::ZERO;
+
+    make_dock_style_square(&mut dock_style);
 
     egui::CentralPanel::default()
       .frame(
@@ -397,20 +398,16 @@ impl UiManager {
           .fill(egui::Color32::TRANSPARENT),
       )
       .show(&ctx, |ui| {
+        // menu bar
         ui.scope(|ui| {
-          ui.style_mut().spacing.item_spacing.y = 0.0;
-          egui::Frame::new()
-            .inner_margin(0)
-            .outer_margin(0)
-            .fill(dock_style.tab_bar.bg_fill)
-            .show(ui, |ui| {
-              super::misc::apply_dock_style_to_egui_style(&dock_style, ui.style_mut());
-              world.resource_scope(|world, mut state: Mut<UiResourceState<menu_bar::Params>>| {
-                let params = state.get_mut(world);
-                menu_bar::render(ui, params);
-                state.apply(world);
-              });
-            });
+          let rect = ui.available_rect_before_wrap();
+          ui.painter()
+            .rect_filled(rect, 0.0, dock_style.tab.tab_body.bg_fill);
+          world.resource_scope(|world, mut state: Mut<UiResourceState<menu_bar::Params>>| {
+            let params = state.get_mut(world);
+            menu_bar::render(ui, params);
+            state.apply(world);
+          });
         });
 
         let mut tab_viewer = TabViewer {

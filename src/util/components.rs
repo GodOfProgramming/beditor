@@ -92,7 +92,7 @@ pub struct RegisteredComponent {
 
 impl RegisteredComponent {
   pub fn spawn(&self, entity: Entity, world: &mut World) {
-    let app_type_registry = world.resource::<AppTypeRegistry>().0.clone();
+    let app_type_registry = world.resource::<AppTypeRegistry>().clone();
     let type_registry = app_type_registry.read();
     let Some(type_registration) = type_registry.get(self.type_id) else {
       return;

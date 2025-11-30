@@ -55,8 +55,8 @@ impl EditorUiBundle for Hierarchy {
 
 impl Hierarchy {
   fn show(ui: &mut egui::Ui, world: &mut World, selected: &mut SelectedEntities) -> bool {
-    let type_registry = world.resource::<AppTypeRegistry>().clone();
-    let type_registry = type_registry.read();
+    let app_type_registry = world.resource::<AppTypeRegistry>().clone();
+    let type_registry = app_type_registry.read();
 
     let ctx_menu = &mut Self::context_menu;
     let mut hierarchy = bevy_inspector::hierarchy::Hierarchy {

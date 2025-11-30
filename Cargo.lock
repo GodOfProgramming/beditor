@@ -1896,9 +1896,9 @@ dependencies = [
 
 [[package]]
 name = "brefabs"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "546136146d2845a1c83dd0f2661cc44cfc21b27cceb46ffe030ba9b6791e4fd4"
+checksum = "fcc7171013b5ad160e1df2aeba64be94194744993b70f0a93cfbe08704f71662"
 dependencies = [
  "bevy_app",
  "bevy_asset",

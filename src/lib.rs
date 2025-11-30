@@ -297,7 +297,7 @@ fn load_settings(
 
 fn auto_register_components(world: &mut World) {
   world.resource_scope(|world, mut component_registry: Mut<ComponentRegistry>| {
-    let app_type_registry = world.resource::<AppTypeRegistry>().0.clone();
+    let app_type_registry = world.resource::<AppTypeRegistry>().clone();
     let type_registry = app_type_registry.read();
 
     for entry in type_registry.iter() {

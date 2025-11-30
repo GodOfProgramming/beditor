@@ -1,4 +1,4 @@
-use crate::ui::{InspectorSelection, EditorUi};
+use crate::ui::{EditorUi, InspectorSelection};
 use bevy::{asset::ReflectAsset, ecs::system::SystemParam, prelude::*};
 use uuid::uuid;
 
@@ -7,8 +7,14 @@ pub struct Assets;
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
-  set: ParamSet<'w, 's, (&'w World, ResMut<'w, InspectorSelection>)>,
+  set: ParamSet<'w, 's, (&'w World, Resources<'w>)>,
   filter: Local<'s, String>,
+}
+
+#[derive(SystemParam)]
+struct Resources<'w> {
+  app_type_registry: Res<'w, AppTypeRegistry>,
+  inspector_selection: ResMut<'w, InspectorSelection>,
 }
 
 impl EditorUi for Assets {
@@ -24,9 +30,10 @@ impl EditorUi for Assets {
   }
 
   fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+    let app_type_registry = params.set.p1().app_type_registry.clone();
+    let type_registry = app_type_registry.read();
+
     let world = params.set.p0();
-    let type_registry = world.resource::<AppTypeRegistry>().0.clone();
-    let type_registry = type_registry.read();
 
     let mut assets = type_registry
       .iter()
@@ -70,7 +77,7 @@ impl EditorUi for Assets {
     }
 
     if let Some(selection) = selection {
-      *params.set.p1() = selection;
+      *params.set.p1().inspector_selection = selection;
     }
   }
 }

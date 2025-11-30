@@ -221,7 +221,6 @@ fn ui_for_item(
     if is_editable_prefab && ui.button("Edit").clicked() {
       world.write_message(EditPrefabDescriptorMessage(
         prefab_data.type_id,
-        path.basename().to_string(),
         prefab_data.variant.clone(),
       ));
     }
@@ -229,18 +228,17 @@ fn ui_for_item(
 }
 
 #[derive(Message)]
-struct EditPrefabDescriptorMessage(TypeId, String, Option<Name>);
+struct EditPrefabDescriptorMessage(TypeId, Option<Name>);
 
 impl EditPrefabDescriptorMessage {
   fn handle(mut messages: MessageReader<Self>, mut commands: Commands) {
     for msg in messages.read() {
       let type_id = msg.0;
-      let name = msg.1.clone();
-      let variant = msg.2.clone();
+      let variant = msg.1.clone();
 
       commands.queue(move |world: &mut World| {
         if let Some(desc) = world.spawn_prefab_descriptor(type_id, variant) {
-          world.commands().queue(OpenTypeEditor::new(name, desc));
+          world.commands().queue(OpenTypeEditor::new(desc));
         }
       });
     }

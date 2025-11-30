@@ -19,7 +19,10 @@ impl Plugin for ReflectionExtensionsPlugin {
 }
 
 #[derive(Resource, Default, Deref)]
-pub struct ReflectDefaultCache(Vec<&'static TypeInfo>);
+pub struct ReflectDefaultCache {
+  #[deref]
+  inner: Vec<&'static TypeInfo>,
+}
 
 impl ReflectDefaultCache {
   fn rebuild_cache(
@@ -28,11 +31,13 @@ impl ReflectDefaultCache {
   ) {
     let type_registry = app_type_registry.read();
 
-    cache.0 = type_registry
+    cache.inner = type_registry
       .iter()
       .filter_map(|t| t.data::<ReflectDefault>().map(|_| t.type_info()))
       .collect();
 
-    cache.0.sort_by(|a, b| a.type_path().cmp(b.type_path()));
+    cache
+      .inner
+      .sort_by(|t1, t2| t1.type_path().cmp(t2.type_path()));
   }
 }

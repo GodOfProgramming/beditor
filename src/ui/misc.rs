@@ -39,11 +39,11 @@ impl UiState {
   }
 }
 
-pub(super) trait UiComponentExtensions {
+pub(crate) trait EditorUiExtensions {
   const VTABLE: VTable;
 }
 
-impl<T> UiComponentExtensions for T
+impl<T> EditorUiExtensions for T
 where
   T: EditorUiBundle,
 {

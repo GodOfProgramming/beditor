@@ -1,7 +1,10 @@
 use super::{OrbitState, PanState, UP};
 use crate::{
   input::EditorActions,
-  util::{self, storage::Settings},
+  util::{
+    self,
+    storage::{CamStateSetting3d, Settings},
+  },
   view::cam::EditorCamera,
 };
 use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorOptions};
@@ -29,7 +32,7 @@ pub fn enable(
   let CameraSaveData {
     settings,
     transform,
-  } = settings.get_or_default(CamStateSetting);
+  } = settings.get_or_default::<CamStateSetting3d>();
 
   commands.spawn((
     Name::new("Editor Camera 3D"),
@@ -48,13 +51,10 @@ pub fn save_settings(
   q_cam: Query<(&Transform, &CameraSettings), With<EditorCamera3d>>,
 ) -> Result {
   for (cam_transform, cam_settings) in &q_cam {
-    settings.set(
-      CamStateSetting,
-      CameraSaveData {
-        settings: cam_settings.clone(),
-        transform: *cam_transform,
-      },
-    )?;
+    settings.set::<CamStateSetting3d>(CameraSaveData {
+      settings: cam_settings.clone(),
+      transform: *cam_transform,
+    })?;
   }
 
   Ok(())
@@ -235,16 +235,8 @@ pub fn zoom_system(
   }
 }
 
-struct CamStateSetting;
-
-impl AsRef<str> for CamStateSetting {
-  fn as_ref(&self) -> &str {
-    "3d_cam_state"
-  }
-}
-
 #[derive(Default, Serialize, Deserialize)]
-struct CameraSaveData {
+pub struct CameraSaveData {
   settings: CameraSettings,
   transform: Transform,
 }

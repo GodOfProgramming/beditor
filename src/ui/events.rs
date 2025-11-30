@@ -1,4 +1,4 @@
-use super::managers::UiManager;
+use super::UiManager;
 use bevy::prelude::*;
 use derive_new::new;
 use egui_dock::{NodeIndex, SurfaceIndex};

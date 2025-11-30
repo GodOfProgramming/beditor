@@ -21,7 +21,7 @@ use brefabs::PrefabPlugin;
 use input::InputPlugin;
 pub use prelude::*;
 use serde::{Deserialize, Serialize};
-use ui::{UiPlugin, managers::UiManager, builtin::game_view::GameView};
+use ui::{UiManager, UiPlugin, builtin::game_view::GameView};
 use view::EditorViewPlugin;
 
 use crate::{
@@ -31,13 +31,14 @@ use crate::{
     components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
     log::LogPlugin,
     reflection::ReflectionExtensionsPlugin,
+    storage::{EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting},
   },
 };
 
 pub mod prelude {
   pub use crate::{
     EditorPlugin,
-    ui::{EditorUi, EditorUiBundle, misc, builtin::*},
+    ui::{EditorUi, EditorUiBundle, builtin::*, misc},
     util::{
       EntityManager, GameEntity, GameRenderLayer,
       reflection::{ReflectDefaultCache, serde::SerdeRegistry},
@@ -57,14 +58,6 @@ pub enum EditorState {
   Editing,
   Testing,
   Exiting,
-}
-
-pub struct StartEditorInTestingSetting;
-
-impl AsRef<str> for StartEditorInTestingSetting {
-  fn as_ref(&self) -> &str {
-    "editor.start_in_testing"
-  }
 }
 
 type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
@@ -268,7 +261,7 @@ struct EditingSystems;
 
 #[derive(Resource, Reflect, Serialize, Deserialize)]
 #[reflect(Resource, Default)]
-struct EditorSettings {
+pub struct EditorSettings {
   render_ui: bool,
   game_requires_mouse: bool,
   game_requires_picking: bool,
@@ -284,16 +277,8 @@ impl Default for EditorSettings {
   }
 }
 
-struct EditorSettingsSetting;
-
-impl AsRef<str> for EditorSettingsSetting {
-  fn as_ref(&self) -> &str {
-    "editor.settings"
-  }
-}
-
 fn save_editor_settings(mut settings: Settings, editor_settings: Res<EditorSettings>) -> Result {
-  settings.set(EditorSettingsSetting, &*editor_settings)
+  settings.set::<EditorSettingsSetting>(&*editor_settings)
 }
 
 fn load_settings(
@@ -301,20 +286,12 @@ fn load_settings(
   mut editor_settings: ResMut<EditorSettings>,
   mut next_state: ResMut<NextState<EditorState>>,
 ) {
-  *editor_settings = settings.get_or_default(EditorSettingsSetting);
+  *editor_settings = settings.get_or_default::<EditorSettingsSetting>();
 
-  let start_in_testing = settings.get_or_default(StartEditorInTestingSetting);
+  let start_in_testing = settings.get_or_default::<StartEditorInTestingSetting>();
 
   if start_in_testing {
     next_state.set(EditorState::Testing);
-  }
-}
-
-struct WindowMaximizedSetting;
-
-impl AsRef<str> for WindowMaximizedSetting {
-  fn as_ref(&self) -> &str {
-    "window.maximized"
   }
 }
 
@@ -353,7 +330,7 @@ fn configure_windows(
   mut settings: Settings,
   mut window: Single<&mut Window, With<PrimaryWindow>>,
 ) -> Result<()> {
-  let maximized = settings.get_or_default::<bool>(WindowMaximizedSetting);
+  let maximized = settings.get_or_default::<WindowMaximizedSetting>();
   window.set_maximized(maximized);
   Ok(())
 }
@@ -411,7 +388,7 @@ fn handle_window_events(
         continue;
       };
 
-      settings.set(WindowMaximizedSetting, winit_window.is_maximized())?;
+      settings.set::<WindowMaximizedSetting>(winit_window.is_maximized())?;
     }
 
     Ok(())

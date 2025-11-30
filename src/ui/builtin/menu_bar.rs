@@ -1,11 +1,8 @@
 use crate::{
-  EditorState, Layouts, Settings, StartEditorInTestingSetting, UiManager,
+  EditorState, Layouts, Settings, UiManager,
   misc::{DockExtensions, MissingUi},
-  ui::{
-    EditorUiSystems, InspectorSelection,
-    managers::{LayoutManager, SaveLayoutOnExitSetting},
-    widgets,
-  },
+  ui::{EditorUiSystems, InspectorSelection, LayoutManager, widgets},
+  util::storage::{SaveLayoutOnExitSetting, StartEditorInTestingSetting},
   view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -94,8 +91,8 @@ pub fn init(app: &mut App) {
 }
 
 fn startup(mut settings: Settings, mut cached_settings: ResMut<CachedSettings>) {
-  cached_settings.save_layout_on_exit = settings.get_or_default(SaveLayoutOnExitSetting);
-  cached_settings.start_in_testing = settings.get_or_default(StartEditorInTestingSetting);
+  cached_settings.save_layout_on_exit = settings.get_or_default::<SaveLayoutOnExitSetting>();
+  cached_settings.start_in_testing = settings.get_or_default::<StartEditorInTestingSetting>();
 }
 
 pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
@@ -144,10 +141,9 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
   if ui
     .checkbox(&mut params.cached_settings.start_in_testing, ())
     .clicked()
-    && let Err(err) = params.settings.set(
-      StartEditorInTestingSetting,
-      params.cached_settings.start_in_testing,
-    )
+    && let Err(err) = params
+      .settings
+      .set::<StartEditorInTestingSetting>(params.cached_settings.start_in_testing)
   {
     error!("{err}");
   }
@@ -191,10 +187,9 @@ fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
       if ui
         .checkbox(&mut params.cached_settings.save_layout_on_exit, ())
         .clicked()
-        && let Err(err) = params.settings.set(
-          SaveLayoutOnExitSetting,
-          params.cached_settings.save_layout_on_exit,
-        )
+        && let Err(err) = params
+          .settings
+          .set::<SaveLayoutOnExitSetting>(params.cached_settings.save_layout_on_exit)
       {
         error!("{err}");
       }

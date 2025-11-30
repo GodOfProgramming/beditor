@@ -16,6 +16,7 @@ bevy-inspector-egui = "0.35.0"
 bevy_egui = "0.38.0"
 brefabs = "0.6.0"
 camino = "1.2.1"
+const_format = "0.2.35"
 derive-new = "0.7.0"
 derive_more = "1.0.0"
 dotenvy = "0.15.7"
@@ -78,6 +79,7 @@ bevy = { workspace = true, features = ["default", "serialize", "bevy_remote"] }
 bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
 brefabs = { workspace = true }
 camino = { workspace = true }
+const_format = { workspace = true }
 derive-new = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 dotenvy = { workspace = true }

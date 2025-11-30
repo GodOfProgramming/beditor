@@ -1,4 +1,4 @@
-use crate::Settings;
+use crate::{Settings, util::storage::LogLevelSetting};
 use bevy::{
   ecs::system::SystemState,
   log::{
@@ -34,7 +34,7 @@ impl Plugin for LogPlugin {
   fn build(&self, app: &mut App) {
     let mut system_state = SystemState::<Settings>::new(app.world_mut());
     let mut settings = system_state.get_mut(app.world_mut());
-    let level = settings.get_or_default::<LogLevel>(LogLevelSetting);
+    let level = settings.get_or_default::<LogLevelSetting>();
 
     app
       .add_observer(ChangeLogLevelEvent::handle.pipe(fire_log_level_changed))
@@ -122,7 +122,7 @@ impl ChangeLogLevelEvent {
     mut settings: Settings,
     log_handle: Res<LogHandle>,
   ) -> Result<LogLevel> {
-    settings.set(LogLevelSetting, **event)?;
+    settings.set::<LogLevelSetting>(**event)?;
     log_handle
       .modify(|filter| *filter = (**event).into())
       .inspect_err(|err| {
@@ -230,14 +230,6 @@ where
   #[inline]
   unsafe fn downcast_raw(&self, id: TypeId) -> Option<*const ()> {
     unsafe { self.reload_layer.downcast_raw(id) }
-  }
-}
-
-struct LogLevelSetting;
-
-impl AsRef<str> for LogLevelSetting {
-  fn as_ref(&self) -> &str {
-    "log.level"
   }
 }
 

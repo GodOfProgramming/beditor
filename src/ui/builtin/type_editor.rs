@@ -1,6 +1,6 @@
 use crate::{
   EditorUiBundle,
-  ui::{managers::UiManager, widgets},
+  ui::{UiManager, widgets},
   util::reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 };
 use bevy::prelude::*;

@@ -1,5 +1,8 @@
 use super::UP;
-use crate::Settings;
+use crate::{
+  Settings,
+  util::storage::{ActiveEditorCameraSetting, RenderCamerasSetting},
+};
 use bevy::{color::palettes::tailwind, prelude::*};
 use derive_new::new;
 use serde::{Deserialize, Serialize};
@@ -28,7 +31,7 @@ fn set_initial_state(
   mut settings: Settings,
   mut next_state: ResMut<NextState<ActiveEditorCamera>>,
 ) {
-  let state = settings.get_or_default::<ActiveEditorCamera>(ActiveEditorCameraSetting);
+  let state = settings.get_or_default::<ActiveEditorCameraSetting>();
   next_state.set(state);
 }
 
@@ -73,27 +76,11 @@ impl Default for GameCameraColor {
 #[reflect(Resource, Default)]
 pub struct RenderCameras(bool);
 
-struct RenderCamerasSetting;
-
-impl AsRef<str> for RenderCamerasSetting {
-  fn as_ref(&self) -> &str {
-    "view.render_cameras"
-  }
-}
-
-pub struct ActiveEditorCameraSetting;
-
-impl AsRef<str> for ActiveEditorCameraSetting {
-  fn as_ref(&self) -> &str {
-    "view.active_editor_camera"
-  }
-}
-
 fn track_editor_camera_changes(
   cam_state: Res<State<ActiveEditorCamera>>,
   mut settings: Settings,
 ) -> Result {
-  settings.set(ActiveEditorCameraSetting, **cam_state)
+  settings.set::<ActiveEditorCameraSetting>(**cam_state)
 }
 
 #[derive(new, Event)]
@@ -123,13 +110,13 @@ pub struct SyncRenderCamerasEvent;
 
 impl SyncRenderCamerasEvent {
   fn handle(_: On<Self>, render_cameras: Res<RenderCameras>, mut settings: Settings) -> Result {
-    settings.set(RenderCamerasSetting, **render_cameras)?;
+    settings.set::<RenderCamerasSetting>(**render_cameras)?;
     Ok(())
   }
 }
 
 fn retrieve_show_cameras_value(mut render_cameras: ResMut<RenderCameras>, mut settings: Settings) {
-  **render_cameras = settings.get_or_default(RenderCamerasSetting);
+  **render_cameras = settings.get_or_default::<RenderCamerasSetting>();
 }
 
 pub fn should_show_cameras(render_cameras: Res<RenderCameras>) -> bool {

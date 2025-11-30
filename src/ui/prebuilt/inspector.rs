@@ -1,8 +1,8 @@
 use std::any::TypeId;
 
 use crate::{
-  registry::components::ComponentRegistry,
   ui::{EditorUiBundle, InspectorSelection, prebuilt::dnd_drop_ui},
+  util::components::ComponentRegistry,
 };
 use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector::{

@@ -1,9 +1,11 @@
 use super::InspectorDnd;
 use crate::{
   EditorUi,
-  registry::components::{ComponentRegistry, RegisteredComponent},
   ui::widgets::{Card, horizontal_list},
-  util::vfs::{VfsNode, VfsPath},
+  util::{
+    components::{ComponentRegistry, RegisteredComponent},
+    vfs::{VfsNode, VfsPath},
+  },
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::marker::PhantomData;

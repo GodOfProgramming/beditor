@@ -2,7 +2,6 @@
 #![allow(clippy::type_complexity)]
 
 mod input;
-mod registry;
 mod ui;
 mod util;
 mod view;
@@ -21,14 +20,18 @@ use bevy::{
 use brefabs::PrefabPlugin;
 use input::InputPlugin;
 pub use prelude::*;
-use registry::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents};
 use serde::{Deserialize, Serialize};
 use ui::{UiPlugin, managers::UiManager, prebuilt::game_view::GameView};
 use view::EditorViewPlugin;
 
 use crate::{
   ui::InspectorIntegrationPlugin,
-  util::{AppExtensions, log::LogPlugin, reflection::ReflectionExtensionsPlugin},
+  util::{
+    AppExtensions,
+    components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
+    log::LogPlugin,
+    reflection::ReflectionExtensionsPlugin,
+  },
 };
 
 pub mod prelude {

@@ -1,6 +1,6 @@
 use crate::{
 	EditorUiBundle,
-	ui::{UiManager, widgets},
+	ui::{TabState, UiManager, widgets},
 	util::reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 };
 use bevy::{prelude::*, reflect::TypeInfo};
@@ -192,11 +192,11 @@ pub struct OpenTypeEditor(Box<dyn Reflect>);
 impl Command for OpenTypeEditor {
 	fn apply(self, world: &mut World) {
 		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-			let entity = ui_manager.spawn_type::<TypeEditor>(world);
+			let tab = TabState::spawn::<TypeEditor>(world);
 			world
-				.entity_mut(entity)
+				.entity_mut(tab.entity)
 				.insert(TypeEditorState::new(self.0));
-			ui_manager.add_tab_to_focused(entity);
+			ui_manager.add_tab_to_focused(tab);
 		});
 	}
 }

@@ -463,6 +463,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "smallvec",
  "static_assertions",
  "thiserror 2.0.17",
  "tracing",

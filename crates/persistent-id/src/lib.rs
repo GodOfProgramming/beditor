@@ -5,27 +5,27 @@ use uuid::Uuid;
 
 pub trait Identifiable<T = Uuid>
 where
-  T: Default,
+	T: Default,
 {
-  const ID: T;
-  const TYPE_NAME: &'static str;
+	const ID: T;
+	const TYPE_NAME: &'static str;
 }
 
 #[derive(
-  Default,
-  Deref,
-  DerefMut,
-  Component,
-  Clone,
-  Copy,
-  Hash,
-  PartialEq,
-  Eq,
-  Reflect,
-  From,
-  Serialize,
-  Deserialize,
+	Default,
+	Deref,
+	DerefMut,
+	Component,
+	Clone,
+	Copy,
+	Hash,
+	PartialEq,
+	Eq,
+	Reflect,
+	From,
+	Serialize,
+	Deserialize,
 )]
 pub struct PersistentId<T = Uuid>(#[reflect(ignore)] pub T)
 where
-  T: Default;
+	T: Default;

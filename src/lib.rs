@@ -44,7 +44,7 @@ pub mod prelude {
 		util::{
 			EntityManager, GameEntity, GameRenderLayer,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
-			storage::{Layouts, Settings, Storage},
+			storage::{Layouts, SettingKey, Settings, SettingsGroup, Storage},
 		},
 	};
 	pub use bevy_egui;
@@ -79,7 +79,7 @@ impl EditorPlugin {
 		Self::default()
 	}
 
-	pub fn configure_defaults<P, M, F>(mut self, f: F) -> Self
+	pub fn configure_defaults<P, F>(mut self, f: F) -> Self
 	where
 		F: Fn(&mut App, DefaultPlugins) -> P + Send + Sync + 'static,
 		P: Into<PluginGroupBuilder> + 'static,

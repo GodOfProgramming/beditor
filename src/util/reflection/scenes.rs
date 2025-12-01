@@ -3,6 +3,7 @@ use ron::ser::PrettyConfig;
 use serde::Serialize;
 
 pub fn serialize_to_scene(entity: Entity, world: &mut World) -> Result<Vec<u8>> {
+	// TODO this needs to build up a list of not only children, but any relationships that should be serialized
 	let scene = DynamicSceneBuilder::from_world(world)
 		.extract_entity(entity)
 		.build();

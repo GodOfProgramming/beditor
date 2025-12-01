@@ -440,16 +440,20 @@ impl UiManager {
 			)
 			.show(&ctx, |ui| {
 				// menu bar
-				ui.scope(|ui| {
-					let rect = ui.available_rect_before_wrap();
-					ui.painter()
-						.rect_filled(rect, 0.0, dock_style.tab.tab_body.bg_fill);
+				let mut frame = egui::Frame::new().begin(ui);
+
+				frame.content_ui.scope(|ui| {
 					world.resource_scope(|world, mut state: Mut<UiResourceState<menu_bar::Params>>| {
 						let params = state.get_mut(world);
 						menu_bar::render(ui, params);
 						state.apply(world);
 					});
 				});
+
+				frame.allocate_space(ui);
+
+				frame.frame.fill = dock_style.tab.tab_body.bg_fill;
+				frame.paint(ui);
 
 				let mut tab_viewer = TabViewer {
 					vtables: &mut self.vtables,

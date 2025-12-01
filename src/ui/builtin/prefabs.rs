@@ -8,7 +8,7 @@ use crate::{
 	util::vfs::{Vfs, VfsNode, VfsPath},
 };
 use bevy::prelude::*;
-use brefabs::{Prefabs, WorldExtensions};
+use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
 use std::{any::TypeId, borrow::Cow};
 use uuid::{Uuid, uuid};
 
@@ -60,6 +60,24 @@ impl EditorUiBundle for PrefabsUi {
 					&& let Some(parent) = current_path.parent(vfs)
 				{
 					*current_path = parent.clone();
+				};
+
+				if egui::DragAndDrop::has_payload_of_type::<BundleDnd>(ui.ctx()) {
+					ui.with_layout(egui::Layout::right_to_left(egui::Align::Max), |ui| {
+						super::dnd_prep_ui(ui);
+						let (_, dnd) = ui.dnd_drop_zone::<BundleDnd, ()>(egui::Frame::new(), |ui| {
+							let stroke =
+								egui::Stroke::new(2.0, ui.style().visuals.widgets.active.fg_stroke.color);
+							egui::Frame::default().stroke(stroke).show(ui, |ui| {
+								ui.label("Create New");
+							});
+						});
+
+						if let Some(bundle) = dnd {
+							let entity = world.spawn_empty().id();
+							bundle.spawn_on(std::iter::once(entity), world);
+						}
+					});
 				}
 			});
 
@@ -219,6 +237,13 @@ fn ui_for_item(
 		.is_some();
 
 	response.context_menu(|ui| {
+		if ui.button("Spawn").clicked() {
+			world.trigger(SpawnUntypedPrefabEvent::new(
+				prefab_data.type_id,
+				prefab_data.variant.clone(),
+			));
+		}
+
 		if is_editable_prefab && ui.button("Edit").clicked() {
 			world.write_message(EditPrefabDescriptorMessage(
 				prefab_data.type_id,

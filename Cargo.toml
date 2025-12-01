@@ -12,7 +12,7 @@ members = [".", "crates/macros", "crates/persistent-id"]
 anyhow = "1.0.100"
 async-std = "1.13.2"
 bevy = "0.17.3"
-bevy-inspector-egui = "0.35.0"
+bevy-inspector-egui = { version = "0.35.0", git = "https://github.com/GodOfProgramming/bevy-inspector-egui", rev = "cc9c316e52ac83dd49023ae8e843c184251cf23a" }
 bevy_egui = "0.38.0"
 brefabs = "0.7.0"
 camino = "1.2.1"

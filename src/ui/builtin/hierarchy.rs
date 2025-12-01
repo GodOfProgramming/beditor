@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::{
 	BundleDnd,
 	ui::{EditorUiBundle, InspectorSelection, SelectedEntities, builtin::panel_dnd_drop_ui},
@@ -16,6 +18,8 @@ impl EditorUiBundle for Hierarchy {
 	const ID: Uuid = uuid!("860ac319-5c6e-4a2e-83ae-8bb0000d5cb4");
 
 	const UNIQUE: bool = true;
+
+	const SCROLL_BARS: [bool; 2] = [true, false];
 
 	fn init(app: &mut App) {
 		app
@@ -66,21 +70,12 @@ impl Hierarchy {
 			context_menu: Some(ctx_menu),
 			shortcircuit_entity: None,
 			extra_state: &mut (),
+			dnd: Some(dnd_handler),
 		};
 
-		let (resp, prefab) =
-			panel_dnd_drop_ui::<BundleDnd, bool>(ui, |ui| hierarchy.show_with_default_filter::<()>(ui));
-
-		if let Some(dnd) = prefab {
-			if selected.is_empty() {
-				let entity = world.spawn_empty().id();
-				dnd.spawn_on(std::iter::once(entity), world);
-			} else {
-				dnd.spawn_on(selected.iter(), world);
-			}
-		}
-
-		resp.inner
+		let bg_fill = ui.style().visuals.window_fill();
+		ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
+		hierarchy.show_with_default_filter::<()>(ui)
 	}
 
 	fn context_menu(ui: &mut egui::Ui, entity: Entity, world: &mut World, _: &mut ()) {
@@ -194,4 +189,10 @@ impl SaveAsSceneMessage {
 			});
 		}
 	}
+}
+
+fn dnd_handler(_: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc<BundleDnd>) {
+	let new_entity = world.spawn_empty().id();
+	world.entity_mut(entity).add_child(new_entity);
+	payload.spawn_on(std::iter::once(new_entity), world);
 }

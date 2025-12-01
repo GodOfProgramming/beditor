@@ -89,12 +89,16 @@ where
 	let frame = egui::Frame::default();
 	let available_size = ui.available_size();
 
-	// fixes weird highlighting on background
-	let bg_fill = ui.style().visuals.window_fill();
-	ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
+	dnd_prep_ui(ui);
 
 	ui.dnd_drop_zone::<P, R>(frame, |ui| {
 		ui.set_min_size(available_size);
 		render_fn(ui)
 	})
+}
+
+fn dnd_prep_ui(ui: &mut egui::Ui) {
+	// fixes weird highlighting on background
+	let bg_fill = ui.style().visuals.window_fill();
+	ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
 }

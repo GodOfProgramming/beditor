@@ -167,8 +167,8 @@ fn rebuild_vfs(
 				None => Cow::Borrowed(type_name),
 			};
 
-			let Some(path) = vfs.mkdir_p(module_path.split("::"), true) else {
-				error!(type_name, "Already registered ");
+			let Some(path) = vfs.mkdir_p(module_path.split("::")) else {
+				error!(type_name, "Already registered");
 				return;
 			};
 

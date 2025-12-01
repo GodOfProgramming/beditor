@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use crate::{
 	BundleDnd,
-	ui::{EditorUiBundle, InspectorSelection, SelectedEntities, builtin::panel_dnd_drop_ui},
+	ui::{EditorUiBundle, InspectorSelection, SelectedEntities},
+	util::reflection,
 };
 use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector;
@@ -26,7 +27,6 @@ impl EditorUiBundle for Hierarchy {
 			.add_message::<SelectEntityMessage>()
 			.add_message::<ReparentMessage>()
 			.add_message::<ClearSelectedMessage>()
-			.add_message::<SaveAsSceneMessage>()
 			.add_message::<DespawnEntityMessage>()
 			.add_systems(
 				FixedUpdate,
@@ -93,7 +93,14 @@ impl Hierarchy {
 		}
 
 		if ui.button("Save As Scene").clicked() {
-			world.write_message(SaveAsSceneMessage(entity));
+			match reflection::scenes::serialize_to_scene(entity, world) {
+				Ok(data) => {
+					warn!("Unimplemented");
+				}
+				Err(err) => {
+					warn!("Unimplemented");
+				}
+			}
 		}
 
 		if ui.button("Despawn").clicked() {
@@ -168,25 +175,6 @@ impl ClearSelectedMessage {
 
 		if let InspectorSelection::Entities(selected) = inspector_selection.as_mut() {
 			selected.clear();
-		}
-	}
-}
-
-#[derive(Message)]
-struct SaveAsSceneMessage(Entity);
-
-impl SaveAsSceneMessage {
-	fn handle(mut messages: MessageReader<Self>, mut commands: Commands) {
-		for msg in messages.read() {
-			let entity = msg.0;
-			commands.queue(move |world: &mut World| {
-				let scene = DynamicSceneBuilder::from_world(world)
-					.extract_entity(entity)
-					.build();
-				let app_type_registry = world.resource::<AppTypeRegistry>().clone();
-				let type_registry = app_type_registry.read();
-				let ser = bevy::scene::serde::SceneSerializer::new(&scene, &type_registry);
-			});
 		}
 	}
 }

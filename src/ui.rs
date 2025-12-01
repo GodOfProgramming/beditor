@@ -92,9 +92,9 @@ impl Plugin for UiPlugin {
         (
           KeyboardFocus::set_state,
           (
-systems::           dispatch_render_events,
-systems::           reset_ui_state,
-systems::           render,
+  systems::           dispatch_render_events,
+  systems::           reset_ui_state,
+  systems::           render,
           )
             .chain()
             .run_if(should_render_ui),

@@ -1,6 +1,8 @@
+use std::any::TypeId;
+
 use super::BundleDnd;
 use crate::ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui};
-use bevy::prelude::*;
+use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
 use bevy_inspector_egui::bevy_inspector::by_type_id::{ui_for_asset, ui_for_resource};
 use uuid::{Uuid, uuid};
 
@@ -47,7 +49,16 @@ impl EditorUiBundle for Inspector {
 								world,
 								entity,
 								ui,
-								Some(|ui, _, _, _, _, _| {}),
+								Some(|ui, entity, world, type_registry, component_id, type_id| {
+									context_menu(
+										ui,
+										std::iter::once(entity),
+										world,
+										type_registry,
+										component_id,
+										type_id,
+									);
+								}),
 							);
 						});
 					}
@@ -57,7 +68,18 @@ impl EditorUiBundle for Inspector {
 								world,
 								entities,
 								ui,
-								Some(|ui, _, _, _, _, _| {}),
+								Some(
+									|ui, entities, world, type_registry, component_id, type_id| {
+										context_menu(
+											ui,
+											entities.iter().cloned(),
+											world,
+											type_registry,
+											component_id,
+											type_id,
+										);
+									},
+								),
 							);
 						});
 					}
@@ -75,4 +97,17 @@ impl EditorUiBundle for Inspector {
 	}
 }
 
-fn context_menu(ui: &mut egui::Ui) {}
+fn context_menu(
+	ui: &mut egui::Ui,
+	entities: impl Iterator<Item = Entity>,
+	world: &mut World,
+	_type_registry: &TypeRegistry,
+	component_id: ComponentId,
+	_type_id: TypeId,
+) {
+	if ui.button("Remove").clicked() {
+		for entity in entities {
+			world.entity_mut(entity).remove_by_id(component_id);
+		}
+	}
+}

@@ -1,5 +1,7 @@
 //! For queries that may actually be more readable without abstraction
 #![allow(clippy::type_complexity)]
+//! For systems that may actually be more readable without abstraction
+#![allow(clippy::too_many_arguments)]
 
 mod input;
 mod ui;
@@ -11,7 +13,7 @@ use bevy::{
 	diagnostic::{
 		EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
 	},
-	ecs::{entity_disabling::Disabled, query::QueryFilter, system::NonSendMarker},
+	ecs::{entity_disabling::Disabled, system::NonSendMarker},
 	prelude::*,
 	remote::{RemotePlugin, http::RemoteHttpPlugin},
 	window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
@@ -38,7 +40,7 @@ use crate::{
 pub mod prelude {
 	pub use crate::{
 		EditorPlugin,
-		ui::{EditorUi, EditorUiBundle, builtin::*, misc},
+		ui::{EditorUi, EditorUiBundle, builtin::*, misc, notifications::Notification},
 		util::{
 			EntityManager, GameEntity, GameRenderLayer,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
@@ -125,9 +127,9 @@ impl EditorPlugin {
 		self
 	}
 
-	pub fn register_pickable<F: QueryFilter + Send + Sync + 'static>(mut self) -> Self {
+	pub fn register_pickable<C: Component + Send + Sync + 'static>(mut self) -> Self {
 		self.generic_registrations.push(Box::new(|app| {
-			app.add_plugins(InspectorIntegrationPlugin::<F>::default());
+			app.add_plugins(InspectorIntegrationPlugin::<C>::default());
 		}));
 		self
 	}

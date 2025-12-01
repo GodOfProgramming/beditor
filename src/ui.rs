@@ -1,9 +1,9 @@
 pub mod builtin;
 pub mod events;
 pub mod misc;
-pub mod widgets;
-
+pub mod notifications;
 mod systems;
+pub mod widgets;
 
 use crate::{
 	EditorSettings, EditorState, Settings,
@@ -11,6 +11,7 @@ use crate::{
 	ui::{
 		events::AddUiMessage,
 		misc::{DockExtensions, EditorUiExtensions, UiResourceState},
+		notifications::NotificationPlugin,
 	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts},
 	view::mouse_hovered_in_editor_view,
@@ -20,7 +21,6 @@ use bevy::{
 	camera::visibility::{Layer, RenderLayers},
 	ecs::{
 		component::Mutable,
-		query::QueryFilter,
 		system::{SystemParam, SystemState},
 	},
 	platform::collections::HashMap,
@@ -71,36 +71,40 @@ impl Plugin for UiPlugin {
 		};
 
 		app
-      .insert_resource(egui_settings)
-      .add_plugins((
-        EguiPlugin::default(),
-        DefaultInspectorConfigPlugin,
-        InspectorIntegrationPlugin::<Or<(With<Sprite>, With<Mesh2d>, With<Mesh3d>, With<Node>)>>::default(),
-      ))
-      .init_resource::<InspectorSelection>()
-      .init_resource::<LayoutManager>()
-      .init_state::<KeyboardFocus>()
-      .add_message::<AddUiMessage>()
-      .configure_sets(EguiPrimaryContextPass, EditorUiSystems)
-      .add_observer(RemoveUiEvent::on_event)
-      .add_systems(Startup, systems::init_resources)
-      .add_systems(OnEnter(EditorState::Exiting), systems::on_app_exit)
-      .add_systems(First,systems:: setup_ctx)
-      .add_systems(FixedUpdate, AddUiMessage::handle)
-      .add_systems(
-        EguiPrimaryContextPass,
-        (
-          KeyboardFocus::set_state,
-          (
-  systems::           dispatch_render_events,
-  systems::           reset_ui_state,
-  systems::           render,
-          )
-            .chain()
-            .run_if(should_render_ui),
-        )
-          .in_set(EditorUiSystems),
-      );
+			.insert_resource(egui_settings)
+			.init_resource::<InspectorSelection>()
+			.init_resource::<LayoutManager>()
+			.init_state::<KeyboardFocus>()
+			.add_message::<AddUiMessage>()
+			.configure_sets(EguiPrimaryContextPass, EditorUiSystems)
+			.add_plugins((
+				EguiPlugin::default(),
+				DefaultInspectorConfigPlugin,
+				InspectorIntegrationPlugin::<Sprite>::default(),
+				InspectorIntegrationPlugin::<Mesh2d>::default(),
+				InspectorIntegrationPlugin::<Mesh3d>::default(),
+				InspectorIntegrationPlugin::<Node>::default(),
+				NotificationPlugin,
+			))
+			.add_observer(RemoveUiEvent::on_event)
+			.add_systems(Startup, systems::init_resources)
+			.add_systems(OnEnter(EditorState::Exiting), systems::on_app_exit)
+			.add_systems(First, systems::setup_ctx)
+			.add_systems(FixedUpdate, AddUiMessage::handle)
+			.add_systems(
+				EguiPrimaryContextPass,
+				(
+					KeyboardFocus::set_state,
+					(
+						systems::dispatch_render_events,
+						systems::reset_ui_state,
+						systems::render,
+					)
+						.chain()
+						.run_if(should_render_ui),
+				)
+					.in_set(EditorUiSystems),
+			);
 
 		builtin::menu_bar::init(app);
 	}
@@ -780,29 +784,29 @@ impl InspectorSelection {
 	}
 }
 
-pub struct InspectorIntegrationPlugin<F: QueryFilter>(PhantomData<F>);
+pub struct InspectorIntegrationPlugin<C: Component>(PhantomData<C>);
 
-impl<F: QueryFilter> Default for InspectorIntegrationPlugin<F> {
+impl<C: Component> Default for InspectorIntegrationPlugin<C> {
 	fn default() -> Self {
 		Self(default())
 	}
 }
 
-impl<F: QueryFilter + Send + Sync + 'static> Plugin for InspectorIntegrationPlugin<F> {
+impl<C: Component + Send + Sync + 'static> Plugin for InspectorIntegrationPlugin<C> {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
 			FixedUpdate,
 			(
-				auto_register_picking_targets::<F>,
-				handle_click_events::<F>.run_if(mouse_hovered_in_editor_view),
+				auto_register_picking_targets::<C>,
+				handle_click_events::<C>.run_if(mouse_hovered_in_editor_view),
 			),
 		);
 	}
 }
 
-fn auto_register_picking_targets<F: QueryFilter>(
+fn auto_register_picking_targets<C: Component>(
 	mut commands: Commands,
-	q_entities: Query<(Entity, Option<&Name>), (Without<Pickable>, F)>,
+	q_entities: Query<(Entity, Option<&Name>), (Without<Pickable>, With<C>)>,
 ) {
 	for (entity, name) in &q_entities {
 		if let Some(name) = name {
@@ -818,11 +822,11 @@ fn auto_register_picking_targets<F: QueryFilter>(
 	}
 }
 
-fn handle_click_events<F: QueryFilter>(
+fn handle_click_events<C: Component>(
 	mut events: MessageReader<Pointer<Click>>,
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
-	q_pickables: Query<(), F>,
+	q_pickables: Query<(), With<C>>,
 ) {
 	for event in events
 		.read()

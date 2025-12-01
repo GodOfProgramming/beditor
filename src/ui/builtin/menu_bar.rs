@@ -1,7 +1,7 @@
 use crate::{
 	EditorState, Layouts, Settings, UiManager,
 	misc::{DockExtensions, MissingUi},
-	ui::{EditorUiSystems, InspectorSelection, LayoutManager, widgets},
+	ui::{EditorUiSystems, InspectorSelection, LayoutManager, notifications::Notification, widgets},
 	util::storage::{SaveLayoutOnExitSetting, StartEditorInTestingSetting},
 	view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
@@ -42,14 +42,12 @@ struct CachedSettings {
 #[derive(Resource)]
 struct SaveLayoutDialogState {
 	dialog: widgets::Dialog,
-	error: Option<String>,
 }
 
 impl Default for SaveLayoutDialogState {
 	fn default() -> Self {
 		Self {
 			dialog: widgets::Dialog::new("Save Layout"),
-			error: None,
 		}
 	}
 }
@@ -145,9 +143,10 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 			.settings
 			.set::<StartEditorInTestingSetting>(params.cached_settings.start_in_testing)
 	{
-		error!("{err}");
+		params
+			.commands
+			.trigger(Notification::error("Failed to save setting").with_context(err));
 	}
-	{}
 }
 
 fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
@@ -191,7 +190,9 @@ fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
 					.settings
 					.set::<SaveLayoutOnExitSetting>(params.cached_settings.save_layout_on_exit)
 			{
-				error!("{err}");
+				params
+					.commands
+					.trigger(Notification::error("Failed to save setting").with_context(err))
 			}
 		});
 	});
@@ -295,7 +296,7 @@ fn save_layout_dialog_display(
 		return;
 	}
 
-	let SaveLayoutDialogState { dialog, error } = &mut *state;
+	let SaveLayoutDialogState { dialog } = &mut *state;
 
 	dialog.show(ctx.get_mut(), |ui| {
 		ui.horizontal(|ui| {
@@ -306,10 +307,6 @@ fn save_layout_dialog_display(
 		ui.horizontal(|ui| {
 			if ui.button("Save").clicked() {
 				commands.write_message(SaveLayoutMessage(layout_name.take()));
-			}
-
-			if let Some(error) = &error {
-				ui.colored_label(egui::Color32::RED, error);
 			}
 		});
 	});
@@ -339,6 +336,7 @@ struct SaveLayoutMessage(String);
 
 impl SaveLayoutMessage {
 	fn handle(
+		mut commands: Commands,
 		mut reader: MessageReader<Self>,
 		mut state: ResMut<SaveLayoutDialogState>,
 		ui_manager: Res<UiManager>,
@@ -352,8 +350,7 @@ impl SaveLayoutMessage {
 				.state()
 				.decouple(&ui_manager, &q_uuids, &q_missing);
 			if let Err(err) = layouts.save_layout(&msg.0, dock) {
-				error!("{err}");
-				state.error = Some(err.to_string());
+				commands.trigger(Notification::error("Failed to save layout").with_context(err));
 			} else {
 				layout_manager.insert(msg.0.clone());
 				state.dialog.open = false;

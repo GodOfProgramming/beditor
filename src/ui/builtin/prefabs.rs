@@ -1,15 +1,17 @@
+use std::{any::TypeId, borrow::Cow};
+
 use crate::{
 	BundleDnd,
 	ui::{
 		EditorUiBundle,
 		builtin::type_editor::OpenTypeEditor,
+		notifications::Notification,
 		widgets::{Card, horizontal_list},
 	},
 	util::vfs::{Vfs, VfsNode, VfsPath},
 };
 use bevy::prelude::*;
 use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
-use std::{any::TypeId, borrow::Cow};
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
@@ -137,6 +139,7 @@ struct PrefabData {
 }
 
 fn rebuild_vfs(
+	mut commands: Commands,
 	mut prefab_vfs: ResMut<PrefabVfsState>,
 	prefabs: Res<Prefabs>,
 	app_type_regsitry: Res<AppTypeRegistry>,
@@ -172,14 +175,22 @@ fn rebuild_vfs(
 				return;
 			};
 
-			vfs.new_item(
+			if let Err(path) = vfs.new_item(
 				path,
 				Name::new(name),
 				PrefabData {
 					type_id,
 					variant: variant.clone(),
 				},
-			);
+			) {
+				commands.trigger(Notification::error("Failed to add prefab").with_context(
+					serde_json::json!({
+						"module_path": module_path,
+						"type_name": type_name,
+						"path": path.full_path(),
+					}),
+				));
+			}
 		}
 	}
 

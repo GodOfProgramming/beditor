@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use derive_new::new;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 

@@ -1,4 +1,4 @@
-use crate::util::vfs::Vfs;
+use crate::{ui::notifications::Notification, util::vfs::Vfs};
 use bevy::{
 	ecs::{component::ComponentId, world::FromWorld},
 	prelude::*,
@@ -79,9 +79,15 @@ impl ComponentRegistry {
 			return;
 		};
 
-		self.vfs.new_item(path, Name::new(type_name), type_id);
-
-		debug!(module_path, type_name, "Registered component");
+		if let Err(path) = self.vfs.new_item(path, Name::new(type_name), type_id) {
+			world.trigger(Notification::error("Failed to add component").with_context(
+				serde_json::json!({
+					"module_path": module_path,
+					"type_name": type_name,
+					"path": path.full_path(),
+				}),
+			));
+		}
 	}
 }
 

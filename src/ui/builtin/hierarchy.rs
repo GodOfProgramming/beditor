@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use crate::{
 	BundleDnd,
-	ui::{EditorUiBundle, InspectorSelection, SelectedEntities},
+	ui::{EditorUiBundle, InspectorSelection, SelectedEntities, notifications::Notification},
 	util::reflection,
 };
 use bevy::prelude::*;
 use bevy_inspector_egui::bevy_inspector;
+use egui_file_dialog::FileDialog;
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
@@ -24,10 +25,12 @@ impl EditorUiBundle for Hierarchy {
 
 	fn init(app: &mut App) {
 		app
+			.init_resource::<HierarchyState>()
 			.add_message::<SelectEntityMessage>()
 			.add_message::<ReparentMessage>()
 			.add_message::<ClearSelectedMessage>()
 			.add_message::<DespawnEntityMessage>()
+			.add_systems(bevy_egui::EguiPrimaryContextPass, show_dialogs)
 			.add_systems(
 				FixedUpdate,
 				(
@@ -92,16 +95,23 @@ impl Hierarchy {
 			entity_ref.remove::<ChildOf>();
 		}
 
-		if ui.button("Save As Scene").clicked() {
-			match reflection::scenes::serialize_to_scene(entity, world) {
-				Ok(data) => {
-					warn!("Unimplemented");
-				}
-				Err(err) => {
-					warn!("Unimplemented");
+		let state = world
+			.resource::<HierarchyState>()
+			.file_dialog
+			.state()
+			.clone();
+		ui.add_enabled_ui(state != egui_file_dialog::DialogState::Open, |ui| {
+			if ui.button("Save As Scene").clicked() {
+				match reflection::scenes::serialize_to_scene(entity, world) {
+					Ok(data) => {
+						let mut state = world.resource_mut::<HierarchyState>();
+						state.file_dialog.save_file();
+						state.data = data;
+					}
+					Err(err) => world.trigger(Notification::error("Failed to save scene").with_context(err)),
 				}
 			}
-		}
+		});
 
 		if ui.button("Despawn").clicked() {
 			world.write_message(DespawnEntityMessage(entity));
@@ -175,6 +185,43 @@ impl ClearSelectedMessage {
 
 		if let InspectorSelection::Entities(selected) = inspector_selection.as_mut() {
 			selected.clear();
+		}
+	}
+}
+
+#[derive(Resource, Default)]
+struct HierarchyState {
+	file_dialog: FileDialog,
+	data: Vec<u8>,
+}
+
+fn show_dialogs(
+	mut commands: Commands,
+	mut state: ResMut<HierarchyState>,
+	mut contexts: bevy_egui::EguiContexts,
+) {
+	let Ok(ctx) = contexts.ctx_mut() else {
+		commands.trigger(Notification::error("Failed to get egui context"));
+		return;
+	};
+
+	state.file_dialog.update(ctx);
+	if let Some(file) = state.file_dialog.take_picked()
+		&& state.file_dialog.mode() == egui_file_dialog::DialogMode::SaveFile
+	{
+		match std::fs::write(&file, std::mem::take(&mut state.data)) {
+			Ok(_) => {
+				commands.trigger(Notification::success(format!(
+					"Saved scene to {}",
+					file.display()
+				)));
+			}
+			Err(err) => {
+				commands.trigger(
+					Notification::error(format!("Failed to save scene to {}", file.display()))
+						.with_context(err),
+				);
+			}
 		}
 	}
 }

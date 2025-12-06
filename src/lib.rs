@@ -33,7 +33,9 @@ use crate::{
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 		log::LogPlugin,
 		reflection::ReflectionExtensionsPlugin,
-		storage::{EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting},
+		storage::{
+			EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
+		},
 	},
 };
 
@@ -140,6 +142,7 @@ impl EditorPlugin {
 				primary_window: Some(Window {
 					title: String::from("Beditor"),
 					mode: WindowMode::Windowed,
+					position: WindowPosition::Automatic,
 					visible: false,
 					..default()
 				}),
@@ -322,6 +325,10 @@ fn configure_windows(
 ) -> Result<()> {
 	let maximized = settings.get_or_default::<WindowMaximizedSetting>();
 	window.set_maximized(maximized);
+	if let Ok(size) = settings.get::<WindowSizeSetting>() {
+		window.resolution.set(size.x, size.y);
+	}
+
 	Ok(())
 }
 
@@ -370,17 +377,36 @@ fn on_close_requested(
 fn handle_window_events(
 	mut settings: Settings,
 	mut events: MessageReader<bevy::window::WindowResized>,
-	_non_send_marker: NonSendMarker,
+	window: Single<&mut Window, With<PrimaryWindow>>,
+	mut was_maximized: Local<Option<bool>>,
+	mut last_size: Local<Option<Vec2>>,
+	_non_send_marker: NonSendMarker, // forces main thread
 ) -> Result {
-	WINIT_WINDOWS.with_borrow(|windows| {
+	WINIT_WINDOWS.with_borrow(|windows| -> Result {
 		for event in events.read() {
 			let Some(winit_window) = windows.get_window(event.window) else {
 				continue;
 			};
 
-			settings.set::<WindowMaximizedSetting>(winit_window.is_maximized())?;
+			{
+				let is_maximized = winit_window.is_maximized();
+				if *was_maximized != Some(is_maximized) {
+					settings.set::<WindowMaximizedSetting>(is_maximized)?;
+					*was_maximized = Some(is_maximized);
+				}
+			}
 		}
 
 		Ok(())
-	})
+	})?;
+
+	{
+		let size = window.resolution.size();
+		if *last_size != Some(size) {
+			settings.set::<WindowSizeSetting>(size)?;
+			*last_size = Some(size);
+		}
+	}
+
+	Ok(())
 }

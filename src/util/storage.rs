@@ -223,6 +223,14 @@ impl SettingKey for WindowMaximizedSetting {
 	const KEY: &str = "maximized";
 }
 
+pub struct WindowSizeSetting;
+
+impl SettingKey for WindowSizeSetting {
+	type Type = Vec2;
+	type Group = WindowSettingsGroup;
+	const KEY: &str = "size";
+}
+
 pub struct UiSettingsGroup;
 
 impl SettingsGroup for UiSettingsGroup {

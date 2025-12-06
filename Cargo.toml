@@ -12,7 +12,7 @@ members = [".", "crates/macros", "crates/persistent-id"]
 anyhow = "1.0.100"
 async-std = "1.13.2"
 bevy = "0.17.3"
-bevy-inspector-egui = { version = "0.35.0", git = "https://github.com/GodOfProgramming/bevy-inspector-egui", rev = "9b0897e30d0ac4f24212bf477cfb1f9d2e8e1a55" }
+bevy-inspector-egui = { version = "0.35.0", git = "https://github.com/GodOfProgramming/bevy-inspector-egui.git", rev = "9b0897e30d0ac4f24212bf477cfb1f9d2e8e1a55" }
 bevy_egui = "0.38.0"
 brefabs = "0.7.0"
 camino = "1.2.1"
@@ -28,7 +28,7 @@ egui_demo_lib = "0.33.2"
 egui_dock = "0.18.0"
 egui_logger = "0.9.0"
 egui_phosphor_icons = "0.2.0"
-egui_tracing = { git = "https://github.com/GodOfProgramming/egui_tracing", branch = "egui/0.33.2" }
+egui_tracing = { git = "https://github.com/GodOfProgramming/egui_tracing.git", branch = "egui/0.33.2" }
 include_dir = "0.7.4"
 inventory = "0.3.21"
 itertools = "0.14.0"
@@ -63,8 +63,10 @@ tracing-tracy = "0.11.4"
 type_extractor = { path = "./crates/type_extractor" }
 uuid = "1.18.1"
 variadics_please = "1.1.0"
+vfs = { git = "https://github.com/GodOfProgramming/vfs-rs.git", rev = "ee1b9b31334c1e5da3342bca6aeb87b528d8de1a" }
 walkdir = "2.5.0"
 xml-rs = "1.0.0"
+
 
 [dependencies]
 
@@ -113,6 +115,8 @@ tracing = { workspace = true }
 tracing-log = { workspace = true }
 tracing-tracy = { workspace = true, optional = true }
 variadics_please = { workspace = true }
+
+vfs = { workspace = true }
 
 
 [features]

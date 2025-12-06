@@ -1,4 +1,4 @@
-use crate::{ui::notifications::Notification, util::vfs::Vfs};
+use crate::ui::notifications::Notification;
 use bevy::{
 	ecs::{component::ComponentId, world::FromWorld},
 	prelude::*,
@@ -6,6 +6,7 @@ use bevy::{
 	utils::TypeIdMap,
 };
 use std::any::TypeId;
+use vfs::Vfs;
 
 macro_rules! impl_reg_comp {
   // Base case: stop recursion
@@ -74,17 +75,22 @@ impl ComponentRegistry {
 			},
 		);
 
-		let Some(path) = self.vfs.mkdir_p(module_path.split("::")) else {
-			error!(type_name, "Already registered");
+		let Ok(path) = self
+			.vfs
+			.mkdir_p(module_path.split("::"))
+			.inspect_err(|err| {
+				error!(type_name, err = err.to_string(), "Already registered");
+			})
+		else {
 			return;
 		};
 
-		if let Err(path) = self.vfs.new_item(path, Name::new(type_name), type_id) {
+		if let Err(err) = self.vfs.new_item(path, type_name, type_id) {
 			world.trigger(Notification::error("Failed to add component").with_context(
 				serde_json::json!({
 					"module_path": module_path,
 					"type_name": type_name,
-					"path": path.full_path(),
+					"err": err.to_string(),
 				}),
 			));
 		}

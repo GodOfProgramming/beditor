@@ -2,14 +2,12 @@ use super::BundleDnd;
 use crate::{
 	EditorUi,
 	ui::widgets::{Card, horizontal_list},
-	util::{
-		components::{ComponentRegistry, RegisteredComponent},
-		vfs::{VfsNode, VfsPath},
-	},
+	util::components::{ComponentRegistry, RegisteredComponent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::marker::PhantomData;
 use uuid::uuid;
+use vfs::{VfsEntry, VfsNode};
 
 #[derive(Component, Reflect)]
 pub struct Components {
@@ -28,7 +26,8 @@ impl Default for Components {
 pub struct Params<'w, 's> {
 	component_registry: Res<'w, ComponentRegistry>,
 
-	current_path: Local<'s, Option<VfsPath>>,
+	current_node: Local<'s, Option<VfsNode>>,
+	current_path_display: Local<'s, String>,
 
 	filter: Local<'s, String>,
 
@@ -53,64 +52,78 @@ impl EditorUi for Components {
 	fn render(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Self::Params {
 			component_registry,
-			mut current_path,
+			mut current_node,
 			mut filter,
-			..
+			current_path_display: mut current_node_display,
+			_pd: _,
 		} = params;
 
-		let current_path = current_path.get_or_insert_with(|| component_registry.vfs().root().clone());
+		let vfs = component_registry.vfs();
+
+		let current_node = current_node.get_or_insert_with(|| {
+			let root = vfs.root();
+			*current_node_display = root.absolute(vfs).expect("root has to exist");
+			root
+		});
 
 		ui.horizontal(|ui| {
 			ui.text_edit_singleline(&mut *filter);
 
-			if current_path.has_parent(component_registry.vfs())
+			if current_node.has_parent(vfs)
 				&& ui
 					.button(egui_phosphor_icons::icons::ARROW_U_UP_LEFT.regular())
 					.clicked()
-				&& let Some(parent) = current_path.parent(component_registry.vfs())
+				&& let Some(parent) = current_node.parent(vfs)
 			{
-				*current_path = parent.clone();
+				*current_node = parent;
 			}
 		});
 
-		ui.label(current_path.display());
+		ui.label(&*current_node_display);
 
-		let components = component_registry.vfs().iter(current_path).filter(|path| {
+		let components = vfs.ls(*current_node).filter(|node| {
 			filter.is_empty() || {
-				path
-					.basename()
-					.to_lowercase()
-					.contains(filter.to_lowercase().as_str())
+				node
+					.basename(vfs)
+					.map(|name| name.to_lowercase().contains(filter.to_lowercase().as_str()))
+					.unwrap_or(false)
 			}
 		});
 
 		let mut next_path = None;
 		let num_columns = self.components_per_row.max(1);
 
-		horizontal_list(ui, num_columns, components, |ui, i, path| {
+		horizontal_list(ui, num_columns, components, |ui, i, node| {
 			let card_width = ui.available_width();
 			let card_height = card_width;
 
-			let Some(node) = component_registry.vfs().read(path) else {
+			let Some(entry) = vfs.read(node) else {
 				return;
 			};
 
-			match node {
-				VfsNode::Dir => {
-					if ui_for_dir(ui, (card_width, card_height), path.basename(), i) {
-						next_path = Some(path.clone());
+			let Some(basename) = node.basename(vfs) else {
+				return;
+			};
+
+			match entry {
+				VfsEntry::Dir => {
+					if ui_for_dir(ui, (card_width, card_height), basename, i) {
+						next_path = Some(node);
 					}
 				}
-				VfsNode::Item { value } => {
+				VfsEntry::Item { value } => {
 					if let Some(component) = component_registry.get(value) {
-						ui_for_item(ui, (card_width, card_height), path.basename(), component);
+						ui_for_item(ui, (card_width, card_height), basename, component);
 					}
 				}
 			}
 		});
 
-		if let Some(path) = next_path {
-			*current_path = path;
+		if let Some(node) = next_path
+			&& let Some(abs_path) = node.absolute(vfs)
+		{
+			*current_node = node;
+			*current_node_display = abs_path;
 		}
 	}
 }

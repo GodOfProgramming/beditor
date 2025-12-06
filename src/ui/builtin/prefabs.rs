@@ -8,11 +8,11 @@ use crate::{
 		notifications::Notification,
 		widgets::{Card, horizontal_list},
 	},
-	util::vfs::{Vfs, VfsNode, VfsPath},
 };
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
 use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
 use uuid::{Uuid, uuid};
+use vfs::{Vfs, VfsEntry, VfsNode};
 
 #[derive(Component, Reflect, Default)]
 pub struct PrefabsUi;
@@ -46,22 +46,28 @@ impl EditorUiBundle for PrefabsUi {
 		world.resource_scope(|world, mut vfs_state: Mut<PrefabVfsState>| {
 			let PrefabVfsState {
 				vfs,
-				current_path,
+				current_node,
+				current_node_display,
 				filter,
+				id_cache,
 			} = vfs_state.as_mut();
 
-			let current_path = current_path.get_or_insert_with(|| vfs.root().clone());
+			let current_node = current_node.get_or_insert_with(|| {
+				let root = vfs.root();
+				*current_node_display = root.absolute(vfs).expect("root must exist");
+				root
+			});
 
 			ui.horizontal(|ui| {
 				ui.text_edit_singleline(&mut *filter);
 
-				if current_path.has_parent(vfs)
+				if current_node.has_parent(vfs)
 					&& ui
 						.button(egui_phosphor_icons::icons::ARROW_U_UP_LEFT.regular())
 						.clicked()
-					&& let Some(parent) = current_path.parent(vfs)
+					&& let Some(parent) = current_node.parent(vfs)
 				{
-					*current_path = parent.clone();
+					*current_node = parent;
 				};
 
 				if egui::DragAndDrop::has_payload_of_type::<BundleDnd>(ui.ctx()) {
@@ -83,42 +89,53 @@ impl EditorUiBundle for PrefabsUi {
 				}
 			});
 
-			ui.label(current_path.display());
+			ui.label(&*current_node_display);
 
-			let prefabs = vfs.iter(current_path).filter(|path| {
+			let prefabs = vfs.ls(*current_node).filter(|node| {
 				filter.is_empty() || {
-					path
-						.basename()
-						.to_lowercase()
-						.contains(filter.to_lowercase().as_str())
+					node
+						.basename(vfs)
+						.map(|name| name.to_lowercase().contains(filter.to_lowercase().as_str()))
+						.unwrap_or(false)
 				}
 			});
 
 			let mut next_path = None;
 			let num_columns = 20;
 
-			horizontal_list(ui, num_columns, prefabs, |ui, i, path| {
+			horizontal_list(ui, num_columns, prefabs, |ui, i, node| {
 				let card_width = ui.available_width();
 				let card_height = card_width;
 
-				let Some(node) = vfs.read(path) else {
+				let Some(entry) = vfs.read(node) else {
 					return;
 				};
 
-				match node {
-					VfsNode::Dir => {
-						if ui_for_dir(ui, (card_width, card_height), path.basename(), i) {
-							next_path = Some(path.clone());
+				let Some(basename) = node.basename(vfs) else {
+					return;
+				};
+
+				let id = id_cache
+					.entry(node)
+					.or_insert_with(|| egui::Id::new(node.absolute(vfs)));
+
+				match entry {
+					VfsEntry::Dir => {
+						if ui_for_dir(ui, (card_width, card_height), basename, i) {
+							next_path = Some(node);
 						}
 					}
-					VfsNode::Item { value } => {
-						ui_for_item(ui, (card_width, card_height), path, value, world);
+					VfsEntry::Item { value } => {
+						ui_for_item(ui, (card_width, card_height), *id, basename, value, world);
 					}
 				}
 			});
 
-			if let Some(path) = next_path {
-				*current_path = path;
+			if let Some(node) = next_path
+				&& let Some(abs_path) = node.absolute(vfs)
+			{
+				*current_node = node;
+				*current_node_display = abs_path;
 			}
 		});
 	}
@@ -128,8 +145,10 @@ impl EditorUiBundle for PrefabsUi {
 struct PrefabVfsState {
 	#[deref]
 	vfs: Vfs<PrefabData>,
-	current_path: Option<VfsPath>,
+	current_node: Option<VfsNode>,
+	current_node_display: String,
 	filter: String,
+	id_cache: HashMap<VfsNode, egui::Id>,
 }
 
 #[derive(Clone)]
@@ -170,14 +189,15 @@ fn rebuild_vfs(
 				None => Cow::Borrowed(type_name),
 			};
 
-			let Some(path) = vfs.mkdir_p(module_path.split("::")) else {
-				error!(type_name, "Already registered");
+			let Ok(path) = vfs.mkdir_p(module_path.split("::")).inspect_err(|err| {
+				error!(type_name, err = err.to_string(), "Already registered");
+			}) else {
 				return;
 			};
 
-			if let Err(path) = vfs.new_item(
+			if let Err(err) = vfs.new_item(
 				path,
-				Name::new(name),
+				name,
 				PrefabData {
 					type_id,
 					variant: variant.clone(),
@@ -187,20 +207,21 @@ fn rebuild_vfs(
 					serde_json::json!({
 						"module_path": module_path,
 						"type_name": type_name,
-						"path": path.full_path(),
+						"err": err.to_string(),
 					}),
 				));
 			}
 		}
 	}
 
-	prefab_vfs.current_path = prefab_vfs
-		.current_path
-		.as_ref()
-		.and_then(|path| vfs.find(path.full_path()))
-		.cloned();
+	prefab_vfs.current_node = prefab_vfs.current_node.as_ref().and_then(|node| {
+		node
+			.absolute(&prefab_vfs.vfs)
+			.and_then(|ap| vfs.find_absolute(ap))
+	});
 
 	prefab_vfs.vfs = vfs;
+	prefab_vfs.id_cache.clear();
 }
 
 fn ui_for_dir(ui: &mut egui::Ui, size: impl Into<egui::Vec2>, label: &str, i: usize) -> bool {
@@ -220,20 +241,19 @@ fn ui_for_dir(ui: &mut egui::Ui, size: impl Into<egui::Vec2>, label: &str, i: us
 fn ui_for_item(
 	ui: &mut egui::Ui,
 	size: impl Into<egui::Vec2>,
-	path: &VfsPath,
+	id: egui::Id,
+	name: &str,
 	prefab_data: &PrefabData,
 	world: &mut World,
 ) {
 	let size = size.into();
-
-	let id = egui::Id::new(path.display());
 
 	let response = ui
 		.dnd_drag_source(
 			id,
 			BundleDnd::AddPrefab(prefab_data.type_id, prefab_data.variant.clone()),
 			|ui| {
-				Card::new(size).with_label(path.basename()).show(ui, |ui| {
+				Card::new(size).with_label(name).show(ui, |ui| {
 					ui.label(egui_phosphor_icons::icons::CUBE.regular());
 				});
 			},

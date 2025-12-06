@@ -3,7 +3,6 @@ pub mod debug;
 pub mod log;
 pub mod reflection;
 pub mod storage;
-pub mod vfs;
 
 use std::borrow::BorrowMut;
 

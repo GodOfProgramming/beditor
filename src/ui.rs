@@ -7,12 +7,6 @@ pub mod widgets;
 
 use crate::{
 	EditorSettings, EditorState, Settings,
-	misc::make_dock_style_square,
-	ui::{
-		events::AddUiMessage,
-		misc::{DockExtensions, EditorUiExtensions, UiResourceState},
-		notifications::NotificationPlugin,
-	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts},
 	view::mouse_hovered_in_editor_view,
 };
@@ -36,9 +30,12 @@ use builtin::{
 };
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
+use events::AddUiMessage;
 use events::RemoveUiEvent;
 use itertools::Itertools;
+use misc::{DockExtensions, EditorUiExtensions, UiResourceState, make_dock_style_square};
 use misc::{MissingUi, UiExtensions, UiState};
+use notifications::NotificationPlugin;
 use persistent_id::PersistentId;
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet, marker::PhantomData};
 use uuid::Uuid;
@@ -186,6 +183,9 @@ pub trait EditorUiBundle: Bundle + GetTypeRegistration + Send + Sync + Sized {
 		let _ = response;
 	}
 }
+
+#[derive(SystemParam)]
+pub struct NoParams;
 
 pub trait EditorUi: EditorUiBundle + Component {
 	const NAME: &str;

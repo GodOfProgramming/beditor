@@ -25,8 +25,8 @@ pub fn identifiable(input: TokenStream) -> TokenStream {
 	};
 
 	let expanded = quote! {
-		impl persistent_id::Identifiable for #name {
-			const ID: uuid::Uuid = uuid::uuid!(#id_attr);
+		impl beditor::Identifiable for #name {
+			const ID: beditor::uuid::Uuid = beditor::uuid::uuid!(#id_attr);
 			const TYPE_NAME: &'static str = #name_lit;
 		}
 	};

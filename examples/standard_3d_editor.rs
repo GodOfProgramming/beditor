@@ -1,4 +1,4 @@
-use beditor::{brefabs::StaticPrefab, prelude::*, uuid};
+use beditor::{brefabs::StaticPrefab, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use brefabs::PrefabPlugin;
 

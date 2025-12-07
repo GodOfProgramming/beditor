@@ -1,4 +1,7 @@
-use crate::{misc::ShrinkableViewport, ui::EditorUi, view::cam::EditorCamera};
+use crate::{
+	ui::{EditorUi, misc::ShrinkableViewport},
+	view::cam::EditorCamera,
+};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use uuid::uuid;
 

@@ -1,7 +1,6 @@
 use crate::{
 	EditorSettings,
-	inspector::InspectorSettings,
-	ui::EditorUi,
+	ui::{EditorUi, builtin::inspector::InspectorSettings},
 	util::log::LogLevel,
 	view::cam::{RenderCameras, SyncRenderCamerasEvent},
 };

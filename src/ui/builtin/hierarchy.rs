@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
 use crate::{
-	BundleDnd,
-	ui::{EditorUiBundle, InspectorSelection, SelectedEntities, notifications::Notification},
+	ui::{
+		EditorUiBundle, InspectorSelection, SelectedEntities, builtin::BundleDnd,
+		notifications::Notification,
+	},
 	util::reflection,
 };
 use bevy::prelude::*;

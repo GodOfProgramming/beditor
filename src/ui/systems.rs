@@ -1,7 +1,9 @@
 use crate::{
 	Layouts, Settings,
-	misc::{MissingUi, UiState},
-	ui::{EditorUiCamera, UiManager, UiPanels},
+	ui::{
+		EditorUiCamera, UiManager, UiPanels,
+		misc::{MissingUi, UiState},
+	},
 	util::storage::{CurrentLayoutSetting, SaveLayoutOnExitSetting},
 };
 use bevy::prelude::*;

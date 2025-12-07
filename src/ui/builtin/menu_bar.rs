@@ -1,7 +1,11 @@
 use crate::{
 	EditorState, Layouts, Settings, UiManager,
-	misc::{DockExtensions, MissingUi},
-	ui::{EditorUiSystems, InspectorSelection, LayoutManager, notifications::Notification, widgets},
+	ui::{
+		EditorUiSystems, InspectorSelection, LayoutManager,
+		misc::{DockExtensions, MissingUi},
+		notifications::Notification,
+		widgets,
+	},
 	util::storage::{SaveLayoutOnExitSetting, StartEditorInTestingSetting},
 	view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };

@@ -1,4 +1,7 @@
-use crate::{DisableGameUiEvent, EnableGameUiEvent, misc::ShrinkableViewport, ui::EditorUi};
+use crate::{
+	DisableGameUiEvent, EnableGameUiEvent,
+	ui::{EditorUi, misc::ShrinkableViewport},
+};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use persistent_id::Identifiable;
 use std::marker::PhantomData;

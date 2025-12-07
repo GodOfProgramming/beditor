@@ -1,8 +1,5 @@
-use std::borrow::Borrow;
-
-use crate::{EditorSettings, UiManager, ui::TabState, util::storage::LayoutInfo};
-
 use super::{EditorUi, EditorUiBundle, VTable};
+use crate::{EditorSettings, NoParams, UiManager, ui::TabState, util::storage::LayoutInfo};
 use bevy::{
 	camera::Viewport,
 	ecs::{
@@ -18,10 +15,8 @@ use derive_new::new;
 use egui::{emath::Numeric, text::LayoutJob};
 use egui_dock::DockState;
 use persistent_id::PersistentId;
+use std::borrow::Borrow;
 use uuid::{Uuid, uuid};
-
-#[derive(SystemParam)]
-pub struct NoParams;
 
 #[derive(Component, Default)]
 pub struct UiState {
@@ -56,23 +51,6 @@ type UiParams<'w, 's, T> = UiComponentState<<T as EditorUi>::Params<'w, 's>>;
 /// Cannot access the world mutably in the system params
 /// Though it is on the user to not query for a mutable reference to themselves when they also have a self reference
 pub unsafe trait UiExtensions: EditorUi {
-	fn get_entity<T>(
-		entity: Entity,
-		world: &mut World,
-		f: impl FnOnce(&Self, Self::Params<'_, '_>) -> T,
-	) -> T {
-		let mut q = world.query::<(&Self, &mut UiParams<Self>)>();
-		let world_cell = world.as_unsafe_world_cell();
-		let Ok((this, mut params)) = q.get_mut(unsafe { world_cell.world_mut() }, entity) else {
-			panic!("Failed to query {}", <Self as EditorUi>::NAME);
-		};
-
-		let items = params.get_mut(unsafe { world_cell.world_mut() });
-		let result = f(this, items);
-		unsafe { params.apply(world_cell.world_mut()) };
-		result
-	}
-
 	fn get_entity_mut<T>(
 		entity: Entity,
 		world: &mut World,

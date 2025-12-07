@@ -26,23 +26,22 @@ use serde::{Deserialize, Serialize};
 use ui::{UiManager, UiPlugin, builtin::game_view::GameView};
 use view::EditorViewPlugin;
 
-use crate::{
-	ui::InspectorIntegrationPlugin,
-	util::{
-		AppExtensions,
-		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
-		log::LogPlugin,
-		reflection::ReflectionExtensionsPlugin,
-		storage::{
-			EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
-		},
+use crate::util::{
+	AppExtensions,
+	components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
+	log::LogPlugin,
+	reflection::ReflectionExtensionsPlugin,
+	storage::{
+		EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
 	},
 };
 
 pub mod prelude {
 	pub use crate::{
 		EditorPlugin,
-		ui::{EditorUi, EditorUiBundle, builtin::*, misc, notifications::Notification},
+		ui::{
+			EditorUi, EditorUiBundle, InspectorIntegrationPlugin, NoParams, notifications::Notification,
+		},
 		util::{
 			EntityManager, GameEntity, GameRenderLayer,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
@@ -50,6 +49,7 @@ pub mod prelude {
 		},
 	};
 	pub use bevy_egui;
+	pub use bevy_inspector_egui as inspector;
 	pub use brefabs;
 	pub use macros::{self, Identifiable};
 	pub use persistent_id::{self, Identifiable};

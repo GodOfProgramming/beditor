@@ -1,13 +1,10 @@
 use std::{any::TypeId, borrow::Cow};
 
-use crate::{
-	BundleDnd,
-	ui::{
-		EditorUiBundle,
-		builtin::type_editor::OpenTypeEditor,
-		notifications::Notification,
-		widgets::{Card, horizontal_list},
-	},
+use crate::ui::{
+	EditorUiBundle,
+	builtin::{BundleDnd, type_editor::OpenTypeEditor},
+	notifications::Notification,
+	widgets::{Card, horizontal_list},
 };
 use bevy::{platform::collections::HashMap, prelude::*};
 use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};

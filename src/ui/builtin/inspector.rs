@@ -32,6 +32,10 @@ impl EditorUiBundle for Inspector {
 
 	const UNIQUE: bool = true;
 
+	fn init(app: &mut App) {
+		app.init_resource::<InspectorSettings>();
+	}
+
 	fn spawn(_entity: Entity, _world: &mut World) -> Self {
 		default()
 	}
@@ -39,6 +43,8 @@ impl EditorUiBundle for Inspector {
 	fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
 		let app_type_registry = world.resource::<AppTypeRegistry>().clone();
 		let type_registry = app_type_registry.read();
+
+		let highlight_changes = world.resource::<InspectorSettings>().highlight_changes;
 
 		world.resource_scope(
 			|world, selection: Mut<InspectorSelection>| match selection.as_ref() {
@@ -59,6 +65,7 @@ impl EditorUiBundle for Inspector {
 										type_id,
 									);
 								}),
+								highlight_changes,
 							);
 						});
 					}
@@ -95,6 +102,11 @@ impl EditorUiBundle for Inspector {
 			},
 		);
 	}
+}
+
+#[derive(Resource, Default)]
+pub struct InspectorSettings {
+	pub highlight_changes: bool,
 }
 
 fn context_menu(

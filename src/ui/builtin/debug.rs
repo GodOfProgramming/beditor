@@ -1,5 +1,6 @@
 use crate::{
 	EditorSettings,
+	inspector::InspectorSettings,
 	ui::EditorUi,
 	util::log::LogLevel,
 	view::cam::{RenderCameras, SyncRenderCamerasEvent},
@@ -42,6 +43,7 @@ pub struct Params<'w, 's> {
 	diagnostics: Res<'w, DiagnosticsStore>,
 	render_cameras: ResMut<'w, RenderCameras>,
 	editor_settings: ResMut<'w, EditorSettings>,
+	inspector_settings: ResMut<'w, InspectorSettings>,
 }
 
 impl EditorUi for DebugMenu {
@@ -66,7 +68,7 @@ impl EditorUi for DebugMenu {
 		ui.separator();
 
 		if ui
-			.checkbox(&mut self.ui_debug_on_hover, "Debug UI")
+			.checkbox(&mut self.ui_debug_on_hover, "Debug Editor UI")
 			.clicked()
 		{
 			params
@@ -80,6 +82,11 @@ impl EditorUi for DebugMenu {
 		{
 			params.commands.trigger(SyncRenderCamerasEvent);
 		}
+
+		let _ = ui.checkbox(
+			&mut params.inspector_settings.highlight_changes,
+			"Highlight Component Changes",
+		);
 
 		let type_registry = params.type_registry.read();
 		bevy_inspector_egui::reflect_inspector::ui_for_value(

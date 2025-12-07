@@ -488,7 +488,7 @@ dependencies = [
 [[package]]
 name = "bevy-inspector-egui"
 version = "0.35.0"
-source = "git+https://github.com/GodOfProgramming/bevy-inspector-egui.git?rev=9b0897e30d0ac4f24212bf477cfb1f9d2e8e1a55#9b0897e30d0ac4f24212bf477cfb1f9d2e8e1a55"
+source = "git+https://github.com/GodOfProgramming/bevy-inspector-egui.git?rev=4404481f35fe5efd1e79cd6b45bbc8e7799ed85b#4404481f35fe5efd1e79cd6b45bbc8e7799ed85b"
 dependencies = [
  "bevy-inspector-egui-derive",
  "bevy_app",
@@ -525,7 +525,7 @@ dependencies = [
 [[package]]
 name = "bevy-inspector-egui-derive"
 version = "0.35.0"
-source = "git+https://github.com/GodOfProgramming/bevy-inspector-egui.git?rev=9b0897e30d0ac4f24212bf477cfb1f9d2e8e1a55#9b0897e30d0ac4f24212bf477cfb1f9d2e8e1a55"
+source = "git+https://github.com/GodOfProgramming/bevy-inspector-egui.git?rev=4404481f35fe5efd1e79cd6b45bbc8e7799ed85b#4404481f35fe5efd1e79cd6b45bbc8e7799ed85b"
 dependencies = [
  "proc-macro2",
  "quote",

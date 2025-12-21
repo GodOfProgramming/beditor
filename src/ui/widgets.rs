@@ -129,13 +129,14 @@ impl Card {
 
 pub fn horizontal_list<I, T>(
 	ui: &mut egui::Ui,
-	columns: usize,
+	columns: impl Into<usize>,
 	iterable: I,
 	mut add_content: impl FnMut(&mut egui::Ui, usize, T),
 ) where
 	I: IntoIterator<Item = T> + Sized,
 {
 	let mut index = 0;
+	let columns = columns.into();
 	let chunks = iterable.into_iter().chunks(columns);
 	for chunk in &chunks {
 		ui.columns(columns, |uis| {
@@ -195,5 +196,14 @@ where
 				value
 			})
 			.inner
+	}
+}
+
+pub struct Dir;
+
+impl Dir {
+	pub fn ui(ui: &mut egui::Ui, id: egui::Id) -> egui::Response {
+		ui.label(egui_phosphor_icons::icons::FOLDER.regular());
+		ui.interact(ui.min_rect(), id, egui::Sense::click())
 	}
 }

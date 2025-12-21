@@ -1,5 +1,5 @@
 use crate::{
-	EditorSettings,
+	RuntimeSettings,
 	ui::{EditorUi, builtin::inspector::InspectorSettings},
 	util::log::LogLevel,
 	view::cam::{RenderCameras, SyncRenderCamerasEvent},
@@ -25,6 +25,9 @@ impl DebugMenu {
 				ui.end_row();
 			}
 		});
+
+		let ctx = ui.ctx().clone();
+		ctx.inspection_ui(ui);
 	}
 
 	fn handle_ui_debug(event: On<DebugUiEvent>, mut q_egui_ctx: Query<&mut EguiContext>) {
@@ -41,7 +44,7 @@ pub struct Params<'w, 's> {
 	type_registry: Res<'w, AppTypeRegistry>,
 	diagnostics: Res<'w, DiagnosticsStore>,
 	render_cameras: ResMut<'w, RenderCameras>,
-	editor_settings: ResMut<'w, EditorSettings>,
+	editor_settings: ResMut<'w, RuntimeSettings>,
 	inspector_settings: ResMut<'w, InspectorSettings>,
 }
 

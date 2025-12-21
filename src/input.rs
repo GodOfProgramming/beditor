@@ -1,4 +1,4 @@
-use crate::{EditingSystems, EditorSettings, EditorState, ui::KeyboardFocus};
+use crate::{EditingSystems, RuntimeSettings, EditorState, ui::KeyboardFocus};
 use bevy::prelude::*;
 use leafwing_input_manager::{
 	Actionlike,
@@ -61,7 +61,7 @@ pub fn global_input_actions(
 	q_action_states: Query<&ActionState<EditorActions>>,
 	current_state: Res<State<EditorState>>,
 	mut next_editor_state: ResMut<NextState<EditorState>>,
-	mut editor_settings: ResMut<EditorSettings>,
+	mut editor_settings: ResMut<RuntimeSettings>,
 ) {
 	for action_state in &q_action_states {
 		if action_state.just_pressed(&EditorActions::Play) {

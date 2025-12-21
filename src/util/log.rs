@@ -1,4 +1,4 @@
-use crate::{Settings, util::storage::LogLevelSetting};
+use crate::util::storage::{LogLevelSetting, ProjectSettings};
 use bevy::{
 	ecs::system::SystemState,
 	log::{
@@ -32,7 +32,7 @@ pub struct LogPlugin;
 impl Plugin for LogPlugin {
 	#[expect(clippy::print_stderr, reason = "Allowed during logger setup")]
 	fn build(&self, app: &mut App) {
-		let mut system_state = SystemState::<Settings>::new(app.world_mut());
+		let mut system_state = SystemState::<ProjectSettings>::new(app.world_mut());
 		let mut settings = system_state.get_mut(app.world_mut());
 		let level = settings.get_or_default::<LogLevelSetting>();
 
@@ -119,7 +119,7 @@ pub struct ChangeLogLevelEvent(LogLevel);
 impl ChangeLogLevelEvent {
 	pub fn handle(
 		event: On<Self>,
-		mut settings: Settings,
+		mut settings: ProjectSettings,
 		log_handle: Res<LogHandle>,
 	) -> Result<LogLevel> {
 		settings.set::<LogLevelSetting>(**event)?;

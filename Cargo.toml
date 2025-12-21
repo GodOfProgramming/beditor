@@ -2,7 +2,7 @@
 name = "beditor"
 version = "0.17.3"
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "1.92.0"
 publish = false
 
 [workspace]
@@ -17,17 +17,20 @@ bevy_egui = "0.38.0"
 brefabs = "0.7.0"
 camino = "1.2.1"
 const_format = "0.2.35"
+convert_case = "0.10.0"
 derive-new = "0.7.0"
 derive_more = "1.0.0"
 dotenvy = "0.15.7"
 egui = "0.33.2"
 egui-file-dialog = "0.12.0"
+egui-probe = "0.10.0"
 egui-snarl = "0.9.0"
 egui-toast = "0.19.0"
 egui_demo_lib = "0.33.2"
 egui_dock = "0.18.0"
 egui_logger = "0.9.0"
 egui_phosphor_icons = "0.2.0"
+egui_taffy = "0.10.0"
 egui_tracing = { git = "https://github.com/GodOfProgramming/egui_tracing.git", branch = "egui/0.33.2" }
 include_dir = "0.7.4"
 inventory = "0.3.21"
@@ -54,6 +57,8 @@ serde_json = "1.0"
 smallvec = "1.15.1"
 speculoos = "0.13.0"
 static_assertions = "1.1.0"
+strum = "0.27"
+strum_macros = "0.27"
 syn = "2.0.110"
 thiserror = "2.0.17"
 toml = "0.9.8"
@@ -84,15 +89,17 @@ bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
 brefabs = { workspace = true }
 camino = { workspace = true }
 const_format = { workspace = true }
+convert_case = { workspace = true }
 derive-new = { workspace = true }
 derive_more = { workspace = true, features = ["full"] }
 dotenvy = { workspace = true }
-egui = { workspace = true }
+egui = { workspace = true, features = ["serde"] }
 egui-file-dialog = { workspace = true }
 egui-toast = { workspace = true }
 egui_dock = { workspace = true, features = ["serde"] }
 egui_logger = { workspace = true }
 egui_phosphor_icons = { workspace = true }
+egui_taffy = { workspace = true }
 egui_tracing = { workspace = true }
 include_dir = { workspace = true }
 itertools = { workspace = true }
@@ -110,6 +117,8 @@ rusqlite_migration = { workspace = true, features = ["from-directory"] }
 serde_json = { workspace = true }
 smallvec = { workspace = true }
 static_assertions = { workspace = true }
+strum = { workspace = true }
+strum_macros = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-log = { workspace = true }

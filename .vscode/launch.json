@@ -5,24 +5,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug unit tests in library 'beditor_lib'",
+      "name": "Debug 'beditor'",
       "type": "lldb",
       "request": "launch",
       "cargo": {
         "args": [
-          "test",
-          "--package=beditor-lib"
-        ]
-      }
-    },
-    {
-      "name": "Debug unit tests in library 'persistent_id'",
-      "type": "lldb",
-      "request": "launch",
-      "cargo": {
-        "args": [
-          "test",
-          "--package=persistent-id"
+          "run"
         ]
       }
     },
@@ -33,56 +21,6 @@
       "cargo": {
         "args": [
           "test",
-          "--package=beditor"
-        ]
-      }
-    },
-    {
-      "name": "Debug example 'components'",
-      "type": "lldb",
-      "request": "launch",
-      "cargo": {
-        "args": [
-          "run",
-          "--example=components",
-          "--package=beditor"
-        ]
-      },
-      "args": []
-    },
-    {
-      "name": "Debug unit tests in example 'components'",
-      "type": "lldb",
-      "request": "launch",
-      "cargo": {
-        "args": [
-          "test",
-          "--example=components",
-          "--package=beditor"
-        ]
-      }
-    },
-    {
-      "name": "Debug example 'custom_ui'",
-      "type": "lldb",
-      "request": "launch",
-      "cargo": {
-        "args": [
-          "run",
-          "--example=custom_ui",
-          "--package=beditor"
-        ]
-      },
-      "args": []
-    },
-    {
-      "name": "Debug unit tests in example 'custom_ui'",
-      "type": "lldb",
-      "request": "launch",
-      "cargo": {
-        "args": [
-          "test",
-          "--example=custom_ui",
           "--package=beditor"
         ]
       }
@@ -101,18 +39,6 @@
       "args": []
     },
     {
-      "name": "Debug unit tests in example 'standard_2d_editor'",
-      "type": "lldb",
-      "request": "launch",
-      "cargo": {
-        "args": [
-          "test",
-          "--example=standard_2d_editor",
-          "--package=beditor"
-        ]
-      }
-    },
-    {
       "name": "Debug example 'standard_3d_editor'",
       "type": "lldb",
       "request": "launch",
@@ -126,16 +52,17 @@
       "args": []
     },
     {
-      "name": "Debug unit tests in example 'standard_3d_editor'",
+      "name": "Debug example 'custom_ui'",
       "type": "lldb",
       "request": "launch",
       "cargo": {
         "args": [
-          "test",
-          "--example=standard_3d_editor",
+          "run",
+          "--example=custom_ui",
           "--package=beditor"
         ]
-      }
-    }
+      },
+      "args": []
+    },
   ]
 }

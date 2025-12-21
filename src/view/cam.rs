@@ -1,9 +1,13 @@
 use super::UP;
-use crate::{
-	Settings,
-	util::storage::{ActiveEditorCameraSetting, RenderCamerasSetting},
+use crate::util::storage::{ActiveEditorCameraSetting, ProjectSettings, RenderCamerasSetting};
+use bevy::{
+	camera::{ImageRenderTarget, RenderTarget},
+	color::palettes::tailwind,
+	prelude::*,
+	render::render_resource::TextureFormat,
+	window::PrimaryWindow,
 };
-use bevy::{color::palettes::tailwind, prelude::*};
+use derive_more::derive::Deref;
 use derive_new::new;
 use serde::{Deserialize, Serialize};
 
@@ -17,22 +21,59 @@ impl Plugin for EditorCamPlugin {
 			.add_observer(PointCameraEvent::handle)
 			.add_observer(MoveCameraEvent::handle)
 			.add_observer(SyncRenderCamerasEvent::handle)
+			.add_observer(on_editor_camera_spawn)
+			.add_observer(on_editor_camera_despawn)
 			.add_systems(Startup, retrieve_show_cameras_value)
-			.add_systems(PostStartup, set_initial_state)
+			.add_systems(PostStartup, init_camera)
 			.add_systems(OnEnter(ActiveEditorCamera::None), despawn_editor_cameras)
 			.add_systems(
 				FixedUpdate,
-				(track_editor_camera_changes.run_if(state_changed::<ActiveEditorCamera>),),
+				track_editor_camera_changes.run_if(state_changed::<ActiveEditorCamera>),
 			);
 	}
 }
 
-fn set_initial_state(
-	mut settings: Settings,
+fn init_camera(
+	mut settings: ProjectSettings,
 	mut next_state: ResMut<NextState<ActiveEditorCamera>>,
 ) {
 	let state = settings.get_or_default::<ActiveEditorCameraSetting>();
 	next_state.set(state);
+}
+
+fn on_editor_camera_spawn(
+	event: On<Add, EditorCamera>,
+	mut commands: Commands,
+	mut contexts: bevy_egui::EguiContexts,
+	q_cameras: Query<&Camera>,
+	window: Single<&Window, With<PrimaryWindow>>,
+	mut images: ResMut<Assets<Image>>,
+) {
+	let camera = q_cameras.get(event.event_target()).ok();
+
+	let image_size = get_viewport_size(camera, &window);
+	let image = Image::new_target_texture(image_size.x, image_size.y, TextureFormat::Rgba32Float);
+	let image_handle = images.add(image);
+
+	contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
+
+	commands.entity(event.event_target()).insert((Camera {
+		order: isize::MIN,
+		target: RenderTarget::Image(ImageRenderTarget::from(image_handle)),
+		..default()
+	},));
+}
+
+fn on_editor_camera_despawn(
+	event: On<Remove, EditorCamera>,
+	q_cameras: Query<&Camera>,
+	mut contexts: bevy_egui::EguiContexts,
+) {
+	if let Ok(camera) = q_cameras.get(event.event_target())
+		&& let RenderTarget::Image(image) = &camera.target
+	{
+		contexts.remove_image(image.handle.id());
+	}
 }
 
 fn despawn_editor_cameras(mut commands: Commands, q_cams: Query<Entity, With<EditorCamera>>) {
@@ -78,7 +119,7 @@ pub struct RenderCameras(bool);
 
 fn track_editor_camera_changes(
 	cam_state: Res<State<ActiveEditorCamera>>,
-	mut settings: Settings,
+	mut settings: ProjectSettings,
 ) -> Result {
 	settings.set::<ActiveEditorCameraSetting>(**cam_state)
 }
@@ -109,13 +150,20 @@ impl PointCameraEvent {
 pub struct SyncRenderCamerasEvent;
 
 impl SyncRenderCamerasEvent {
-	fn handle(_: On<Self>, render_cameras: Res<RenderCameras>, mut settings: Settings) -> Result {
+	fn handle(
+		_: On<Self>,
+		render_cameras: Res<RenderCameras>,
+		mut settings: ProjectSettings,
+	) -> Result {
 		settings.set::<RenderCamerasSetting>(**render_cameras)?;
 		Ok(())
 	}
 }
 
-fn retrieve_show_cameras_value(mut render_cameras: ResMut<RenderCameras>, mut settings: Settings) {
+fn retrieve_show_cameras_value(
+	mut render_cameras: ResMut<RenderCameras>,
+	mut settings: ProjectSettings,
+) {
 	**render_cameras = settings.get_or_default::<RenderCamerasSetting>();
 }
 
@@ -191,4 +239,10 @@ fn render_3d_camera(
 	for corner in rect_corners {
 		gizmos.line(start, corner, **cam_color);
 	}
+}
+
+pub fn get_viewport_size(camera: Option<&Camera>, window: &Window) -> UVec2 {
+	camera
+		.and_then(|c| c.viewport.as_ref().map(|vp| vp.physical_size))
+		.unwrap_or(window.physical_size())
 }

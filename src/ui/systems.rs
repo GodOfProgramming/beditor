@@ -1,10 +1,15 @@
+use std::num::NonZeroUsize;
+
 use crate::{
-	Layouts, Settings,
+	Layouts,
 	ui::{
 		EditorUiCamera, UiManager, UiPanels,
 		misc::{MissingUi, UiState},
 	},
-	util::storage::{CurrentLayoutSetting, SaveLayoutOnExitSetting},
+	util::storage::{
+		CurrentLayoutSetting, EditorEguiSettings, GlobalSettings, ProjectSettings,
+		SaveLayoutOnExitSetting,
+	},
 };
 use bevy::prelude::*;
 use bevy_egui::PrimaryEguiContext;
@@ -17,7 +22,8 @@ pub fn init_resources(world: &mut World) -> Result {
 	world.resource_scope(|world, mut ui_manager: Mut<UiManager>| ui_manager.restore_or_init(world))
 }
 
-pub fn setup_ctx(
+pub fn on_new_ctx(
+	event: On<Add, PrimaryEguiContext>,
 	mut q_ctx: Query<
 		(
 			&mut bevy_egui::EguiContext,
@@ -25,15 +31,30 @@ pub fn setup_ctx(
 		),
 		Added<PrimaryEguiContext>,
 	>,
+	mut settings: GlobalSettings,
 ) {
+	let Ok((mut ctx, mut ctx_settings)) = q_ctx.get_mut(event.event_target()) else {
+		return;
+	};
+
+	let ctx = ctx.get_mut();
+
 	let mut fonts = egui::FontDefinitions::default();
 	egui_phosphor_icons::add_fonts(&mut fonts);
+	ctx.set_fonts(fonts.clone());
 
-	for (mut ctx, mut settings) in &mut q_ctx {
-		let ctx = ctx.get_mut();
-		ctx.set_fonts(fonts.clone());
-		settings.capture_pointer_input = false;
+	if let Ok(options) = settings.get::<EditorEguiSettings>() {
+		ctx.options_mut(|opts| {
+			// corrects this running after the other that deals with themes
+			let dark = opts.dark_style.clone();
+			let light = opts.light_style.clone();
+			*opts = options;
+			opts.dark_style = dark;
+			opts.light_style = light;
+		});
 	}
+
+	ctx_settings.capture_pointer_input = false;
 }
 
 pub fn reset_ui_state(mut q_ui_infos: Query<&mut UiState>) {
@@ -80,12 +101,12 @@ pub fn on_app_exit(
 	ui_manager: Res<UiManager>,
 	q_uuids: Query<&PersistentId, Without<MissingUi>>,
 	q_missing: Query<&MissingUi>,
-	mut params: ParamSet<(Settings, Layouts)>,
+	mut params: ParamSet<(ProjectSettings, Layouts)>,
 ) -> Result {
 	let current_layout = {
 		let mut settings = params.p0();
 
-		let save_on_exit = settings.get_or_default::<SaveLayoutOnExitSetting>();
+		let save_on_exit = settings.get_or::<SaveLayoutOnExitSetting>(true);
 		if save_on_exit {
 			let name = match settings.get::<CurrentLayoutSetting>().ok() {
 				Some(opt) => opt,

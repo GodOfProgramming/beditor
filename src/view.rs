@@ -18,8 +18,6 @@ pub const UP: Vec3 = Vec3::Y;
 
 pub struct EditorViewPlugin;
 
-impl EditorViewPlugin {}
-
 impl Plugin for EditorViewPlugin {
 	fn build(&self, app: &mut bevy::prelude::App) {
 		app

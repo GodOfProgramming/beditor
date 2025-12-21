@@ -435,6 +435,7 @@ dependencies = [
  "brefabs",
  "camino",
  "const_format",
+ "convert_case 0.10.0",
  "derive-new",
  "derive_more 1.0.0",
  "dotenvy",
@@ -445,6 +446,7 @@ dependencies = [
  "egui_dock",
  "egui_logger",
  "egui_phosphor_icons",
+ "egui_taffy",
  "egui_tracing",
  "include_dir",
  "itertools 0.14.0",
@@ -466,6 +468,8 @@ dependencies = [
  "serde_json",
  "smallvec",
  "static_assertions",
+ "strum",
+ "strum_macros",
  "thiserror 2.0.17",
  "tracing",
  "tracing-log",
@@ -2197,6 +2201,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "convert_case"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
+dependencies = [
+ "unicode-segmentation",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2449,7 +2462,7 @@ version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
- "convert_case",
+ "convert_case 0.6.0",
  "proc-macro2",
  "quote",
  "syn 2.0.110",
@@ -2730,6 +2743,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "633bbce043c6529ff60011aa7c4f2f1d12b9d2b5a87dc18749b615a7304f05fe"
 dependencies = [
  "egui",
+]
+
+[[package]]
+name = "egui_taffy"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c1e43803467e18ddac4aeb09d631684993a7d45e9dba6919d7f2ae085d47011"
+dependencies = [
+ "egui",
+ "log",
+ "parking_lot",
+ "stackbox",
+ "taffy",
 ]
 
 [[package]]
@@ -5811,6 +5837,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 
 [[package]]
+name = "stackbox"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "719cc368f443f1b8b4e9abfe8c1444d1f14341ce5fa9c9e6c59e456837523d0d"
+dependencies = [
+ "paste",
+]
+
+[[package]]
 name = "stackfuture"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5829,6 +5864,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6637bab7722d379c8b41ba849228d680cc12d0a45ba1fa2b48f2a30577a06731"
 dependencies = [
  "float-cmp",
+]
+
+[[package]]
+name = "strum"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af23d6f6c1a224baef9d3f61e287d2761385a5b88fdab4eb4c6f11aeb54c4bcf"
+
+[[package]]
+name = "strum_macros"
+version = "0.27.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.110",
 ]
 
 [[package]]

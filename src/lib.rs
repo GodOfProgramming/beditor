@@ -8,6 +8,18 @@ mod ui;
 mod util;
 mod view;
 
+use std::{path::PathBuf, sync::LazyLock};
+
+use crate::util::{
+	AppExtensions,
+	components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
+	log::LogPlugin,
+	reflection::ReflectionExtensionsPlugin,
+	storage::{
+		EditorSettingsSetting, Global, GlobalSettings, Project, ProjectSettings,
+		StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
+	},
+};
 use bevy::{
 	app::PluginGroupBuilder,
 	diagnostic::{
@@ -21,20 +33,11 @@ use bevy::{
 };
 use brefabs::PrefabPlugin;
 use input::InputPlugin;
+use platform_dirs::AppDirs;
 pub use prelude::*;
 use serde::{Deserialize, Serialize};
 use ui::{UiManager, UiPlugin, builtin::game_view::GameView};
 use view::EditorViewPlugin;
-
-use crate::util::{
-	AppExtensions,
-	components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
-	log::LogPlugin,
-	reflection::ReflectionExtensionsPlugin,
-	storage::{
-		EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
-	},
-};
 
 pub mod prelude {
 	pub use crate::{
@@ -45,7 +48,7 @@ pub mod prelude {
 		util::{
 			EntityManager, GameEntity, GameRenderLayer,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
-			storage::{Layouts, SettingKey, Settings, SettingsGroup, Storage},
+			storage::{Layouts, SettingKey, Settings, SettingsGroup},
 		},
 	};
 	pub use bevy_egui;
@@ -67,6 +70,13 @@ pub enum EditorState {
 type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
 type UiRegistrationFn = Box<dyn Fn(&mut App, &mut UiManager) + Send + Sync>;
 type ComponentRegistrationFn = Box<dyn Fn(&mut App, &mut ComponentRegistry) + Send + Sync>;
+
+static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+	let dirs =
+		AppDirs::new(Some("beditor"), false).expect("Could not acquire application directories");
+	std::fs::create_dir_all(&dirs.data_dir).expect("Must be able to create app data dir");
+	dirs.data_dir
+});
 
 #[derive(Default)]
 pub struct EditorPlugin {
@@ -153,7 +163,9 @@ impl EditorPlugin {
 	}
 
 	fn configure<'a>(&self, app: &'a mut App) -> &'a mut App {
-		app.insert_resource(Storage::new().unwrap());
+		app
+			.insert_resource(Settings::<Global>::new().unwrap())
+			.insert_resource(Settings::<Project>::new().unwrap());
 
 		if let Some(config_fn) = &self.default_plugins {
 			(config_fn)(app);
@@ -187,7 +199,7 @@ impl Plugin for EditorPlugin {
 
 		self
 			.configure(app)
-			.init_resource::<EditorSettings>()
+			.init_resource::<RuntimeSettings>()
 			.init_resource::<GameRenderLayer>()
 			.add_plugin_if_not_present(MeshPickingPlugin)
 			.add_plugin_if_not_present(FrameTimeDiagnosticsPlugin::default())
@@ -254,29 +266,26 @@ struct EditingSystems;
 
 #[derive(Resource, Reflect, Serialize, Deserialize)]
 #[reflect(Resource, Default)]
-pub struct EditorSettings {
+pub struct RuntimeSettings {
 	render_ui: bool,
-	game_requires_mouse: bool,
-	game_requires_picking: bool,
 }
 
-impl Default for EditorSettings {
+impl Default for RuntimeSettings {
 	fn default() -> Self {
-		Self {
-			render_ui: true,
-			game_requires_mouse: false,
-			game_requires_picking: false,
-		}
+		Self { render_ui: true }
 	}
 }
 
-fn save_editor_settings(mut settings: Settings, editor_settings: Res<EditorSettings>) -> Result {
+fn save_editor_settings(
+	mut settings: ProjectSettings,
+	editor_settings: Res<RuntimeSettings>,
+) -> Result {
 	settings.set::<EditorSettingsSetting>(&*editor_settings)
 }
 
 fn load_settings(
-	mut settings: Settings,
-	mut editor_settings: ResMut<EditorSettings>,
+	mut settings: ProjectSettings,
+	mut editor_settings: ResMut<RuntimeSettings>,
 	mut next_state: ResMut<NextState<EditorState>>,
 ) {
 	*editor_settings = settings.get_or_default::<EditorSettingsSetting>();
@@ -320,13 +329,15 @@ fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 }
 
 fn configure_windows(
-	mut settings: Settings,
+	mut settings: GlobalSettings,
 	mut window: Single<&mut Window, With<PrimaryWindow>>,
 ) -> Result<()> {
 	let maximized = settings.get_or_default::<WindowMaximizedSetting>();
 	window.set_maximized(maximized);
 	if let Ok(size) = settings.get::<WindowSizeSetting>() {
 		window.resolution.set(size.x, size.y);
+	} else {
+		error!("No windows setting??");
 	}
 
 	Ok(())
@@ -375,7 +386,7 @@ fn on_close_requested(
 }
 
 fn handle_window_events(
-	mut settings: Settings,
+	mut settings: GlobalSettings,
 	mut events: MessageReader<bevy::window::WindowResized>,
 	window: Single<&mut Window, With<PrimaryWindow>>,
 	mut was_maximized: Local<Option<bool>>,

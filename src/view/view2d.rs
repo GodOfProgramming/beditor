@@ -3,7 +3,7 @@ use crate::{
 	input::EditorActions,
 	util::{
 		self,
-		storage::{CamStateSetting2d, Settings},
+		storage::{CamStateSetting2d, ProjectSettings},
 	},
 	view::cam::EditorCamera,
 };
@@ -26,7 +26,7 @@ pub struct EditorCamera2d;
 pub fn enable(
 	mut commands: Commands,
 	mut q_prev_cams: Query<Entity, With<EditorCamera>>,
-	mut settings: Settings,
+	mut settings: ProjectSettings,
 ) {
 	info!("Switched to 2d camera");
 
@@ -61,7 +61,7 @@ pub fn enable(
 }
 
 pub fn save_settings(
-	mut settings: Settings,
+	mut settings: ProjectSettings,
 	q_cam: Query<(&Transform, &CameraSettings, &Projection), With<EditorCamera2d>>,
 ) -> Result {
 	for (cam_transform, cam_settings, cam_proj) in &q_cam {

@@ -17,6 +17,7 @@ pub mod logs;
 pub mod menu_bar;
 pub mod prefabs;
 pub mod resources;
+pub mod settings;
 pub mod type_editor;
 
 pub enum BundleDnd {

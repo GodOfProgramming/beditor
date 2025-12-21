@@ -186,7 +186,7 @@ impl TypeEditorState {
 	}
 }
 
-#[derive(new, Message)]
+#[derive(new)]
 pub struct OpenTypeEditor(Box<dyn Reflect>);
 
 impl Command for OpenTypeEditor {

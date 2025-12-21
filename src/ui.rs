@@ -6,8 +6,12 @@ mod systems;
 pub mod widgets;
 
 use crate::{
-	EditorSettings, EditorState, Settings,
-	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts},
+	EditorState, RuntimeSettings, Settings,
+	ui::{
+		builtin::settings::{EditorSettingsUi, ProjectSettingsUi},
+		events::{OpenSingleUiMessage, OpenUiMessage},
+	},
+	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
 	view::mouse_hovered_in_editor_view,
 };
 use bevy::{
@@ -30,7 +34,7 @@ use builtin::{
 };
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
-use events::AddUiMessage;
+use events::AppendUiMessage;
 use events::RemoveUiEvent;
 use itertools::Itertools;
 use misc::{DockExtensions, EditorUiExtensions, UiResourceState, make_dock_style_square};
@@ -49,7 +53,7 @@ struct EditorUiSystems;
 #[require(
   PrimaryEguiContext = PrimaryEguiContext,
   Camera = Camera {
-    order: 1,
+    order: isize::MAX,
     ..default()
   },
   Camera2d,
@@ -72,7 +76,9 @@ impl Plugin for UiPlugin {
 			.init_resource::<InspectorSelection>()
 			.init_resource::<LayoutManager>()
 			.init_state::<KeyboardFocus>()
-			.add_message::<AddUiMessage>()
+			.add_message::<AppendUiMessage>()
+			.add_message::<OpenUiMessage>()
+			.add_message::<OpenSingleUiMessage>()
 			.configure_sets(EguiPrimaryContextPass, EditorUiSystems)
 			.add_plugins((
 				EguiPlugin::default(),
@@ -83,11 +89,18 @@ impl Plugin for UiPlugin {
 				InspectorIntegrationPlugin::<Node>::default(),
 				NotificationPlugin,
 			))
+			.add_observer(systems::on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
 			.add_systems(Startup, systems::init_resources)
 			.add_systems(OnEnter(EditorState::Exiting), systems::on_app_exit)
-			.add_systems(First, systems::setup_ctx)
-			.add_systems(FixedUpdate, AddUiMessage::handle)
+			.add_systems(
+				FixedUpdate,
+				(
+					AppendUiMessage::handle,
+					OpenUiMessage::handle,
+					OpenSingleUiMessage::handle,
+				),
+			)
 			.add_systems(
 				EguiPrimaryContextPass,
 				(
@@ -357,12 +370,14 @@ impl UiManager {
 		this.register::<Assets>(app);
 		this.register::<Components>(app);
 		this.register::<DebugMenu>(app);
+		this.register::<EditorSettingsUi>(app);
 		this.register::<EditorView>(app);
 		this.register::<Hierarchy>(app);
 		this.register::<Inspector>(app);
-		this.register::<Resources>(app);
 		this.register::<Logs>(app);
 		this.register::<PrefabsUi>(app);
+		this.register::<ProjectSettingsUi>(app);
+		this.register::<Resources>(app);
 		this.register::<TypeEditor>(app);
 
 		let state = SystemState::<menu_bar::Params<'_, '_>>::new(app.world_mut());
@@ -372,7 +387,7 @@ impl UiManager {
 	}
 
 	pub fn restore_or_init(&mut self, world: &mut World) -> Result {
-		let mut sys_state = SystemState::<ParamSet<(Settings, Layouts)>>::new(world);
+		let mut sys_state = SystemState::<ParamSet<(ResMut<Settings<Project>>, Layouts)>>::new(world);
 		let mut params = sys_state.get_mut(world);
 
 		let current_layout_name = {
@@ -436,7 +451,7 @@ impl UiManager {
 					// this makes it so the ui panels all surround the window's edges
 					.inner_margin(0)
 					// this allows the game to be rendered behind egui
-					.fill(egui::Color32::TRANSPARENT),
+					.fill(dock_style.tab.tab_body.bg_fill),
 			)
 			.show(&ctx, |ui| {
 				// menu bar
@@ -475,6 +490,10 @@ impl UiManager {
 		q_missing: &Query<&MissingUi>,
 	) -> DockState<LayoutInfo> {
 		self.state.decouple(self, q_uuids, q_missing)
+	}
+
+	fn add_detached(&mut self, tabs: Vec<TabState>) -> SurfaceIndex {
+		self.state.add_window(tabs)
 	}
 
 	fn add_tab(&mut self, surface: SurfaceIndex, node: NodeIndex, tab: TabState) -> bool {
@@ -700,7 +719,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 				ui.add_enabled_ui(!exists, |ui| {
 					if ui.checkbox(&mut exists, vtable.name).clicked() {
 						let entity = (vtable.spawn)(&mut world);
-						world.write_message(AddUiMessage::new(
+						world.write_message(AppendUiMessage::new(
 							surface,
 							node,
 							TabState::new(entity, vtable),
@@ -710,7 +729,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 			} else if ui.button(vtable.name).clicked() {
 				let mut world = self.world.borrow_mut();
 				let entity = (vtable.spawn)(&mut world);
-				world.write_message(AddUiMessage::new(
+				world.write_message(AppendUiMessage::new(
 					surface,
 					node,
 					TabState::new(entity, vtable),
@@ -870,6 +889,6 @@ impl KeyboardFocus {
 	}
 }
 
-fn should_render_ui(editor_settings: Res<EditorSettings>) -> bool {
+fn should_render_ui(editor_settings: Res<RuntimeSettings>) -> bool {
 	editor_settings.render_ui
 }

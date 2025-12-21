@@ -1,12 +1,14 @@
 use crate::{
-	EditorState, Layouts, Settings, UiManager,
+	EditorState, Layouts, UiManager,
 	ui::{
 		EditorUiSystems, InspectorSelection, LayoutManager,
+		builtin::settings::{EditorSettingsUi, ProjectSettingsUi},
+		events::OpenSingleUiMessage,
 		misc::{DockExtensions, MissingUi},
 		notifications::Notification,
 		widgets,
 	},
-	util::storage::{SaveLayoutOnExitSetting, StartEditorInTestingSetting},
+	util::storage::{ProjectSettings, SaveLayoutOnExitSetting, StartEditorInTestingSetting},
 	view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -32,9 +34,12 @@ pub struct Params<'w, 's> {
 	reset_layout_dialog_state: ResMut<'w, ResetLayoutDialogState>,
 
 	cached_settings: ResMut<'w, CachedSettings>,
-	settings: Settings<'w>,
+	settings: ProjectSettings<'w>,
 
 	q_transforms: Query<'w, 's, &'static Transform>,
+
+	q_editor_settings_ui: Query<'w, 's, (), With<EditorSettingsUi>>,
+	q_project_settings_ui: Query<'w, 's, (), With<ProjectSettingsUi>>,
 }
 
 #[derive(Resource, Reflect, Default)]
@@ -92,16 +97,43 @@ pub fn init(app: &mut App) {
 		);
 }
 
-fn startup(mut settings: Settings, mut cached_settings: ResMut<CachedSettings>) {
-	cached_settings.save_layout_on_exit = settings.get_or_default::<SaveLayoutOnExitSetting>();
-	cached_settings.start_in_testing = settings.get_or_default::<StartEditorInTestingSetting>();
+fn startup(mut project_settings: ProjectSettings, mut cached_settings: ResMut<CachedSettings>) {
+	cached_settings.save_layout_on_exit = project_settings.get_or::<SaveLayoutOnExitSetting>(true);
+	cached_settings.start_in_testing =
+		project_settings.get_or_default::<StartEditorInTestingSetting>();
 }
 
 pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 	egui::MenuBar::new().ui(ui, |ui| {
+		file_menu(ui);
+		edit_menu(ui, &mut params);
 		tools_menu(ui, &mut params);
 		view_menu(ui, &mut params);
 		game_control(ui, &mut params);
+	});
+}
+
+fn file_menu(ui: &mut egui::Ui) {
+	ui.menu_button("File", |_ui| {});
+}
+
+fn edit_menu(ui: &mut egui::Ui, params: &mut Params<'_, '_>) {
+	ui.menu_button("Edit", |ui| {
+		ui.add_enabled_ui(params.q_editor_settings_ui.is_empty(), |ui| {
+			if ui.button("Editor Settings").clicked() {
+				params
+					.commands
+					.write_message(OpenSingleUiMessage::new::<EditorSettingsUi>());
+			}
+		});
+
+		ui.add_enabled_ui(params.q_project_settings_ui.is_empty(), |ui| {
+			if ui.button("Project Settings").clicked() {
+				params
+					.commands
+					.write_message(OpenSingleUiMessage::new::<ProjectSettingsUi>());
+			}
+		});
 	});
 }
 

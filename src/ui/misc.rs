@@ -1,5 +1,5 @@
 use super::{EditorUi, EditorUiBundle, VTable};
-use crate::{EditorSettings, NoParams, UiManager, ui::TabState, util::storage::LayoutInfo};
+use crate::{RuntimeSettings, NoParams, UiManager, ui::TabState, util::storage::LayoutInfo};
 use bevy::{
 	camera::Viewport,
 	ecs::{
@@ -226,7 +226,7 @@ pub(crate) trait ShrinkableViewport: Component + Sized {
 		egui_settings: Single<&bevy_egui::EguiContextSettings>,
 		q_views: Query<(&Self, &UiState)>,
 		mut q_cameras: Query<&mut Camera, With<<Self as ShrinkableViewport>::Marker>>,
-		editor_settings: Res<EditorSettings>,
+		editor_settings: Res<RuntimeSettings>,
 	) {
 		if !editor_settings.render_ui {
 			for mut camera in q_cameras {

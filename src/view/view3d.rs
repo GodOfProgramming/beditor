@@ -3,7 +3,7 @@ use crate::{
 	input::EditorActions,
 	util::{
 		self,
-		storage::{CamStateSetting3d, Settings},
+		storage::{CamStateSetting3d, ProjectSettings},
 	},
 	view::cam::EditorCamera,
 };
@@ -21,7 +21,7 @@ pub struct EditorCamera3d;
 pub fn enable(
 	mut commands: Commands,
 	mut q_prev_cams: Query<Entity, With<EditorCamera>>,
-	mut settings: Settings,
+	mut settings: ProjectSettings,
 ) {
 	info!("Switched to 3d camera");
 
@@ -39,15 +39,11 @@ pub fn enable(
 		EditorCamera3d,
 		settings,
 		transform,
-		Camera {
-			order: isize::MIN,
-			..default()
-		},
 	));
 }
 
 pub fn save_settings(
-	mut settings: Settings,
+	mut settings: ProjectSettings,
 	q_cam: Query<(&Transform, &CameraSettings), With<EditorCamera3d>>,
 ) -> Result {
 	for (cam_transform, cam_settings) in &q_cam {

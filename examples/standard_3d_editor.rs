@@ -5,7 +5,7 @@ use brefabs::PrefabPlugin;
 fn main() {
 	App::new()
 		.add_plugins((
-			EditorPlugin::new(),
+			EditorPlugin::new().register_game_camera::<GameCamera>(),
 			PrefabPlugin::default().with_static_prefab::<Cube>(),
 		))
 		.add_systems(Startup, startup)

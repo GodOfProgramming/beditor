@@ -1,9 +1,7 @@
-use std::num::NonZeroUsize;
-
 use crate::{
 	Layouts,
 	ui::{
-		EditorUiCamera, UiManager, UiPanels,
+		EditorUiCamera, EditorUiHitCaptureNode, UiManager,
 		misc::{MissingUi, UiState},
 	},
 	util::storage::{
@@ -11,15 +9,23 @@ use crate::{
 		SaveLayoutOnExitSetting,
 	},
 };
-use bevy::prelude::*;
+use bevy::{prelude::*, ui::FocusPolicy};
 use bevy_egui::PrimaryEguiContext;
 use itertools::Itertools;
 use persistent_id::PersistentId;
 
-pub fn init_resources(world: &mut World) -> Result {
-	world.spawn((Name::new("Editor UI Camera"), EditorUiCamera));
-	world.spawn((Name::new("Editor Ui Panels"), UiPanels));
-	world.resource_scope(|world, mut ui_manager: Mut<UiManager>| ui_manager.restore_or_init(world))
+pub fn startup(mut commands: Commands) {
+	commands.spawn((Name::new("Editor UI Camera"), EditorUiCamera));
+	commands.spawn((
+		Name::new("Editor Ui Pointer Capture"),
+		EditorUiHitCaptureNode,
+		FocusPolicy::Pass,
+		Node {
+			width: vw(100),
+			height: vh(100),
+			..default()
+		},
+	));
 }
 
 pub fn on_new_ctx(

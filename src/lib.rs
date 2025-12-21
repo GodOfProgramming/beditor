@@ -141,7 +141,7 @@ impl EditorPlugin {
 
 	pub fn register_pickable<C: Component + Send + Sync + 'static>(mut self) -> Self {
 		self.generic_registrations.push(Box::new(|app| {
-			app.add_plugins(InspectorIntegrationPlugin::<C>::default());
+			app.add_plugins(InspectorIntegrationPlugin::<With<C>>::default());
 		}));
 		self
 	}

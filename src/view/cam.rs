@@ -3,6 +3,7 @@ use crate::util::storage::{ActiveEditorCameraSetting, ProjectSettings, RenderCam
 use bevy::{
 	camera::{ImageRenderTarget, RenderTarget},
 	color::palettes::tailwind,
+	picking::pointer::PointerId,
 	prelude::*,
 	render::render_resource::TextureFormat,
 	window::PrimaryWindow,
@@ -10,6 +11,7 @@ use bevy::{
 use derive_more::derive::Deref;
 use derive_new::new;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 pub struct EditorCamPlugin;
 
@@ -90,7 +92,10 @@ pub fn disable_camera<C: Component>(mut q_camera: Query<&mut Camera, With<C>>) {
 }
 
 #[derive(Default, Component, Reflect)]
-#[require(MeshPickingCamera)]
+#[require(
+  MeshPickingCamera,
+  PointerId = PointerId::Custom(Uuid::new_v4()),
+)]
 pub struct EditorCamera;
 
 #[derive(

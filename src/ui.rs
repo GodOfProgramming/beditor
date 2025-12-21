@@ -12,15 +12,17 @@ use crate::{
 		events::{OpenSingleUiMessage, OpenUiMessage},
 	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
-	view::mouse_hovered_in_editor_view,
+	view::{cam::EditorCamera, mouse_hovered_in_editor_view},
 };
 use bevy::{
 	asset::UntypedAssetId,
 	camera::visibility::{Layer, RenderLayers},
 	ecs::{
 		component::Mutable,
+		query::QueryFilter,
 		system::{SystemParam, SystemState},
 	},
+	picking::pointer::PointerId,
 	platform::collections::HashMap,
 	prelude::*,
 	reflect::GetTypeRegistration,
@@ -60,6 +62,9 @@ struct EditorUiSystems;
   RenderLayers = RenderLayers::layer(EDITOR_UI_LAYER))]
 pub struct EditorUiCamera;
 
+#[derive(Component)]
+pub struct EditorUiHitCaptureNode;
+
 pub(crate) struct UiPlugin;
 
 impl Plugin for UiPlugin {
@@ -83,15 +88,15 @@ impl Plugin for UiPlugin {
 			.add_plugins((
 				EguiPlugin::default(),
 				DefaultInspectorConfigPlugin,
-				InspectorIntegrationPlugin::<Sprite>::default(),
-				InspectorIntegrationPlugin::<Mesh2d>::default(),
-				InspectorIntegrationPlugin::<Mesh3d>::default(),
-				InspectorIntegrationPlugin::<Node>::default(),
+				InspectorIntegrationPlugin::<With<Sprite>>::default(),
+				InspectorIntegrationPlugin::<With<Mesh2d>>::default(),
+				InspectorIntegrationPlugin::<With<Mesh3d>>::default(),
+				InspectorIntegrationPlugin::<(With<Node>, Without<EditorUiHitCaptureNode>)>::default(),
 				NotificationPlugin,
 			))
 			.add_observer(systems::on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
-			.add_systems(Startup, systems::init_resources)
+			.add_systems(Startup, (systems::startup, UiManager::init))
 			.add_systems(OnEnter(EditorState::Exiting), systems::on_app_exit)
 			.add_systems(
 				FixedUpdate,
@@ -384,6 +389,11 @@ impl UiManager {
 		app.insert_resource(UiResourceState::new(state));
 
 		this
+	}
+
+	pub fn init(world: &mut World) -> Result {
+		world.spawn((Name::new("Editor Ui Panels"), UiPanels));
+		world.resource_scope(|world, mut this: Mut<Self>| this.restore_or_init(world))
 	}
 
 	pub fn restore_or_init(&mut self, world: &mut World) -> Result {
@@ -807,29 +817,29 @@ impl InspectorSelection {
 	}
 }
 
-pub struct InspectorIntegrationPlugin<C: Component>(PhantomData<C>);
+pub struct InspectorIntegrationPlugin<F: QueryFilter>(PhantomData<F>);
 
-impl<C: Component> Default for InspectorIntegrationPlugin<C> {
+impl<F: QueryFilter> Default for InspectorIntegrationPlugin<F> {
 	fn default() -> Self {
 		Self(default())
 	}
 }
 
-impl<C: Component + Send + Sync + 'static> Plugin for InspectorIntegrationPlugin<C> {
+impl<F: 'static + Send + Sync + QueryFilter> Plugin for InspectorIntegrationPlugin<F> {
 	fn build(&self, app: &mut App) {
 		app.add_systems(
 			FixedUpdate,
 			(
-				auto_register_picking_targets::<C>,
-				handle_click_events::<C>.run_if(mouse_hovered_in_editor_view),
+				auto_register_picking_targets::<F>,
+				handle_click_events::<F>.run_if(mouse_hovered_in_editor_view),
 			),
 		);
 	}
 }
 
-fn auto_register_picking_targets<C: Component>(
+fn auto_register_picking_targets<F: QueryFilter>(
 	mut commands: Commands,
-	q_entities: Query<(Entity, Option<&Name>), (Without<Pickable>, With<C>)>,
+	q_entities: Query<(Entity, Option<&Name>), (Without<Pickable>, F)>,
 ) {
 	for (entity, name) in &q_entities {
 		if let Some(name) = name {
@@ -845,16 +855,16 @@ fn auto_register_picking_targets<C: Component>(
 	}
 }
 
-fn handle_click_events<C: Component>(
+fn handle_click_events<F: QueryFilter>(
 	mut events: MessageReader<Pointer<Click>>,
+	editor_camera_pointer_id: Single<&PointerId, With<EditorCamera>>,
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
-	q_pickables: Query<(), With<C>>,
+	q_pickables: Query<(), F>,
 ) {
-	for event in events
-		.read()
-		.filter(|event| q_pickables.contains(event.event_target()))
-	{
+	for event in events.read().filter(|event| {
+		**editor_camera_pointer_id == event.pointer_id && q_pickables.contains(event.event_target())
+	}) {
 		selection.add_selected(
 			event.event_target(),
 			keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),

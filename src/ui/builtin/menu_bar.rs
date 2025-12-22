@@ -25,7 +25,6 @@ pub struct Params<'w, 's> {
 	editor_state: Res<'w, State<EditorState>>,
 	next_editor_state: ResMut<'w, NextState<EditorState>>,
 	active_camera_state: Res<'w, State<ActiveEditorCamera>>,
-	next_active_camera: ResMut<'w, NextState<ActiveEditorCamera>>,
 	selection: Res<'w, InspectorSelection>,
 
 	layout_manager: Res<'w, LayoutManager>,
@@ -237,8 +236,6 @@ fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
 fn camera_menu(ui: &mut egui::Ui, params: &mut Params) {
 	ui.menu_button("Camera", |ui| {
 		if *params.editor_state == EditorState::Editing {
-			camera_selector(ui, params);
-
 			if *params.active_camera_state == ActiveEditorCamera::Cam3D {
 				look_at_origin_button(ui, params);
 			}
@@ -246,17 +243,6 @@ fn camera_menu(ui: &mut egui::Ui, params: &mut Params) {
 			entity_commands(ui, params);
 		}
 	});
-}
-
-fn camera_selector(ui: &mut egui::Ui, params: &mut Params) {
-	for (text, state) in [
-		("Use 3D Camera", ActiveEditorCamera::Cam3D),
-		("Use 2D Camera", ActiveEditorCamera::Cam2D),
-	] {
-		if ui.button(text).clicked() {
-			params.next_active_camera.set(state);
-		}
-	}
 }
 
 fn look_at_origin_button(ui: &mut egui::Ui, params: &mut Params) {

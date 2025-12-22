@@ -786,7 +786,7 @@ fn handle_click_events(
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
 ) {
-	if event.pointer_id != **editor_camera_pointer_id {
+	if event.pointer_id != **editor_camera_pointer_id || event.button != PointerButton::Primary {
 		return;
 	}
 

@@ -16,20 +16,21 @@ pub use settings::*;
 
 use crate::APP_DIR;
 
-static EMBEDDED_GLOBAL_MIGRATIONS: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations/global");
+static EMBEDDED_GLOBAL_EDITOR_MIGRATIONS: Dir =
+	include_dir!("$CARGO_MANIFEST_DIR/migrations/global");
 static EMBEDDED_PROJECT_MIGRATIONS: Dir = include_dir!("$CARGO_MANIFEST_DIR/migrations/project");
 
-static GLOBAL_MIGRATIONS: LazyLock<Migrations<'static>> =
-	LazyLock::new(|| Migrations::from_directory(&EMBEDDED_GLOBAL_MIGRATIONS).unwrap());
+static GLOBAL_EDITOR_MIGRATIONS: LazyLock<Migrations<'static>> =
+	LazyLock::new(|| Migrations::from_directory(&EMBEDDED_GLOBAL_EDITOR_MIGRATIONS).unwrap());
 
 static PROJECT_MIGRATIONS: LazyLock<Migrations<'static>> =
 	LazyLock::new(|| Migrations::from_directory(&EMBEDDED_PROJECT_MIGRATIONS).unwrap());
 
-pub type GlobalSettingsRes<'w> = ResMut<'w, Settings<Global>>;
+pub type GlobalEditorSettingsRes<'w> = ResMut<'w, Settings<Global>>;
 
 #[derive(SystemParam, Deref, DerefMut)]
-pub struct GlobalSettings<'w> {
-	settings: GlobalSettingsRes<'w>,
+pub struct GlobalEditorSettings<'w> {
+	settings: GlobalEditorSettingsRes<'w>,
 }
 
 pub type ProjectSettingsRes<'w> = ResMut<'w, Settings<Project>>;
@@ -127,7 +128,7 @@ impl LocalStorage for Global {
 	fn db() -> Result<Connection> {
 		let mut conn = Connection::open(APP_DIR.join("settings.sqlite"))?;
 
-		GLOBAL_MIGRATIONS.to_latest(&mut conn)?;
+		GLOBAL_EDITOR_MIGRATIONS.to_latest(&mut conn)?;
 
 		Ok(conn)
 	}

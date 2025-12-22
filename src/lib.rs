@@ -18,7 +18,7 @@ use crate::{
 		log::LogPlugin,
 		reflection::ReflectionExtensionsPlugin,
 		storage::{
-			EditorSettingsSetting, Global, GlobalSettings, Project, ProjectSettings,
+			EditorSettingsSetting, Global, GlobalEditorSettings, Project, ProjectSettings,
 			StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
 		},
 	},
@@ -319,7 +319,7 @@ fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 }
 
 fn configure_windows(
-	mut settings: GlobalSettings,
+	mut settings: GlobalEditorSettings,
 	mut window: Single<&mut Window, With<PrimaryWindow>>,
 ) -> Result<()> {
 	let maximized = settings.get_or_default::<WindowMaximizedSetting>();
@@ -376,7 +376,7 @@ fn on_close_requested(
 }
 
 fn handle_window_events(
-	mut settings: GlobalSettings,
+	mut settings: GlobalEditorSettings,
 	mut events: MessageReader<bevy::window::WindowResized>,
 	window: Single<&mut Window, With<PrimaryWindow>>,
 	mut was_maximized: Local<Option<bool>>,

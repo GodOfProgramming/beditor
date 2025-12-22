@@ -5,7 +5,7 @@ use crate::{
 		misc::{MissingUi, UiState},
 	},
 	util::storage::{
-		CurrentLayoutSetting, EditorEguiSettings, GlobalSettings, ProjectSettings,
+		CurrentLayoutSetting, EditorEguiSettings, GlobalEditorSettings, ProjectSettings,
 		SaveLayoutOnExitSetting,
 	},
 };
@@ -36,7 +36,7 @@ pub fn on_new_ctx(
 		),
 		Added<PrimaryEguiContext>,
 	>,
-	mut settings: GlobalSettings,
+	mut settings: GlobalEditorSettings,
 ) {
 	let Ok((mut ctx, mut ctx_settings)) = q_ctx.get_mut(event.event_target()) else {
 		return;

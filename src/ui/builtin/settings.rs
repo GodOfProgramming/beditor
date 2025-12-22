@@ -2,7 +2,10 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use crate::{
 	APP_DIR, EditorState, EditorUi, NoParams, Notification, Settings,
-	util::storage::{CurrentThemeSetting, EditorEguiSettings, Global, GlobalSettings},
+	util::storage::{
+		CurrentThemeSetting, EditorEguiSettings, Global, GlobalEditorSettings, ProjectSettings,
+	},
+	view::cam::ActiveEditorCamera,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContexts, PrimaryEguiContext};
@@ -22,7 +25,7 @@ pub struct EditorSettingsUi {
 pub struct EditorSettingsUiParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	editor_settings: ResMut<'w, EditorSettings>,
-	global_settings: GlobalSettings<'w>,
+	global_settings: GlobalEditorSettings<'w>,
 }
 
 impl EditorUi for EditorSettingsUi {
@@ -248,7 +251,17 @@ impl EditorSettingCategory {
 }
 
 #[derive(Default, Component, Reflect)]
-pub struct ProjectSettingsUi;
+pub struct ProjectSettingsUi {
+	selected_category: Option<ProjectSettingCategory>,
+}
+
+#[derive(SystemParam)]
+pub struct ProjectSettingsUiParams<'w, 's> {
+	commands: Commands<'w, 's>,
+	project_settings: ProjectSettings<'w>,
+	active_camera_state: Res<'w, State<ActiveEditorCamera>>,
+	next_active_camera: ResMut<'w, NextState<ActiveEditorCamera>>,
+}
 
 impl EditorUi for ProjectSettingsUi {
 	const NAME: &str = "Project Settings";
@@ -257,13 +270,58 @@ impl EditorUi for ProjectSettingsUi {
 
 	const HIDDEN: bool = true;
 
-	type Params<'w, 's> = NoParams;
+	type Params<'w, 's> = ProjectSettingsUiParams<'w, 's>;
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		default()
 	}
 
-	fn render(&mut self, _ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {}
+	fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+		let selected = settings_display(
+			ui,
+			self.selected_category,
+			ProjectSettingCategory::iter(),
+			|ui| {
+				if let Some(category) = self.selected_category {
+					category.ui(ui, &mut params);
+				} else {
+					ui.label("Select a category");
+				}
+			},
+		);
+
+		if selected.is_some() {
+			self.selected_category = selected;
+		}
+	}
+}
+
+#[derive(Reflect, Clone, Copy, EnumIter, Display, PartialEq, Eq)]
+enum ProjectSettingCategory {
+	Camera,
+}
+
+impl ProjectSettingCategory {
+	fn ui(self, ui: &mut egui::Ui, params: &mut ProjectSettingsUiParams<'_, '_>) {
+		match self {
+			Self::Camera => {
+				ui.horizontal(|ui| {
+					ui.label("Editor Camera Mode:");
+
+					for (text, state) in [
+						("2D", ActiveEditorCamera::Cam2D),
+						("3D", ActiveEditorCamera::Cam3D),
+					] {
+						ui.add_enabled_ui(*params.active_camera_state.get() != state, |ui| {
+							if ui.button(text).clicked() {
+								params.next_active_camera.set(state);
+							}
+						});
+					}
+				});
+			}
+		}
+	}
 }
 
 fn settings_display<C>(
@@ -325,7 +383,7 @@ where
 	out
 }
 
-fn save_settings(mut contexts: EguiContexts, mut settings: GlobalSettings) {
+fn save_settings(mut contexts: EguiContexts, mut settings: GlobalEditorSettings) {
 	if let Ok(ctx) = contexts.ctx_mut() {
 		let opts = ctx.options(|opts| opts.clone());
 		let _ = settings.set::<EditorEguiSettings>(opts);
@@ -337,22 +395,29 @@ fn on_new_ctx(
 	mut q_ctx: Query<&mut bevy_egui::EguiContext>,
 	editor_settings: Res<EditorSettings>,
 ) {
+	let Ok(mut ctx) = q_ctx.get_mut(event.event_target()) else {
+		return;
+	};
+
+	let ctx = ctx.get_mut();
+
 	if let Some(value) = editor_settings
 		.appearance_settings
 		.loaded_themes
 		.get(&editor_settings.appearance_settings.current_theme)
 	{
-		let Ok(mut ctx) = q_ctx.get_mut(event.event_target()) else {
-			return;
-		};
-
-		let ctx = ctx.get_mut();
 		ctx.set_style_of(egui::Theme::Dark, value.dark.clone());
 		ctx.set_style_of(egui::Theme::Light, value.light.clone());
 		info!(
 			"Restored style of {}",
 			editor_settings.appearance_settings.current_theme
 		);
+	} else {
+		for theme in [egui::Theme::Dark, egui::Theme::Light] {
+			ctx.style_mut_of(theme, |style| {
+				style.spacing.window_margin = egui::Margin::same(0);
+			});
+		}
 	}
 }
 

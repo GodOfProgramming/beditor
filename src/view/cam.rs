@@ -1,16 +1,25 @@
 use super::UP;
-use crate::util::storage::{ActiveEditorCameraSetting, ProjectSettings, RenderCamerasSetting};
+use crate::{
+	ui::EditorUiHitCaptureNode,
+	util::storage::{ActiveEditorCameraSetting, ProjectSettings, RenderCamerasSetting},
+};
 use bevy::{
-	camera::{ImageRenderTarget, RenderTarget},
+	camera::{ImageRenderTarget, NormalizedRenderTarget, RenderTarget},
 	color::palettes::tailwind,
-	picking::pointer::PointerId,
+	picking::{
+		PickingSystems,
+		hover::HoverMap,
+		pointer::{Location, PointerId, PointerInput},
+	},
 	prelude::*,
 	render::render_resource::TextureFormat,
 	window::PrimaryWindow,
 };
 use derive_more::derive::Deref;
 use derive_new::new;
+use macros::Identifiable;
 use serde::{Deserialize, Serialize};
+use smallvec::SmallVec;
 use uuid::Uuid;
 
 pub struct EditorCamPlugin;
@@ -23,11 +32,19 @@ impl Plugin for EditorCamPlugin {
 			.add_observer(PointCameraEvent::handle)
 			.add_observer(MoveCameraEvent::handle)
 			.add_observer(SyncRenderCamerasEvent::handle)
-			.add_observer(on_editor_camera_spawn)
-			.add_observer(on_editor_camera_despawn)
+			.add_observer(on_manage_camera)
+			.add_observer(on_unmanage_camera)
 			.add_systems(Startup, retrieve_show_cameras_value)
 			.add_systems(PostStartup, init_camera)
 			.add_systems(OnEnter(ActiveEditorCamera::None), despawn_editor_cameras)
+			.add_systems(
+				First,
+				(
+					EditorManagedCamera::viewport_picking.in_set(PickingSystems::PostInput),
+					EditorManagedCamera::reset_rects,
+				)
+					.chain(),
+			)
 			.add_systems(
 				FixedUpdate,
 				track_editor_camera_changes.run_if(state_changed::<ActiveEditorCamera>),
@@ -43,8 +60,8 @@ fn init_camera(
 	next_state.set(state);
 }
 
-fn on_editor_camera_spawn(
-	event: On<Add, EditorCamera>,
+fn on_manage_camera(
+	event: On<Add, EditorManagedCamera>,
 	mut commands: Commands,
 	mut contexts: bevy_egui::EguiContexts,
 	q_cameras: Query<&Camera>,
@@ -59,15 +76,15 @@ fn on_editor_camera_spawn(
 
 	contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
 
-	commands.entity(event.event_target()).insert((Camera {
+	commands.entity(event.event_target()).insert(Camera {
 		order: isize::MIN,
 		target: RenderTarget::Image(ImageRenderTarget::from(image_handle)),
 		..default()
-	},));
+	});
 }
 
-fn on_editor_camera_despawn(
-	event: On<Remove, EditorCamera>,
+fn on_unmanage_camera(
+	event: On<Remove, EditorManagedCamera>,
 	q_cameras: Query<&Camera>,
 	mut contexts: bevy_egui::EguiContexts,
 ) {
@@ -91,12 +108,80 @@ pub fn disable_camera<C: Component>(mut q_camera: Query<&mut Camera, With<C>>) {
 	}
 }
 
-#[derive(Default, Component, Reflect)]
+#[derive(Default, Component, Reflect, Identifiable)]
+#[require(MeshPickingCamera, EditorManagedCamera)]
+#[id("c910a397-a017-4a29-99bc-6282b4b1a214")]
+pub struct EditorCamera;
+
+#[derive(Component, Default)]
 #[require(
-  MeshPickingCamera,
+  Camera,
   PointerId = PointerId::Custom(Uuid::new_v4()),
 )]
-pub struct EditorCamera;
+pub struct EditorManagedCamera {
+	pub viewport_rect: Option<Rect>,
+}
+
+impl EditorManagedCamera {
+	fn viewport_picking(
+		mut commands: Commands,
+		q_managed_cameras: Query<(&Camera, &PointerId, &Self)>,
+		ui_hit_node: Single<Entity, With<EditorUiHitCaptureNode>>,
+		hover_map: Res<HoverMap>,
+		mut pointer_inputs: MessageReader<PointerInput>,
+	) {
+		let node_pointers = hover_map
+			.iter()
+			.flat_map(|(pointer_id, hits)| {
+				hits.keys().filter_map(|entity| {
+					if *entity == *ui_hit_node {
+						Some(*pointer_id)
+					} else {
+						None
+					}
+				})
+			})
+			.collect::<SmallVec<[_; 2]>>();
+
+		for (camera, managed_camera_pointer_id, managed_camera) in &q_managed_cameras {
+			let Some(viewport_rect) = managed_camera.viewport_rect else {
+				continue;
+			};
+
+			let Some(target) = camera.target.as_image() else {
+				continue;
+			};
+
+			let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
+
+			for node_pointer_id in node_pointers.iter().cloned() {
+				for input in inputs
+					.iter()
+					.filter(|input| input.pointer_id == node_pointer_id)
+				{
+					let location = Location {
+						position: input.location.position - viewport_rect.min,
+						target: NormalizedRenderTarget::Image(target.clone().into()),
+					};
+
+					let msg = PointerInput {
+						pointer_id: *managed_camera_pointer_id,
+						location,
+						action: input.action,
+					};
+
+					commands.write_message(msg);
+				}
+			}
+		}
+	}
+
+	fn reset_rects(mut q_managed_cameras: Query<&mut Self>) {
+		for mut cam in &mut q_managed_cameras {
+			cam.viewport_rect.take();
+		}
+	}
+}
 
 #[derive(
 	Debug, Clone, Copy, PartialEq, Eq, Hash, States, Default, Serialize, Deserialize, Reflect,

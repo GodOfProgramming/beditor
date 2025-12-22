@@ -10,14 +10,17 @@ mod view;
 
 use std::{path::PathBuf, sync::LazyLock};
 
-use crate::util::{
-	AppExtensions,
-	components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
-	log::LogPlugin,
-	reflection::ReflectionExtensionsPlugin,
-	storage::{
-		EditorSettingsSetting, Global, GlobalSettings, Project, ProjectSettings,
-		StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
+use crate::{
+	ui::builtin::managed_view::EditorManagedView,
+	util::{
+		AppExtensions,
+		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
+		log::LogPlugin,
+		reflection::ReflectionExtensionsPlugin,
+		storage::{
+			EditorSettingsSetting, Global, GlobalSettings, Project, ProjectSettings,
+			StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
+		},
 	},
 };
 use bevy::{
@@ -27,6 +30,7 @@ use bevy::{
 	},
 	ecs::{entity_disabling::Disabled, system::NonSendMarker},
 	prelude::*,
+	reflect::Reflectable,
 	remote::{RemotePlugin, http::RemoteHttpPlugin},
 	window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
 	winit::WINIT_WINDOWS,
@@ -36,7 +40,7 @@ use input::InputPlugin;
 use platform_dirs::AppDirs;
 pub use prelude::*;
 use serde::{Deserialize, Serialize};
-use ui::{UiManager, UiPlugin, builtin::game_view::GameView};
+use ui::{UiManager, UiPlugin};
 use view::EditorViewPlugin;
 
 pub mod prelude {
@@ -123,11 +127,11 @@ impl EditorPlugin {
 
 	pub fn register_game_camera<C>(mut self) -> Self
 	where
-		C: Component + Reflect + TypePath + Identifiable,
+		C: Component + Reflectable + Identifiable,
 	{
 		self.ui_registrations.push(Box::new(|app, ui_manager| {
 			view::add_game_camera::<C>(app);
-			ui_manager.register::<GameView<C>>(app);
+			ui_manager.register::<EditorManagedView<C>>(app);
 		}));
 		self
 	}

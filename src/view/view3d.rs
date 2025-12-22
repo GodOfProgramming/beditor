@@ -170,8 +170,12 @@ pub fn orbit_system(
 		.unwrap_or_default();
 
 	let right = transform.right();
+	let Some(up) = Dir3::new(UP).ok() else {
+		return;
+	};
+
 	transform.rotate_axis(right, -orbit.y);
-	transform.rotate_axis(Dir3::new(UP).unwrap(), -orbit.x);
+	transform.rotate_axis(up, -orbit.x);
 }
 
 pub fn pan_system(

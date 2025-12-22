@@ -8,7 +8,10 @@ pub mod widgets;
 use crate::{
 	EditorState, RuntimeSettings, Settings,
 	ui::{
-		builtin::settings::{EditorSettingsUi, ProjectSettingsUi},
+		builtin::{
+			managed_view::EditorManagedView,
+			settings::{EditorSettingsUi, ProjectSettingsUi},
+		},
 		events::{OpenSingleUiMessage, OpenUiMessage},
 	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
@@ -30,9 +33,9 @@ use bevy::{
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
 use bevy_inspector_egui::{DefaultInspectorConfigPlugin, bevy_inspector};
 use builtin::{
-	assets::Assets, components::Components, debug::DebugMenu, editor_view::EditorView,
-	hierarchy::Hierarchy, inspector::Inspector, logs::Logs, menu_bar, prefabs::PrefabsUi,
-	resources::Resources, type_editor::TypeEditor,
+	assets::Assets, components::Components, debug::DebugMenu, hierarchy::Hierarchy,
+	inspector::Inspector, logs::Logs, menu_bar, prefabs::PrefabsUi, resources::Resources,
+	type_editor::TypeEditor,
 };
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
@@ -376,7 +379,7 @@ impl UiManager {
 		this.register::<Components>(app);
 		this.register::<DebugMenu>(app);
 		this.register::<EditorSettingsUi>(app);
-		this.register::<EditorView>(app);
+		this.register::<EditorManagedView<EditorCamera>>(app);
 		this.register::<Hierarchy>(app);
 		this.register::<Inspector>(app);
 		this.register::<Logs>(app);
@@ -552,7 +555,9 @@ impl UiManager {
 	}
 
 	fn default_dock_state(&self, world: &mut World) -> DockState<TabState> {
-		let mut state = DockState::new(vec![TabState::spawn::<EditorView>(world)]);
+		let mut state = DockState::new(vec![TabState::spawn::<EditorManagedView<EditorCamera>>(
+			world,
+		)]);
 
 		let tree = state.main_surface_mut();
 

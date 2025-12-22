@@ -4,13 +4,10 @@ pub mod view3d;
 
 use crate::{
 	EditorState, input,
-	ui::{
-		builtin::{editor_view::EditorView, game_view::GameView},
-		misc::UiState,
-	},
-	view::cam::{ActiveEditorCamera, EditorCamPlugin},
+	ui::{builtin::managed_view::EditorManagedView, misc::UiState},
+	view::cam::{ActiveEditorCamera, EditorCamPlugin, EditorCamera},
 };
-use bevy::prelude::*;
+use bevy::{prelude::*, reflect::Reflectable};
 use view2d::View2d;
 use view3d::View3d;
 
@@ -93,7 +90,7 @@ enum CameraInputSystems {
 }
 
 pub fn mouse_hovered_in_editor_view(
-	q_editor_view_ui_info: Query<&UiState, With<EditorView>>,
+	q_editor_view_ui_info: Query<&UiState, With<EditorManagedView<EditorCamera>>>,
 ) -> bool {
 	q_editor_view_ui_info.iter().any(UiState::hovered)
 }
@@ -104,10 +101,10 @@ fn mouse_movement_active(orbit: Res<State<OrbitState>>, pan: Res<State<PanState>
 
 pub fn add_game_camera<C>(app: &mut App)
 where
-	C: Component + Reflect + TypePath,
+	C: Component + Reflectable,
 {
 	app
-		.register_type::<GameView<C>>()
+		.register_type::<EditorManagedView<C>>()
 		.add_systems(PostStartup, cam::disable_camera::<C>)
 		.add_systems(
 			Update,

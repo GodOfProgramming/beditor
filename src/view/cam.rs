@@ -142,17 +142,7 @@ impl EditorManagedCamera {
 
 		let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
 
-		let query_iter =
-			q_managed_cameras
-				.iter()
-				.filter_map(|(camera, managed_camera_pointer_id, managed_camera)| {
-					managed_camera
-						.viewport_rect
-						.zip(camera.target.as_image())
-						.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
-				});
-
-		let input_iter = node_pointers
+		let filtered_inputs = node_pointers
 			.flat_map(|node_pointer_id| {
 				inputs
 					.iter()
@@ -160,24 +150,35 @@ impl EditorManagedCamera {
 			})
 			.collect::<SmallVec<[_; 2]>>();
 
-		for (target, viewport_rect, managed_camera_pointer_id) in query_iter {
-			for input in input_iter.iter() {
-				let location = Location {
-					position: input.location.position - viewport_rect.min,
-					target: NormalizedRenderTarget::Image(target.clone().into()),
-				};
+		let iter = q_managed_cameras
+			.iter()
+			.filter_map(|(camera, managed_camera_pointer_id, managed_camera)| {
+				managed_camera
+					.viewport_rect
+					.zip(camera.target.as_image())
+					.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
+			})
+			.flat_map(|(target, viewport_rect, managed_camera_pointer_id)| {
+				filtered_inputs
+					.iter()
+					.map(move |input| (target, viewport_rect, managed_camera_pointer_id, input))
+			});
 
-				let msg = PointerInput {
-					pointer_id: *managed_camera_pointer_id,
-					location,
-					action: input.action,
-				};
+		for (target, viewport_rect, managed_camera_pointer_id, input) in iter {
+			let location = Location {
+				position: input.location.position - viewport_rect.min,
+				target: NormalizedRenderTarget::Image(target.clone().into()),
+			};
 
-				commands.write_message(msg);
-			}
+			let msg = PointerInput {
+				pointer_id: *managed_camera_pointer_id,
+				location,
+				action: input.action,
+			};
+
+			commands.write_message(msg);
 		}
 	}
-	// }
 
 	fn reset_rects(mut q_managed_cameras: Query<&mut Self>) {
 		for mut cam in &mut q_managed_cameras {

@@ -115,11 +115,7 @@ impl Plugin for UiPlugin {
 				EguiPrimaryContextPass,
 				(
 					KeyboardFocus::set_state,
-					(
-						systems::dispatch_render_events,
-						systems::reset_ui_state,
-						systems::render,
-					)
+					(systems::reset_ui_state, systems::render)
 						.chain()
 						.run_if(should_render_ui),
 				)
@@ -170,16 +166,6 @@ pub trait EditorUiBundle: Bundle + GetTypeRegistration + Send + Sync + Sized {
 	}
 
 	fn render(entity: Entity, ui: &mut egui::Ui, world: &mut World);
-
-	fn when_rendered(entity: Entity, world: &mut World) {
-		let _ = entity;
-		let _ = world;
-	}
-
-	fn when_not_rendered(entity: Entity, world: &mut World) {
-		let _ = entity;
-		let _ = world;
-	}
 
 	fn context_menu(
 		entity: Entity,
@@ -245,14 +231,6 @@ pub trait EditorUi: EditorUiBundle + Component {
 	}
 
 	fn render(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>);
-
-	fn when_rendered(&mut self, params: Self::Params<'_, '_>) {
-		let _ = params;
-	}
-
-	fn when_not_rendered(&mut self, params: Self::Params<'_, '_>) {
-		let _ = params;
-	}
 
 	fn context_menu(
 		&mut self,
@@ -321,14 +299,6 @@ where
 		Self::get_entity_mut(entity, world, |this, params| {
 			this.render(ui, params);
 		})
-	}
-
-	fn when_rendered(entity: Entity, world: &mut World) {
-		Self::get_entity_mut(entity, world, <Self as EditorUi>::when_rendered)
-	}
-
-	fn when_not_rendered(entity: Entity, world: &mut World) {
-		Self::get_entity_mut(entity, world, <Self as EditorUi>::when_not_rendered)
 	}
 
 	fn context_menu(
@@ -461,9 +431,7 @@ impl UiManager {
 		egui::CentralPanel::default()
 			.frame(
 				egui::Frame::central_panel(&style)
-					// this makes it so the ui panels all surround the window's edges
 					.inner_margin(0)
-					// this allows the game to be rendered behind egui
 					.fill(dock_style.tab.tab_body.bg_fill),
 			)
 			.show(&ctx, |ui| {
@@ -526,12 +494,6 @@ impl UiManager {
 
 	fn vtables(&self) -> &HashMap<PersistentId, &'static VTable> {
 		&self.vtables
-	}
-
-	fn vtable_of(&self, entity: Entity, world: &mut World) -> Option<&VTable> {
-		let mut q_ids = world.query::<&PersistentId>();
-		let id = q_ids.get(world, entity).unwrap();
-		self.get_vtable_by_id(id)
 	}
 
 	fn get_vtable_by_id(&self, id: &PersistentId) -> Option<&'static VTable> {
@@ -608,8 +570,6 @@ pub(crate) struct VTable {
 	despawn: fn(Entity, &mut World),
 	title: fn(Entity, &mut World) -> egui::WidgetText,
 	render: fn(Entity, &mut egui::Ui, &mut World),
-	when_rendered: fn(Entity, &mut World),
-	when_not_rendered: fn(Entity, &mut World),
 	context_menu: fn(Entity, &mut egui::Ui, &mut World, SurfaceIndex, NodeIndex),
 	handle_tab_response: fn(Entity, &mut World, &egui::Response),
 	on_panel_changed: fn(Entity, &mut World),
@@ -634,8 +594,6 @@ impl VTable {
 			despawn: Self::despawn::<T>,
 			title: T::title,
 			render: T::render,
-			when_rendered: T::when_rendered,
-			when_not_rendered: T::when_not_rendered,
 			context_menu: T::context_menu,
 			handle_tab_response: T::handle_tab_response,
 			on_panel_changed: T::on_panel_changed,
@@ -702,7 +660,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
 		self.ui_info(tab.entity, |ui_info| {
 			ui_info.hovered = ui.ui_contains_pointer();
-			ui_info.rendered = true;
 		});
 	}
 

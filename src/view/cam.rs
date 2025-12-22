@@ -14,7 +14,6 @@ use bevy::{
 	prelude::*,
 	render::render_resource::TextureFormat,
 	ui::FocusPolicy,
-	window::PrimaryWindow,
 };
 use bevy_axes_gizmo::{AxesGizmoSyncCamera, AxesGizmoTexture};
 use derive_more::derive::Deref;
@@ -48,7 +47,7 @@ impl Plugin for EditorCamPlugin {
 						EditorManagedCamera::viewport_picking.in_set(PickingSystems::PostInput),
 						EditorManagedCamera::sync_gizmos,
 					),
-					EditorManagedCamera::reset_rects,
+					EditorManagedCamera::on_frame_end,
 				)
 					.chain(),
 			)
@@ -71,14 +70,9 @@ fn on_manage_camera(
 	event: On<Add, EditorManagedCamera>,
 	mut commands: Commands,
 	mut contexts: bevy_egui::EguiContexts,
-	q_cameras: Query<&Camera>,
-	window: Single<&Window, With<PrimaryWindow>>,
 	mut images: ResMut<Assets<Image>>,
 ) {
-	let camera = q_cameras.get(event.event_target()).ok();
-
-	let image_size = get_viewport_size(camera, &window);
-	let image = Image::new_target_texture(image_size.x, image_size.y, TextureFormat::Rgba32Float);
+	let image = Image::new_target_texture(1, 1, TextureFormat::Rgba32Float);
 	let image_handle = images.add(image);
 
 	contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
@@ -164,10 +158,37 @@ struct EditorCameraUi(Entity);
   PointerId = PointerId::Custom(Uuid::new_v4()),
 )]
 pub struct EditorManagedCamera {
-	pub viewport_rect: Option<Rect>,
+	context_menu_opened: bool,
+	viewport_rect: Option<Rect>,
+	last_viewport: Option<Rect>,
+	ignore_size_mismatch: bool,
 }
 
 impl EditorManagedCamera {
+	pub fn set_ctx_menu_open(&mut self, open: bool) {
+		self.context_menu_opened = open;
+	}
+
+	pub fn viewport(&self) -> Option<Rect> {
+		self.last_viewport
+	}
+
+	pub fn set_viewport(&mut self, rect: Rect) {
+		self.viewport_rect = Some(rect);
+	}
+
+	pub fn should_sync_to_viewport(&self) -> bool {
+		!self.ignore_size_mismatch
+	}
+
+	pub fn ignore_viewport_size(&mut self) {
+		self.ignore_size_mismatch = true;
+	}
+
+	pub fn sync_viewport_size(&mut self) {
+		self.ignore_size_mismatch = false;
+	}
+
 	fn viewport_picking(
 		mut commands: Commands,
 		q_managed_cameras: Query<(&Camera, &PointerId, &Self)>,
@@ -198,10 +219,14 @@ impl EditorManagedCamera {
 		let iter = q_managed_cameras
 			.iter()
 			.filter_map(|(camera, managed_camera_pointer_id, managed_camera)| {
-				managed_camera
-					.viewport_rect
-					.zip(camera.target.as_image())
-					.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
+				if managed_camera.context_menu_opened {
+					None
+				} else {
+					managed_camera
+						.viewport_rect
+						.zip(camera.target.as_image())
+						.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
+				}
 			})
 			.flat_map(|(target, viewport_rect, managed_camera_pointer_id)| {
 				filtered_inputs
@@ -232,9 +257,10 @@ impl EditorManagedCamera {
 		gizmos_options.viewport_rect = editor_camera.viewport_rect;
 	}
 
-	fn reset_rects(mut q_managed_cameras: Query<&mut Self>) {
+	fn on_frame_end(mut q_managed_cameras: Query<&mut Self>) {
 		for mut cam in &mut q_managed_cameras {
-			cam.viewport_rect.take();
+			cam.last_viewport = cam.viewport_rect.take();
+			cam.set_ctx_menu_open(false);
 		}
 	}
 }
@@ -385,10 +411,4 @@ fn render_3d_camera(
 	for corner in rect_corners {
 		gizmos.line(start, corner, **cam_color);
 	}
-}
-
-pub fn get_viewport_size(camera: Option<&Camera>, window: &Window) -> UVec2 {
-	camera
-		.and_then(|c| c.viewport.as_ref().map(|vp| vp.physical_size))
-		.unwrap_or(window.physical_size())
 }

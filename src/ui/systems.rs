@@ -11,7 +11,6 @@ use crate::{
 };
 use bevy::{prelude::*, ui::FocusPolicy};
 use bevy_egui::PrimaryEguiContext;
-use itertools::Itertools;
 use persistent_id::PersistentId;
 
 pub fn startup(mut commands: Commands) {
@@ -65,41 +64,13 @@ pub fn on_new_ctx(
 
 pub fn reset_ui_state(mut q_ui_infos: Query<&mut UiState>) {
 	q_ui_infos.par_iter_mut().for_each(|mut ui_info| {
-		ui_info.rendered = false;
+		ui_info.hovered = false;
 	});
 }
 
 pub fn render(world: &mut World) {
 	world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
 		ui_manager.render(world);
-	});
-}
-
-pub fn dispatch_render_events(world: &mut World) {
-	let mut q_entities = world.query::<(Entity, &UiState)>();
-	let (rendered, unrendered): (Vec<Entity>, Vec<Entity>) =
-		q_entities.iter(world).partition_map(|(entity, ui_info)| {
-			if ui_info.rendered {
-				itertools::Either::Left(entity)
-			} else {
-				itertools::Either::Right(entity)
-			}
-		});
-
-	world.resource_scope(|world, ui_manager: Mut<UiManager>| {
-		for entity in rendered {
-			let Some(vtable) = ui_manager.vtable_of(entity, world) else {
-				continue;
-			};
-			(vtable.when_rendered)(entity, world);
-		}
-
-		for entity in unrendered {
-			let Some(vtable) = ui_manager.vtable_of(entity, world) else {
-				continue;
-			};
-			(vtable.when_not_rendered)(entity, world);
-		}
 	});
 }
 

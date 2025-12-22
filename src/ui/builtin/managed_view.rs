@@ -103,38 +103,99 @@ where
 			return;
 		};
 
-		let rect = ui
-			.image(egui::load::SizedTexture::new(tex, ui.clip_rect().size()))
-			.rect;
-
-		let viewport_rect = Rect::from_corners(
-			Vec2::new(rect.min.x, rect.min.y),
-			Vec2::new(rect.max.x, rect.max.y),
-		);
-
-		managed_camera.viewport_rect = Some(viewport_rect);
-
+		let ppp = ui.ctx().pixels_per_point();
 		let Some(image) = images.get(target.handle.id()) else {
 			ui.label("No image");
 			return;
 		};
 
-		let viewport_size = viewport_rect.size().as_uvec2();
+		let image_size = image.size();
+		let image_size_vec2 = image_size.as_vec2();
+		let tex_size = image_size_vec2 / ppp;
+		let tex_size = if tex_size.is_finite() {
+			tex_size
+		} else {
+			image_size_vec2
+		};
 
-		if image.size() == viewport_size {
-			return;
+		let tex_size_arr = tex_size.to_array();
+
+		let ui_area = ui.clip_rect();
+
+		let inner_response = ui.centered_and_justified(|ui| {
+			ui.image(egui::load::SizedTexture::new(tex, tex_size_arr));
+		});
+
+		let outer_rect = inner_response.response.rect;
+		let rect = egui::Rect::from_center_size(outer_rect.center(), egui::Vec2::from(tex_size_arr));
+
+		let image_viewport_rect = Rect::from_corners(
+			Vec2::new(rect.min.x, rect.min.y) * ppp,
+			Vec2::new(rect.max.x, rect.max.y) * ppp,
+		);
+
+		managed_camera.set_viewport(image_viewport_rect);
+
+		if managed_camera.should_sync_to_viewport() {
+			let ui_viewport_size = ui_area.size() * ppp;
+			let ui_viewport_size = Vec2::new(ui_viewport_size.x, ui_viewport_size.y).as_uvec2();
+
+			if image_size == ui_viewport_size {
+				return;
+			}
+
+			let Some(image) = images.get_mut(target.handle.id()) else {
+				ui.label("No image (mut)");
+				return;
+			};
+
+			image.resize(Extent3d {
+				width: ui_viewport_size.x,
+				height: ui_viewport_size.y,
+				depth_or_array_layers: 1,
+			});
 		}
+	}
 
-		let Some(image) = images.get_mut(target.handle.id()) else {
-			ui.label("No image (mut)");
+	fn context_menu(
+		&mut self,
+		ui: &mut egui::Ui,
+		params: Self::Params<'_, '_>,
+		_surface: egui_dock::SurfaceIndex,
+		_node: egui_dock::NodeIndex,
+	) {
+		let Self::Params {
+			mut managed_camera,
+			mut images,
+			..
+		} = params;
+
+		let Some(mut managed_camera) = managed_camera.p1() else {
+			ui.label("No camera type selected");
 			return;
 		};
 
-		image.resize(Extent3d {
-			width: viewport_size.x,
-			height: viewport_size.y,
-			depth_or_array_layers: 1,
-		})
+		let (camera, managed_camera) = &mut *managed_camera;
+
+		managed_camera.set_ctx_menu_open(true);
+
+		ui.menu_button("Aspect Ratio Overrides", |ui| {
+			if ui.button("480p").clicked()
+				&& let Some(image_handle) = camera.target.as_image()
+				&& let Some(image) = images.get_mut(image_handle.id())
+			{
+				managed_camera.ignore_viewport_size();
+				image.resize(Extent3d {
+					width: 640,
+					height: 480,
+					depth_or_array_layers: 1,
+				});
+			}
+
+			if ui.button("Clear aspect override").clicked() {
+				managed_camera.sync_viewport_size();
+			}
+		});
 	}
 }
 

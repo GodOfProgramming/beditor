@@ -31,6 +31,7 @@ impl EditorUiBundle for Inspector {
 	const ID: Uuid = uuid!("10bb68b8-c247-4792-89e9-61d1b9682a72");
 
 	const UNIQUE: bool = true;
+	const SCROLL_BARS: [bool; 2] = [true, true];
 
 	fn init(app: &mut App) {
 		app.init_resource::<InspectorSettings>();

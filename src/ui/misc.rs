@@ -18,7 +18,6 @@ use uuid::{Uuid, uuid};
 
 #[derive(Component, Default)]
 pub struct UiState {
-	pub(super) rendered: bool,
 	pub(super) hovered: bool,
 }
 

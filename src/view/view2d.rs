@@ -5,11 +5,10 @@ use crate::{
 		self,
 		storage::{CamStateSetting2d, ProjectSettings},
 	},
-	view::cam::EditorCamera,
+	view::cam::{EditorCamera, EditorManagedCamera},
 };
 use bevy::{
 	input::mouse::MouseMotion,
-	picking::pointer::PointerLocation,
 	prelude::*,
 	window::{PrimaryWindow, SystemCursorIcon},
 };
@@ -79,22 +78,18 @@ pub fn save_settings(
 
 pub(super) fn mouse_input_actions(
 	mut commands: Commands,
-	mut q_cam_states: Query<(&mut CameraState, &Camera), With<EditorCamera2d>>,
+	mut q_cam_states: Query<&mut CameraState, With<EditorCamera2d>>,
 	q_action_states: Query<&ActionState<EditorActions>>,
-	primary_window: Single<Entity, With<PrimaryWindow>>,
-	q_pointers: Query<&PointerLocation>,
+	primary_window: Single<(Entity, &Window), With<PrimaryWindow>>,
 	mut pan_state: ResMut<NextState<PanState>>,
 ) {
+	let (window_entity, window) = *primary_window;
 	for action_state in &q_action_states {
 		if action_state.just_pressed(&EditorActions::PanCamera) {
-			util::set_cursor_icon(&mut commands, *primary_window, SystemCursorIcon::Grab);
+			util::set_cursor_icon(&mut commands, window_entity, SystemCursorIcon::Grab);
 
-			for (mut cam_state, camera) in &mut q_cam_states {
-				cam_state.pan_viewport_start = q_pointers
-					.iter()
-					.next()
-					.and_then(|p| p.location.as_ref().zip(camera.viewport.as_ref()))
-					.map(|(location, viewport)| location.position - viewport.physical_position.as_vec2());
+			for mut cam_state in &mut q_cam_states {
+				cam_state.pan_viewport_start = window.cursor_position();
 			}
 
 			pan_state.set(PanState::Active);
@@ -177,17 +172,19 @@ pub fn zoom_system(
 
 pub fn pan_system(
 	q_action_states: Query<&ActionState<EditorActions>>,
-	mut q_cam: Single<
+	mut camera: Single<
 		(
-			&CameraSettings,
-			&mut Transform,
-			&GlobalTransform,
-			&mut CameraState,
 			&Camera,
+			&EditorManagedCamera,
+			&Projection,
+			&mut Transform,
+			&CameraSettings,
 		),
 		With<EditorCamera2d>,
 	>,
 	mut mouse_motion: MessageReader<MouseMotion>,
+	images: Res<Assets<Image>>,
+	window: Single<&Window, With<PrimaryWindow>>,
 ) {
 	let should_pan = q_action_states
 		.iter()
@@ -197,30 +194,37 @@ pub fn pan_system(
 		return;
 	}
 
-	let (cam_settings, cam_transform, cam_g_transform, cam_state, cam) = &mut *q_cam;
+	let (camera, managed_camera, projection, ref mut transform, settings) = *camera;
 
-	let pan_motion = mouse_motion
+	let Projection::Orthographic(ortho) = projection else {
+		return;
+	};
+
+	let texture_size = camera
+		.target
+		.as_image()
+		.and_then(|handle| images.get(handle.id()))
+		.map(|image| image.size())
+		.unwrap_or_default()
+		.as_vec2();
+
+	let ui_viewport = managed_camera
+		.viewport()
+		.map(|vp| vp.size())
+		.unwrap_or(texture_size);
+
+	let delta = mouse_motion
 		.read()
 		.map(|motion| motion.delta)
 		.reduce(|c, n| c + n)
 		.unwrap_or_default()
-		* cam_settings.pan_sensitivity;
+		* (texture_size / ui_viewport)
+		* settings.pan_sensitivity
+		* ortho.scale
+		* window.scale_factor();
 
-	if let Some((pan_vp_new_pos, pan_world_old_pos, pan_world_new_pos)) = cam_state
-		.pan_viewport_start
-		.map(|p| (p, p + pan_motion))
-		.and_then(|(op, np)| {
-			cam
-				.viewport_to_world_2d(cam_g_transform, op)
-				.ok()
-				.zip(cam.viewport_to_world_2d(cam_g_transform, np).ok())
-				.map(|(ow, nw)| (np, ow, nw))
-		}) {
-		let delta = pan_world_new_pos - pan_world_old_pos;
-
-		cam_state.pan_viewport_start = Some(pan_vp_new_pos);
-		cam_transform.translation -= delta.extend(0.0);
-	}
+	transform.translation.x -= delta.x;
+	transform.translation.y += delta.y;
 }
 
 #[derive(Default, Serialize, Deserialize)]

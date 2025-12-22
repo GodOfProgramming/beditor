@@ -12,7 +12,7 @@ use crate::{
 			managed_view::EditorManagedView,
 			settings::{EditorSettingsUi, ProjectSettingsUi},
 		},
-		events::{OpenSingleUiMessage, OpenUiMessage},
+		events::{OpenSingleUiMessage, OpenUiMessage, SyncGizmoTargetsEvent},
 	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
 	view::{cam::EditorCamera, mouse_hovered_in_editor_view},
@@ -22,6 +22,7 @@ use bevy::{
 	camera::visibility::{Layer, RenderLayers},
 	ecs::{
 		component::Mutable,
+		entity::EntityHashSet,
 		query::QueryFilter,
 		system::{SystemParam, SystemState},
 	},
@@ -42,7 +43,7 @@ use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
 use events::AppendUiMessage;
 use events::RemoveUiEvent;
 use itertools::Itertools;
-use misc::{DockExtensions, EditorUiExtensions, UiResourceState, make_dock_style_square};
+use misc::{DockExtensions, EditorUiExtensions, UiResourceState};
 use misc::{MissingUi, UiExtensions, UiState};
 use notifications::NotificationPlugin;
 use persistent_id::PersistentId;
@@ -99,6 +100,7 @@ impl Plugin for UiPlugin {
 			))
 			.add_observer(systems::on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
+			.add_observer(SyncGizmoTargetsEvent::on_event)
 			.add_systems(Startup, (systems::startup, UiManager::init))
 			.add_systems(OnEnter(EditorState::Exiting), systems::on_app_exit)
 			.add_systems(
@@ -454,9 +456,7 @@ impl UiManager {
 
 		let style = ctx.style();
 
-		let mut dock_style = egui_dock::Style::from_egui(&style);
-
-		make_dock_style_square(&mut dock_style);
+		let dock_style = egui_dock::Style::from_egui(&style);
 
 		egui::CentralPanel::default()
 			.frame(
@@ -468,20 +468,11 @@ impl UiManager {
 			)
 			.show(&ctx, |ui| {
 				// menu bar
-				let mut frame = egui::Frame::new().begin(ui);
-
-				frame.content_ui.scope(|ui| {
-					world.resource_scope(|world, mut state: Mut<UiResourceState<menu_bar::Params>>| {
-						let params = state.get_mut(world);
-						menu_bar::render(ui, params);
-						state.apply(world);
-					});
+				world.resource_scope(|world, mut state: Mut<UiResourceState<menu_bar::Params>>| {
+					let params = state.get_mut(world);
+					menu_bar::render(ui, params);
+					state.apply(world);
 				});
-
-				frame.allocate_space(ui);
-
-				frame.frame.fill = dock_style.tab.tab_body.bg_fill;
-				frame.paint(ui);
 
 				let mut tab_viewer = TabViewer {
 					vtables: &mut self.vtables,
@@ -811,13 +802,26 @@ impl Default for InspectorSelection {
 }
 
 impl InspectorSelection {
-	pub fn add_selected(&mut self, entity: Entity, add: bool) {
+	pub fn add_selected(&mut self, entity: Entity, add: bool) -> SyncGizmoTargetsEvent {
 		if let InspectorSelection::Entities(selected_entities) = self {
+			let previous = EntityHashSet::from_iter(selected_entities.iter());
 			selected_entities.select_maybe_add(entity, add);
+			let current = EntityHashSet::from_iter(selected_entities.iter());
+
+			SyncGizmoTargetsEvent::new(
+				selected_entities.as_slice().into(),
+				previous.difference(&current).cloned().collect(),
+			)
 		} else {
 			let mut selected_entities = SelectedEntities::default();
 			selected_entities.select_replace(entity);
+
 			*self = Self::Entities(selected_entities);
+			let InspectorSelection::Entities(selected_entities) = self else {
+				unreachable!();
+			};
+
+			SyncGizmoTargetsEvent::new(selected_entities.as_slice().into(), default())
 		}
 	}
 }
@@ -862,6 +866,7 @@ fn auto_register_picking_targets<F: QueryFilter>(
 
 fn handle_click_events<F: QueryFilter>(
 	mut events: MessageReader<Pointer<Click>>,
+	mut commands: Commands,
 	editor_camera_pointer_id: Single<&PointerId, With<EditorCamera>>,
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
@@ -870,10 +875,12 @@ fn handle_click_events<F: QueryFilter>(
 	for event in events.read().filter(|event| {
 		**editor_camera_pointer_id == event.pointer_id && q_pickables.contains(event.event_target())
 	}) {
-		selection.add_selected(
+		let event = selection.add_selected(
 			event.event_target(),
 			keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
 		);
+
+		commands.trigger(event);
 	}
 }
 

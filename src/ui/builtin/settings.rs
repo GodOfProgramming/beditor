@@ -71,7 +71,7 @@ impl EditorUi for EditorSettingsUi {
 struct EditorSettings {
 	appearance_settings: AppearanceSettings,
 
-	advanced_options: AdvancedOptions,
+	_advanced_options: AdvancedOptions,
 }
 
 impl FromWorld for EditorSettings {
@@ -110,7 +110,7 @@ impl FromWorld for EditorSettings {
 				current_theme: current_theme.unwrap_or_else(|| String::from("default")),
 				loaded_themes,
 			},
-			advanced_options: default(),
+			_advanced_options: default(),
 		}
 	}
 }
@@ -263,7 +263,7 @@ impl EditorUi for ProjectSettingsUi {
 		default()
 	}
 
-	fn render(&mut self, ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {}
+	fn render(&mut self, _ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {}
 }
 
 fn settings_display<C>(

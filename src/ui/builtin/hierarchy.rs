@@ -3,11 +3,11 @@ use std::sync::Arc;
 use crate::{
 	ui::{
 		EditorUiBundle, InspectorSelection, SelectedEntities, builtin::BundleDnd,
-		notifications::Notification,
+		events::SyncGizmoTargetsEvent, notifications::Notification,
 	},
 	util::reflection,
 };
-use bevy::prelude::*;
+use bevy::{ecs::entity::EntityHashSet, prelude::*};
 use bevy_inspector_egui::bevy_inspector;
 use egui_file_dialog::FileDialog;
 use uuid::{Uuid, uuid};
@@ -51,10 +51,22 @@ impl EditorUiBundle for Hierarchy {
 	fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
 		world.resource_scope(|world, mut selection: Mut<InspectorSelection>| {
 			if let InspectorSelection::Entities(selected_entities) = selection.as_mut() {
+				let previous = EntityHashSet::from_iter(selected_entities.iter());
 				Self::show(ui, world, selected_entities);
+				let current = EntityHashSet::from_iter(selected_entities.iter());
+
+				world.trigger(SyncGizmoTargetsEvent::new(
+					selected_entities.as_slice().into(),
+					previous.difference(&current).cloned().collect(),
+				));
 			} else {
 				let mut selected_entities = SelectedEntities::default();
+
 				if Self::show(ui, world, &mut selected_entities) {
+					world.trigger(SyncGizmoTargetsEvent::new(
+						selected_entities.as_slice().into(),
+						default(),
+					));
 					*selection = InspectorSelection::Entities(selected_entities);
 				}
 			}
@@ -177,6 +189,7 @@ struct ClearSelectedMessage;
 impl ClearSelectedMessage {
 	fn handle(
 		mut messages: MessageReader<Self>,
+		mut commands: Commands,
 		mut inspector_selection: ResMut<InspectorSelection>,
 	) {
 		if messages.is_empty() {
@@ -186,6 +199,10 @@ impl ClearSelectedMessage {
 		messages.clear();
 
 		if let InspectorSelection::Entities(selected) = inspector_selection.as_mut() {
+			commands.trigger(SyncGizmoTargetsEvent::new(
+				default(),
+				selected.as_slice().into(),
+			));
 			selected.clear();
 		}
 	}

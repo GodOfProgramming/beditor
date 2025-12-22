@@ -35,11 +35,13 @@ use bevy::{
 	window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
 	winit::WINIT_WINDOWS,
 };
+use bevy_axes_gizmo::AxesGizmoPlugin;
 use brefabs::PrefabPlugin;
 use input::InputPlugin;
 use platform_dirs::AppDirs;
 pub use prelude::*;
 use serde::{Deserialize, Serialize};
+use transform_gizmo_bevy::TransformGizmoPlugin;
 use ui::{UiManager, UiPlugin};
 use view::EditorViewPlugin;
 
@@ -217,6 +219,8 @@ impl Plugin for EditorPlugin {
 				UiPlugin,
 				LogPlugin,
 				ReflectionExtensionsPlugin,
+				TransformGizmoPlugin,
+				AxesGizmoPlugin::default(),
 			))
 			.insert_state(EditorState::Editing)
 			.configure_sets(

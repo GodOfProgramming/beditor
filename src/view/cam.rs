@@ -13,13 +13,16 @@ use bevy::{
 	},
 	prelude::*,
 	render::render_resource::TextureFormat,
+	ui::FocusPolicy,
 	window::PrimaryWindow,
 };
+use bevy_axes_gizmo::{AxesGizmoSyncCamera, AxesGizmoTexture};
 use derive_more::derive::Deref;
 use derive_new::new;
 use macros::Identifiable;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
+use transform_gizmo_bevy::{GizmoCamera, GizmoOptions};
 use uuid::Uuid;
 
 pub struct EditorCamPlugin;
@@ -34,13 +37,17 @@ impl Plugin for EditorCamPlugin {
 			.add_observer(SyncRenderCamerasEvent::handle)
 			.add_observer(on_manage_camera)
 			.add_observer(on_unmanage_camera)
+			.add_observer(on_spawn_editor_camera)
 			.add_systems(Startup, retrieve_show_cameras_value)
 			.add_systems(PostStartup, init_camera)
 			.add_systems(OnEnter(ActiveEditorCamera::None), despawn_editor_cameras)
 			.add_systems(
 				First,
 				(
-					EditorManagedCamera::viewport_picking.in_set(PickingSystems::PostInput),
+					(
+						EditorManagedCamera::viewport_picking.in_set(PickingSystems::PostInput),
+						EditorManagedCamera::sync_gizmos,
+					),
 					EditorManagedCamera::reset_rects,
 				)
 					.chain(),
@@ -95,6 +102,37 @@ fn on_unmanage_camera(
 	}
 }
 
+fn on_spawn_editor_camera(
+	event: On<Add, EditorCamera>,
+	mut commands: Commands,
+	axes_gizmo_image: Res<AxesGizmoTexture>,
+) {
+	commands.spawn((
+		Name::new("Axis Image"),
+		Pickable::IGNORE,
+		FocusPolicy::Pass,
+		UiTargetCamera(event.event_target()),
+		Node {
+			position_type: PositionType::Absolute,
+			left: px(0),
+			bottom: px(0),
+			width: vw(20),
+			height: vh(20),
+			..default()
+		},
+		BackgroundColor(Color::NONE),
+		EditorCameraUi(event.event_target()),
+		Children::spawn(Spawn((
+			Pickable::IGNORE,
+			FocusPolicy::Pass,
+			ImageNode {
+				image: axes_gizmo_image.0.clone(),
+				..default()
+			},
+		))),
+	));
+}
+
 fn despawn_editor_cameras(mut commands: Commands, q_cams: Query<Entity, With<EditorCamera>>) {
 	info!("Despawning all editor cameras");
 	for entity in &q_cams {
@@ -102,16 +140,23 @@ fn despawn_editor_cameras(mut commands: Commands, q_cams: Query<Entity, With<Edi
 	}
 }
 
-pub fn disable_camera<C: Component>(mut q_camera: Query<&mut Camera, With<C>>) {
-	for mut camera in &mut q_camera {
-		camera.is_active = false;
-	}
-}
-
 #[derive(Default, Component, Reflect, Identifiable)]
-#[require(MeshPickingCamera, EditorManagedCamera)]
+#[require(
+  MeshPickingCamera,
+  EditorManagedCamera,
+  GizmoCamera = GizmoCamera,
+  AxesGizmoSyncCamera = AxesGizmoSyncCamera,
+)]
 #[id("c910a397-a017-4a29-99bc-6282b4b1a214")]
 pub struct EditorCamera;
+
+#[derive(Component)]
+#[relationship_target(relationship = EditorCameraUi, linked_spawn)]
+struct EditorCameraUis(Vec<Entity>);
+
+#[derive(Component)]
+#[relationship(relationship_target = EditorCameraUis)]
+struct EditorCameraUi(Entity);
 
 #[derive(Component, Default)]
 #[require(
@@ -178,6 +223,13 @@ impl EditorManagedCamera {
 
 			commands.write_message(msg);
 		}
+	}
+
+	fn sync_gizmos(
+		editor_camera: Single<&Self, With<EditorCamera>>,
+		mut gizmos_options: ResMut<GizmoOptions>,
+	) {
+		gizmos_options.viewport_rect = editor_camera.viewport_rect;
 	}
 
 	fn reset_rects(mut q_managed_cameras: Query<&mut Self>) {

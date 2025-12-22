@@ -12,8 +12,10 @@ members = [".", "crates/macros", "crates/persistent-id"]
 anyhow = "1.0.100"
 async-std = "1.13.2"
 bevy = "0.17.3"
+bevy-axes-gizmo = "0.2.0"
 bevy-inspector-egui = { version = "0.35.0", git = "https://github.com/GodOfProgramming/bevy-inspector-egui.git", rev = "51d2e4dd97e9c3e3656480d87281522c30f34bb6" }
 bevy_egui = "0.38.0"
+bevy_infinite_grid = "0.17.0"
 brefabs = "0.7.0"
 camino = "1.2.1"
 const_format = "0.2.35"
@@ -66,7 +68,7 @@ toml = "0.9.8"
 tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-tracy = "0.11.4"
-type_extractor = { path = "./crates/type_extractor" }
+transform-gizmo-bevy = { git = "https://github.com/GodOfProgramming/transform-gizmo.git", rev = "b1b2ac13e0526dff01915758dd4ba4c576d2bfd2" }
 uuid = "1.18.1"
 variadics_please = "1.1.0"
 vfs = { git = "https://github.com/GodOfProgramming/vfs-rs.git", rev = "ed5ba004878e076bc3e9bdf8b133e62ccba1ba0c" }
@@ -86,7 +88,9 @@ uuid = { workspace = true, features = ["serde"] }
 # internal
 async-std = { workspace = true }
 bevy = { workspace = true, features = ["default", "serialize", "bevy_remote"] }
+bevy-axes-gizmo = { workspace = true }
 bevy-inspector-egui = { workspace = true, features = ["highlight_changes"] }
+bevy_infinite_grid = { workspace = true }
 brefabs = { workspace = true }
 camino = { workspace = true }
 const_format = { workspace = true }
@@ -124,8 +128,8 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-log = { workspace = true }
 tracing-tracy = { workspace = true, optional = true }
+transform-gizmo-bevy = { workspace = true }
 variadics_please = { workspace = true }
-
 vfs = { workspace = true }
 
 

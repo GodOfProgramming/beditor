@@ -64,19 +64,19 @@ where
 	}
 
 	fn spawn(mut params: Self::Params<'_, '_>) -> Self {
-		if let Some(mut managed_camera) = params.managed_camera.p0() {
-			managed_camera.is_active = true;
-		}
+		if let Some(mut camera) = params.managed_camera.p0() {
+			camera.is_active = true;
+		};
 
 		default()
 	}
 
 	fn on_despawn(&mut self, mut params: Self::Params<'_, '_>) {
-		let Some(mut managed_camera) = params.managed_camera.p0() else {
+		let Some(mut camera) = params.managed_camera.p0() else {
 			return;
 		};
 
-		managed_camera.is_active = false;
+		camera.is_active = false;
 	}
 
 	fn render(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {

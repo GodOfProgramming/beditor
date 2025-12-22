@@ -130,51 +130,54 @@ impl EditorManagedCamera {
 		hover_map: Res<HoverMap>,
 		mut pointer_inputs: MessageReader<PointerInput>,
 	) {
-		let node_pointers = hover_map
-			.iter()
-			.flat_map(|(pointer_id, hits)| {
-				hits.keys().filter_map(|entity| {
-					if *entity == *ui_hit_node {
-						Some(*pointer_id)
-					} else {
-						None
-					}
-				})
+		let node_pointers = hover_map.iter().flat_map(|(pointer_id, hits)| {
+			hits.keys().filter_map(|entity| {
+				if *entity == *ui_hit_node {
+					Some(*pointer_id)
+				} else {
+					None
+				}
+			})
+		});
+
+		let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
+
+		let query_iter =
+			q_managed_cameras
+				.iter()
+				.filter_map(|(camera, managed_camera_pointer_id, managed_camera)| {
+					managed_camera
+						.viewport_rect
+						.zip(camera.target.as_image())
+						.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
+				});
+
+		let input_iter = node_pointers
+			.flat_map(|node_pointer_id| {
+				inputs
+					.iter()
+					.filter(move |input| input.pointer_id == node_pointer_id)
 			})
 			.collect::<SmallVec<[_; 2]>>();
 
-		for (camera, managed_camera_pointer_id, managed_camera) in &q_managed_cameras {
-			let Some(viewport_rect) = managed_camera.viewport_rect else {
-				continue;
-			};
+		for (target, viewport_rect, managed_camera_pointer_id) in query_iter {
+			for input in input_iter.iter() {
+				let location = Location {
+					position: input.location.position - viewport_rect.min,
+					target: NormalizedRenderTarget::Image(target.clone().into()),
+				};
 
-			let Some(target) = camera.target.as_image() else {
-				continue;
-			};
+				let msg = PointerInput {
+					pointer_id: *managed_camera_pointer_id,
+					location,
+					action: input.action,
+				};
 
-			let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
-
-			for node_pointer_id in node_pointers.iter().cloned() {
-				for input in inputs
-					.iter()
-					.filter(|input| input.pointer_id == node_pointer_id)
-				{
-					let location = Location {
-						position: input.location.position - viewport_rect.min,
-						target: NormalizedRenderTarget::Image(target.clone().into()),
-					};
-
-					let msg = PointerInput {
-						pointer_id: *managed_camera_pointer_id,
-						location,
-						action: input.action,
-					};
-
-					commands.write_message(msg);
-				}
+				commands.write_message(msg);
 			}
 		}
 	}
+	// }
 
 	fn reset_rects(mut q_managed_cameras: Query<&mut Self>) {
 		for mut cam in &mut q_managed_cameras {

@@ -103,20 +103,17 @@ pub fn add_game_camera<C>(app: &mut App)
 where
 	C: Component + Reflectable,
 {
-	app
-		.register_type::<EditorManagedView<C>>()
-		.add_systems(PostStartup, cam::disable_camera::<C>)
-		.add_systems(
-			Update,
-			(
-				cam::render_2d_cameras::<C>
-					.in_set(View2d)
-					.run_if(cam::should_show_cameras),
-				cam::render_3d_cameras::<C>
-					.in_set(View3d)
-					.run_if(cam::should_show_cameras),
-			),
-		);
+	app.register_type::<EditorManagedView<C>>().add_systems(
+		Update,
+		(
+			cam::render_2d_cameras::<C>
+				.in_set(View2d)
+				.run_if(cam::should_show_cameras),
+			cam::render_3d_cameras::<C>
+				.in_set(View3d)
+				.run_if(cam::should_show_cameras),
+		),
+	);
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]

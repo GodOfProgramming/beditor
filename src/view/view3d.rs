@@ -175,7 +175,10 @@ pub fn orbit_system(
 	};
 
 	transform.rotate_axis(right, -orbit.y);
+	transform.rotation = transform.rotation.normalize();
+
 	transform.rotate_axis(up, -orbit.x);
+	transform.rotation = transform.rotation.normalize();
 }
 
 pub fn pan_system(

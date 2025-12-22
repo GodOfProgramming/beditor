@@ -55,7 +55,7 @@ where
 
 	const POPOUT: bool = true;
 
-	const SCROLL_BARS: [bool; 2] = [false, false];
+	const SCROLL_BARS: [bool; 2] = [true, true];
 
 	type Params<'w, 's> = Params<'w, 's, C>;
 
@@ -103,31 +103,30 @@ where
 			return;
 		};
 
-		let egui_rect = ui.clip_rect();
+		let rect = ui
+			.image(egui::load::SizedTexture::new(tex, ui.clip_rect().size()))
+			.rect;
 
-		managed_camera.viewport_rect = Some(Rect::from_corners(
-			Vec2::new(egui_rect.min.x, egui_rect.min.y),
-			Vec2::new(egui_rect.max.x, egui_rect.max.y),
-		));
+		let viewport_rect = Rect::from_corners(
+			Vec2::new(rect.min.x, rect.min.y),
+			Vec2::new(rect.max.x, rect.max.y),
+		);
 
-		ui.image(egui::load::SizedTexture::new(tex, egui_rect.size()));
+		managed_camera.viewport_rect = Some(viewport_rect);
 
 		let Some(image) = images.get(target.handle.id()) else {
+			ui.label("No image");
 			return;
 		};
 
-		let viewport_size = Rect {
-			max: Vec2::new(egui_rect.max.x, egui_rect.max.y),
-			min: Vec2::new(egui_rect.min.x, egui_rect.min.y),
-		}
-		.size()
-		.as_uvec2();
+		let viewport_size = viewport_rect.size().as_uvec2();
 
 		if image.size() == viewport_size {
 			return;
 		}
 
 		let Some(image) = images.get_mut(target.handle.id()) else {
+			ui.label("No image (mut)");
 			return;
 		};
 

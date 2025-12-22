@@ -15,7 +15,7 @@ use crate::{
 		events::{OpenSingleUiMessage, OpenUiMessage, SyncGizmoTargetsEvent},
 	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
-	view::{cam::EditorCamera, mouse_hovered_in_editor_view},
+	view::cam::EditorCamera,
 };
 use bevy::{
 	asset::UntypedAssetId,
@@ -23,7 +23,6 @@ use bevy::{
 	ecs::{
 		component::Mutable,
 		entity::EntityHashSet,
-		query::QueryFilter,
 		system::{SystemParam, SystemState},
 	},
 	picking::pointer::PointerId,
@@ -47,7 +46,7 @@ use misc::{DockExtensions, EditorUiExtensions, UiResourceState};
 use misc::{MissingUi, UiExtensions, UiState};
 use notifications::NotificationPlugin;
 use persistent_id::PersistentId;
-use std::{any::TypeId, cell::RefCell, collections::BTreeSet, marker::PhantomData};
+use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
 use uuid::Uuid;
 
 pub const EDITOR_UI_LAYER: Layer = 31;
@@ -92,15 +91,12 @@ impl Plugin for UiPlugin {
 			.add_plugins((
 				EguiPlugin::default(),
 				DefaultInspectorConfigPlugin,
-				InspectorIntegrationPlugin::<With<Sprite>>::default(),
-				InspectorIntegrationPlugin::<With<Mesh2d>>::default(),
-				InspectorIntegrationPlugin::<With<Mesh3d>>::default(),
-				InspectorIntegrationPlugin::<(With<Node>, Without<EditorUiHitCaptureNode>)>::default(),
 				NotificationPlugin,
 			))
 			.add_observer(systems::on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
 			.add_observer(SyncGizmoTargetsEvent::on_event)
+			.add_observer(handle_click_events)
 			.add_systems(Startup, (systems::startup, UiManager::init))
 			.add_systems(OnEnter(EditorState::Exiting), systems::on_app_exit)
 			.add_systems(
@@ -783,62 +779,25 @@ impl InspectorSelection {
 	}
 }
 
-pub struct InspectorIntegrationPlugin<F: QueryFilter>(PhantomData<F>);
-
-impl<F: QueryFilter> Default for InspectorIntegrationPlugin<F> {
-	fn default() -> Self {
-		Self(default())
-	}
-}
-
-impl<F: 'static + Send + Sync + QueryFilter> Plugin for InspectorIntegrationPlugin<F> {
-	fn build(&self, app: &mut App) {
-		app.add_systems(
-			FixedUpdate,
-			(
-				auto_register_picking_targets::<F>,
-				handle_click_events::<F>.run_if(mouse_hovered_in_editor_view),
-			),
-		);
-	}
-}
-
-fn auto_register_picking_targets<F: QueryFilter>(
-	mut commands: Commands,
-	q_entities: Query<(Entity, Option<&Name>), (Without<Pickable>, F)>,
-) {
-	for (entity, name) in &q_entities {
-		if let Some(name) = name {
-			debug!("Registered picking on object: {name}");
-		} else {
-			debug!("Registered picking on entity: {entity}");
-		}
-
-		commands.entity(entity).insert(Pickable {
-			is_hoverable: true,
-			should_block_lower: true,
-		});
-	}
-}
-
-fn handle_click_events<F: QueryFilter>(
-	mut events: MessageReader<Pointer<Click>>,
+fn handle_click_events(
+	event: On<Pointer<Click>>,
 	mut commands: Commands,
 	editor_camera_pointer_id: Single<&PointerId, With<EditorCamera>>,
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
-	q_pickables: Query<(), F>,
 ) {
-	for event in events.read().filter(|event| {
-		**editor_camera_pointer_id == event.pointer_id && q_pickables.contains(event.event_target())
-	}) {
-		let event = selection.add_selected(
-			event.event_target(),
-			keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
-		);
-
-		commands.trigger(event);
+	if event.pointer_id != **editor_camera_pointer_id {
+		return;
 	}
+
+	let target = event.event_target();
+
+	let event = selection.add_selected(
+		target,
+		keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
+	);
+
+	commands.trigger(event);
 }
 
 #[derive(Default, Deref, DerefMut, Debug)]

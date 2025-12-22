@@ -48,9 +48,7 @@ use view::EditorViewPlugin;
 pub mod prelude {
 	pub use crate::{
 		EditorPlugin,
-		ui::{
-			EditorUi, EditorUiBundle, InspectorIntegrationPlugin, NoParams, notifications::Notification,
-		},
+		ui::{EditorUi, EditorUiBundle, NoParams, notifications::Notification},
 		util::{
 			EntityManager, GameEntity, GameRenderLayer,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
@@ -141,13 +139,6 @@ impl EditorPlugin {
 	pub fn register_ui<U: EditorUiBundle>(mut self) -> Self {
 		self.ui_registrations.push(Box::new(|app, ui_manager| {
 			ui_manager.register::<U>(app);
-		}));
-		self
-	}
-
-	pub fn register_pickable<C: Component + Send + Sync + 'static>(mut self) -> Self {
-		self.generic_registrations.push(Box::new(|app| {
-			app.add_plugins(InspectorIntegrationPlugin::<With<C>>::default());
 		}));
 		self
 	}
@@ -245,12 +236,7 @@ impl Plugin for EditorPlugin {
 			.add_observer(DisableGameUiEvent::handle)
 			.add_systems(
 				Startup,
-				(
-					configure_windows,
-					set_picking_settings,
-					auto_register_components,
-					load_settings,
-				),
+				(configure_windows, auto_register_components, load_settings),
 			)
 			.add_systems(PostStartup, show_window)
 			.add_systems(OnEnter(EditorState::Editing), show_window_cursor)
@@ -314,10 +300,6 @@ fn auto_register_components(world: &mut World) {
 			component_registry.register_raw(world, entry);
 		}
 	});
-}
-
-fn set_picking_settings(mut picking_settings: ResMut<MeshPickingSettings>) {
-	picking_settings.require_markers = true;
 }
 
 fn show_window(mut q_windows: Query<&mut Window>) {

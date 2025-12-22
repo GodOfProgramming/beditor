@@ -101,6 +101,11 @@ fn on_spawn_editor_camera(
 	mut commands: Commands,
 	axes_gizmo_image: Res<AxesGizmoTexture>,
 ) {
+	commands
+		.entity(event.event_target())
+		.observe(|_: On<Pointer<Click>>| {
+			info!("Clicked");
+		});
 	commands.spawn((
 		Name::new("Axis Image"),
 		Pickable::IGNORE,

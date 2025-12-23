@@ -1,5 +1,6 @@
 pub mod builtin;
 pub mod events;
+pub mod inspector;
 pub mod misc;
 pub mod notifications;
 mod systems;
@@ -10,10 +11,10 @@ use crate::{
 	ui::{
 		builtin::{
 			editor_view::EditorView,
-			managed_view::EditorManagedView,
 			settings::{EditorSettingsUi, ProjectSettingsUi},
 		},
 		events::{OpenSingleUiMessage, OpenUiMessage, SyncGizmoTargetsEvent},
+		inspector::InspectorPlugin,
 	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
 	view::cam::EditorCamera,
@@ -94,6 +95,7 @@ impl Plugin for UiPlugin {
 				DefaultInspectorConfigPlugin,
 				NotificationPlugin,
 			))
+			.add_plugins(InspectorPlugin)
 			.add_observer(systems::on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
 			.add_observer(SyncGizmoTargetsEvent::on_event)

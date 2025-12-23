@@ -8,7 +8,7 @@ use crate::{
 		builtin::{editor_view::EditorView, managed_view::EditorManagedView},
 		misc::UiState,
 	},
-	view::cam::{ActiveEditorCamera, EditorCamPlugin, EditorCamera},
+	view::cam::{ActiveEditorCamera, EditorCamPlugin},
 };
 use bevy::{prelude::*, reflect::Reflectable};
 use view2d::View2d;
@@ -21,7 +21,6 @@ pub struct EditorViewPlugin;
 impl Plugin for EditorViewPlugin {
 	fn build(&self, app: &mut bevy::prelude::App) {
 		app
-			.add_plugins(EditorCamPlugin)
 			.configure_sets(
 				Update,
 				(
@@ -41,6 +40,7 @@ impl Plugin for EditorViewPlugin {
 			.insert_state(ActiveEditorCamera::None)
 			.insert_state(OrbitState::Inactive)
 			.insert_state(PanState::Inactive)
+			.add_plugins(EditorCamPlugin)
 			.add_systems(OnEnter(ActiveEditorCamera::Cam2D), view2d::enable)
 			.add_systems(OnExit(ActiveEditorCamera::Cam2D), view2d::save_settings)
 			.add_systems(OnEnter(ActiveEditorCamera::Cam3D), view3d::enable)

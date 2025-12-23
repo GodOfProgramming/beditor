@@ -13,7 +13,6 @@ use std::{path::PathBuf, sync::LazyLock};
 use crate::{
 	ui::builtin::managed_view::EditorManagedView,
 	util::{
-		AppExtensions,
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 		log::LogPlugin,
 		reflection::ReflectionExtensionsPlugin,
@@ -50,7 +49,8 @@ pub mod prelude {
 		EditorPlugin,
 		ui::{EditorUi, EditorUiBundle, NoParams, notifications::Notification},
 		util::{
-			EntityManager, GameEntity, GameRenderLayer,
+			AppExtensions, EntityManager, GameEntity, GameRenderLayer, RegisterableType, TypeGroups,
+			TypeList,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 			storage::{Layouts, SettingKey, Settings, SettingsGroup},
 		},
@@ -198,21 +198,6 @@ impl Plugin for EditorPlugin {
 			.configure(app)
 			.init_resource::<RuntimeSettings>()
 			.init_resource::<GameRenderLayer>()
-			.add_plugin_if_not_present(MeshPickingPlugin)
-			.add_plugin_if_not_present(FrameTimeDiagnosticsPlugin::default())
-			.add_plugin_if_not_present(EntityCountDiagnosticsPlugin::default())
-			.add_plugin_if_not_present(SystemInformationDiagnosticsPlugin)
-			.add_plugin_if_not_present(RemotePlugin::default())
-			.add_plugin_if_not_present(RemoteHttpPlugin::default())
-			.add_plugins((
-				EditorViewPlugin,
-				InputPlugin,
-				UiPlugin,
-				LogPlugin,
-				ReflectionExtensionsPlugin,
-				TransformGizmoPlugin,
-				AxesGizmoPlugin::default(),
-			))
 			.insert_state(EditorState::Editing)
 			.configure_sets(
 				Update,
@@ -232,6 +217,21 @@ impl Plugin for EditorPlugin {
 						.run_if(in_state(EditorState::Editing)),
 				),
 			)
+			.add_plugin_if_not_present(MeshPickingPlugin)
+			.add_plugin_if_not_present(FrameTimeDiagnosticsPlugin::default())
+			.add_plugin_if_not_present(EntityCountDiagnosticsPlugin::default())
+			.add_plugin_if_not_present(SystemInformationDiagnosticsPlugin)
+			.add_plugin_if_not_present(RemotePlugin::default())
+			.add_plugin_if_not_present(RemoteHttpPlugin::default())
+			.add_plugins((
+				EditorViewPlugin,
+				InputPlugin,
+				UiPlugin,
+				LogPlugin,
+				ReflectionExtensionsPlugin,
+				TransformGizmoPlugin,
+				AxesGizmoPlugin::default(),
+			))
 			.add_observer(EnableGameUiEvent::handle)
 			.add_observer(DisableGameUiEvent::handle)
 			.add_systems(

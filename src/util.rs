@@ -8,10 +8,10 @@ use bevy::{
 	camera::visibility::{Layer as CameraLayer, RenderLayers},
 	ecs::{bundle::NoBundleEffect, system::SystemParam},
 	prelude::*,
-	reflect::{GetTypeRegistration, Reflectable},
+	reflect::GetTypeRegistration,
 	window::{CursorGrabMode, CursorIcon, CursorOptions},
 };
-use std::borrow::BorrowMut;
+use std::{borrow::BorrowMut, marker::PhantomData};
 
 pub fn show_cursor(cursor: &mut CursorOptions) {
 	cursor.visible = true;
@@ -82,12 +82,7 @@ pub trait AppExtensions: BorrowMut<App> {
 		self
 	}
 
-	fn register_types<T: RegisterableType>(&mut self) -> &mut Self {
-		T::register(self.borrow_mut());
-		self
-	}
-
-	fn register_type_groups<T: RegisterableTypeGroup>(&mut self) -> &mut Self {
+	fn register_types<T: sealed::RegisterableTypes>(&mut self) -> &mut Self {
 		T::register(self.borrow_mut());
 		self
 	}
@@ -109,7 +104,7 @@ macro_rules! impl_registerable_type {
     {
       fn register(app: &mut App) {
         $(
-          println!("Registered {}", $name::get_type_registration().type_info().type_path());
+          println!("registered {}", $name::get_type_registration().type_info().type_path());
           app.register_type::<$name>();
         )*
       }
@@ -139,3 +134,44 @@ macro_rules! impl_registerable_type_group {
 }
 
 variadics_please::all_tuples!(impl_registerable_type_group, 0, 12, T);
+
+macro_rules! impl_registerable_types {
+  ($(#[$meta:meta])* $($name: ident),*) => {
+    #[allow(unused_variables)]
+    $(#[$meta])*
+    impl<$($name),*> sealed::RegisterableTypes for ($($name,)*)
+    where
+      $($name: sealed::RegisterableTypes),*
+    {
+      fn register(app: &mut App) {
+        $(<$name as sealed::RegisterableTypes>::register(app);)*
+      }
+    }
+  };
+}
+
+variadics_please::all_tuples!(impl_registerable_types, 0, 12, T);
+
+pub struct TypeList<T: RegisterableType>(PhantomData<T>);
+
+impl<T: RegisterableType> sealed::RegisterableTypes for TypeList<T> {
+	fn register(app: &mut App) {
+		T::register(app);
+	}
+}
+
+pub struct TypeGroups<T: RegisterableTypeGroup>(PhantomData<T>);
+
+impl<T: RegisterableTypeGroup> sealed::RegisterableTypes for TypeGroups<T> {
+	fn register(app: &mut App) {
+		T::register(app);
+	}
+}
+
+mod sealed {
+	use bevy::prelude::*;
+
+	pub trait RegisterableTypes {
+		fn register(app: &mut App);
+	}
+}

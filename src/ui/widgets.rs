@@ -14,23 +14,28 @@ impl Dialog {
 			open: false,
 		}
 	}
-}
 
-impl Dialog {
+	pub fn set_title(&mut self, title: impl Into<WidgetText>) {
+		self.title = title.into();
+	}
+
 	/// See [`egui::Window::show`]
 	pub fn show<R>(
 		&mut self,
 		ctx: &egui::Context,
-		contents: impl FnOnce(&mut egui::Ui) -> R,
+		contents: impl FnOnce(&mut egui::Ui, &mut bool) -> R,
 	) -> Option<egui::InnerResponse<Option<R>>> {
-		egui::Window::new(self.title.clone())
+		let mut open = self.open;
+		let out = egui::Window::new(self.title.clone())
 			.open(&mut self.open)
 			.anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
 			.title_bar(true)
 			.resizable(false)
 			.movable(false)
 			.collapsible(false)
-			.show(ctx, contents)
+			.show(ctx, |ui| (contents)(ui, &mut open));
+		self.open &= open;
+		out
 	}
 }
 

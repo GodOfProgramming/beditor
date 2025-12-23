@@ -1,21 +1,13 @@
 use crate::{
-	EditorState, Layouts, UiManager,
+	EditorState,
 	ui::{
-		EditorUiSystems, InspectorSelection, LayoutManager,
+		InspectorSelection,
 		builtin::settings::{EditorSettingsUi, ProjectSettingsUi},
 		events::OpenSingleUiMessage,
-		misc::{DockExtensions, MissingUi},
-		notifications::Notification,
-		widgets,
 	},
-	util::storage::{ProjectSettings, SaveLayoutOnExitSetting, StartEditorInTestingSetting},
 	view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::EguiPrimaryContextPass;
-use egui::TextBuffer;
-use egui_dock::DockState;
-use persistent_id::PersistentId;
 use uuid::Uuid;
 
 #[derive(SystemParam)]
@@ -27,14 +19,6 @@ pub struct Params<'w, 's> {
 	active_camera_state: Res<'w, State<ActiveEditorCamera>>,
 	selection: Res<'w, InspectorSelection>,
 
-	layout_manager: Res<'w, LayoutManager>,
-
-	save_layout_dialog_state: ResMut<'w, SaveLayoutDialogState>,
-	reset_layout_dialog_state: ResMut<'w, ResetLayoutDialogState>,
-
-	cached_settings: ResMut<'w, CachedSettings>,
-	settings: ProjectSettings<'w>,
-
 	q_transforms: Query<'w, 's, &'static Transform>,
 
 	q_editor_settings_ui: Query<'w, 's, (), With<EditorSettingsUi>>,
@@ -45,61 +29,6 @@ pub struct Params<'w, 's> {
 struct CachedSettings {
 	save_layout_on_exit: bool,
 	start_in_testing: bool,
-}
-
-#[derive(Resource)]
-struct SaveLayoutDialogState {
-	dialog: widgets::Dialog,
-}
-
-impl Default for SaveLayoutDialogState {
-	fn default() -> Self {
-		Self {
-			dialog: widgets::Dialog::new("Save Layout"),
-		}
-	}
-}
-
-#[derive(Resource)]
-struct ResetLayoutDialogState {
-	dialog: widgets::Dialog,
-}
-
-impl Default for ResetLayoutDialogState {
-	fn default() -> Self {
-		Self {
-			dialog: widgets::Dialog::new("Reset Layout?"),
-		}
-	}
-}
-
-pub fn init(app: &mut App) {
-	app
-		.init_resource::<CachedSettings>()
-		.init_resource::<SaveLayoutDialogState>()
-		.init_resource::<ResetLayoutDialogState>()
-		.add_message::<SaveLayoutMessage>()
-		.add_message::<ResetLayoutMessage>()
-		.add_message::<LoadLayoutMessage>()
-		.add_systems(Startup, startup)
-		.add_systems(
-			FixedUpdate,
-			(
-				ResetLayoutMessage::handle,
-				SaveLayoutMessage::handle,
-				LoadLayoutMessage::handle,
-			),
-		)
-		.add_systems(
-			EguiPrimaryContextPass,
-			(save_layout_dialog_display, reset_layout_dialog_display).after(EditorUiSystems),
-		);
-}
-
-fn startup(mut project_settings: ProjectSettings, mut cached_settings: ResMut<CachedSettings>) {
-	cached_settings.save_layout_on_exit = project_settings.get_or::<SaveLayoutOnExitSetting>(true);
-	cached_settings.start_in_testing =
-		project_settings.get_or_default::<StartEditorInTestingSetting>();
 }
 
 pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
@@ -154,7 +83,6 @@ fn tools_menu(ui: &mut egui::Ui, params: &mut Params) {
 
 fn view_menu(ui: &mut egui::Ui, params: &mut Params) {
 	ui.menu_button("View", |ui| {
-		layout_menu(ui, params);
 		camera_menu(ui, params);
 	});
 }
@@ -169,68 +97,6 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 		}
 		_ => (),
 	}
-
-	ui.label("Start In Testing");
-	if ui
-		.checkbox(&mut params.cached_settings.start_in_testing, ())
-		.clicked()
-		&& let Err(err) = params
-			.settings
-			.set::<StartEditorInTestingSetting>(params.cached_settings.start_in_testing)
-	{
-		params
-			.commands
-			.trigger(Notification::error("Failed to save setting").with_context(err));
-	}
-}
-
-fn layout_menu(ui: &mut egui::Ui, params: &mut Params) {
-	ui.menu_button("Layouts", |ui| {
-		ui.add_enabled_ui(!params.save_layout_dialog_state.dialog.open, |ui| {
-			if ui.button("Save Layout").clicked() {
-				params.save_layout_dialog_state.dialog.open = true;
-			}
-		});
-
-		if !params.layout_manager.is_empty() {
-			ui.add_enabled_ui(
-				!params.save_layout_dialog_state.dialog.open
-					&& !params.reset_layout_dialog_state.dialog.open,
-				|ui| {
-					ui.menu_button("Restore", |ui| {
-						for layout in params.layout_manager.iter() {
-							if ui.button(layout).clicked() {
-								params
-									.commands
-									.write_message(LoadLayoutMessage(layout.clone()));
-							}
-						}
-					});
-				},
-			);
-		}
-
-		ui.add_enabled_ui(!params.reset_layout_dialog_state.dialog.open, |ui| {
-			if ui.button("Restore Default").clicked() {
-				params.reset_layout_dialog_state.dialog.open = true;
-			}
-		});
-
-		ui.horizontal(|ui| {
-			ui.label("Save On Exit");
-			if ui
-				.checkbox(&mut params.cached_settings.save_layout_on_exit, ())
-				.clicked()
-				&& let Err(err) = params
-					.settings
-					.set::<SaveLayoutOnExitSetting>(params.cached_settings.save_layout_on_exit)
-			{
-				params
-					.commands
-					.trigger(Notification::error("Failed to save setting").with_context(err))
-			}
-		});
-	});
 }
 
 fn camera_menu(ui: &mut egui::Ui, params: &mut Params) {
@@ -304,125 +170,5 @@ fn play_button(ui: &mut egui::Ui, params: &mut Params) {
 fn pause_button(ui: &mut egui::Ui, params: &mut Params) {
 	if ui.button("⏸").clicked() {
 		params.next_editor_state.set(EditorState::Editing);
-	}
-}
-
-fn save_layout_dialog_display(
-	mut commands: Commands,
-	mut state: ResMut<SaveLayoutDialogState>,
-	mut ctx: Single<&mut bevy_egui::EguiContext>,
-	mut layout_name: Local<String>,
-) {
-	if !state.dialog.open {
-		layout_name.clear();
-		return;
-	}
-
-	let SaveLayoutDialogState { dialog } = &mut *state;
-
-	dialog.show(ctx.get_mut(), |ui| {
-		ui.horizontal(|ui| {
-			ui.label("Name");
-			ui.text_edit_singleline(&mut *layout_name);
-		});
-
-		ui.horizontal(|ui| {
-			if ui.button("Save").clicked() {
-				commands.write_message(SaveLayoutMessage(layout_name.take()));
-			}
-		});
-	});
-}
-
-fn reset_layout_dialog_display(
-	mut commands: Commands,
-	mut ctx: Single<&mut bevy_egui::EguiContext>,
-	mut state: ResMut<ResetLayoutDialogState>,
-) {
-	if !state.dialog.open {
-		return;
-	}
-
-	state.dialog.show(ctx.get_mut(), |ui| {
-		ui.label("This will reset your layout to the default configuration. Continue?");
-		ui.horizontal(|ui| {
-			if ui.button("Ok").clicked() {
-				commands.write_message(ResetLayoutMessage);
-			}
-		});
-	});
-}
-
-#[derive(Message)]
-struct SaveLayoutMessage(String);
-
-impl SaveLayoutMessage {
-	fn handle(
-		mut commands: Commands,
-		mut reader: MessageReader<Self>,
-		mut state: ResMut<SaveLayoutDialogState>,
-		ui_manager: Res<UiManager>,
-		mut layout_manager: ResMut<LayoutManager>,
-		q_uuids: Query<&PersistentId, Without<MissingUi>>,
-		q_missing: Query<&MissingUi>,
-		mut layouts: Layouts,
-	) {
-		for msg in reader.read() {
-			let dock = ui_manager
-				.state()
-				.decouple(&ui_manager, &q_uuids, &q_missing);
-			if let Err(err) = layouts.save_layout(&msg.0, dock) {
-				commands.trigger(Notification::error("Failed to save layout").with_context(err));
-			} else {
-				layout_manager.insert(msg.0.clone());
-				state.dialog.open = false;
-			}
-		}
-	}
-}
-
-#[derive(Message)]
-struct LoadLayoutMessage(String);
-
-impl LoadLayoutMessage {
-	fn handle(
-		mut reader: MessageReader<Self>,
-		mut commands: Commands,
-		mut layouts: Layouts,
-	) -> Result {
-		for msg in reader.read() {
-			let layout_name = msg.0.clone();
-			let dock = layouts.get_layout(layout_name)?;
-			commands.queue(move |world: &mut World| {
-				world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-					let new_state = DockState::restore(&dock, ui_manager.vtables(), world);
-					ui_manager.switch_state(new_state, world);
-				})
-			});
-		}
-
-		Ok(())
-	}
-}
-
-#[derive(Message)]
-struct ResetLayoutMessage;
-
-impl ResetLayoutMessage {
-	fn handle(mut reader: MessageReader<ResetLayoutMessage>, mut commands: Commands) {
-		if reader.is_empty() {
-			return;
-		}
-
-		reader.clear();
-
-		commands.queue(|world: &mut World| {
-			world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-				let default_state = ui_manager.default_dock_state(world);
-				ui_manager.switch_state(default_state, world);
-				let mut state = world.resource_mut::<ResetLayoutDialogState>();
-				state.dialog.open = false;
-			});
-		});
 	}
 }

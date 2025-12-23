@@ -250,7 +250,7 @@ fn show_dialogs(
 			}
 		}
 
-		let response = type_selection_dialog.show(ctx, |ui| {
+		let response = type_selection_dialog.show(ctx, |ui, open| {
 			if ui.text_edit_singleline(type_filter).changed() || cache.is_changed() {
 				let filter = type_filter.to_lowercase();
 
@@ -265,7 +265,7 @@ fn show_dialogs(
 					.collect();
 			}
 
-			if type_list.ui(ui, type_list_cache).is_some() {
+			if let Some(inner_response) = type_list.ui(ui, type_list_cache) {
 				let Some(type_info) = type_list.selected().and_then(|selected| {
 					cache
 						.iter()
@@ -286,6 +286,10 @@ fn show_dialogs(
 					warn!("Logic error accessing reflect default for a type that had reflect default");
 					return None;
 				};
+
+				if inner_response.response.clicked() {
+					*open = false;
+				}
 
 				Some(reflect_default.default())
 			} else {

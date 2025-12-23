@@ -117,8 +117,6 @@ impl Plugin for UiPlugin {
 				)
 					.in_set(EditorUiSystems),
 			);
-
-		builtin::menu_bar::init(app);
 	}
 }
 

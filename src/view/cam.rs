@@ -164,6 +164,7 @@ struct EditorCameraUi(Entity);
 )]
 pub struct EditorManagedCamera {
 	context_menu_opened: bool,
+	hovered: bool,
 	viewport_rect: Option<Rect>,
 	last_viewport: Option<Rect>,
 	ignore_size_mismatch: bool,
@@ -172,6 +173,10 @@ pub struct EditorManagedCamera {
 impl EditorManagedCamera {
 	pub fn set_ctx_menu_open(&mut self, open: bool) {
 		self.context_menu_opened = open;
+	}
+
+	pub fn set_hovered(&mut self, hovered: bool) {
+		self.hovered = hovered;
 	}
 
 	pub fn viewport(&self) -> Option<Rect> {
@@ -224,7 +229,7 @@ impl EditorManagedCamera {
 		let iter = q_managed_cameras
 			.iter()
 			.filter_map(|(camera, managed_camera_pointer_id, managed_camera)| {
-				if managed_camera.context_menu_opened {
+				if !managed_camera.hovered || managed_camera.context_menu_opened {
 					None
 				} else {
 					managed_camera
@@ -266,6 +271,7 @@ impl EditorManagedCamera {
 		for mut cam in &mut q_managed_cameras {
 			cam.last_viewport = cam.viewport_rect.take();
 			cam.set_ctx_menu_open(false);
+			cam.hovered = false;
 		}
 	}
 }

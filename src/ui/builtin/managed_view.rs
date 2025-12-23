@@ -111,24 +111,29 @@ where
 		let ppp = ui.ctx().pixels_per_point();
 		let image_size = image.size();
 		let image_size_vec2 = image_size.as_vec2();
-		let tex_size = image_size_vec2 / ppp;
-		let tex_size = if tex_size.is_finite() {
-			tex_size
+		let size_in_points = image_size_vec2 / ppp;
+		let size_in_points = if size_in_points.is_finite() {
+			size_in_points
 		} else {
 			image_size_vec2
 		};
-
-		let tex_size_arr = tex_size.to_array();
+		let size_in_points_arr = size_in_points.to_array();
 
 		let ui_area = ui.clip_rect();
 
-		ui.scope_builder(egui::UiBuilder::new().max_rect(ui_area), |ui| {
-			ui.centered_and_justified(|ui| {
-				ui.image(egui::load::SizedTexture::new(tex, tex_size_arr));
-			});
-		});
+		let contains_pointer = ui
+			.scope_builder(egui::UiBuilder::new().max_rect(ui_area), |ui| {
+				ui.centered_and_justified(|ui| {
+					ui.image(egui::load::SizedTexture::new(tex, size_in_points_arr));
+				});
+			})
+			.response
+			.contains_pointer();
 
-		let egui_rect = egui::Rect::from_center_size(ui_area.center(), egui::Vec2::from(tex_size_arr));
+		managed_camera.set_hovered(contains_pointer);
+
+		let egui_rect =
+			egui::Rect::from_center_size(ui_area.center(), egui::Vec2::from(size_in_points_arr));
 
 		let image_viewport_rect = Rect::from_corners(
 			Vec2::new(egui_rect.min.x, egui_rect.min.y) * ppp,

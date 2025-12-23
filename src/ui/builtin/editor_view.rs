@@ -95,4 +95,16 @@ impl EditorUi for EditorView {
 			});
 		});
 	}
+
+	fn context_menu(
+		&mut self,
+		ui: &mut egui::Ui,
+		mut params: Self::Params<'_, '_>,
+		surface: egui_dock::SurfaceIndex,
+		node: egui_dock::NodeIndex,
+	) {
+		params
+			.managed_view
+			.context_menu(ui, params.managed_view_params, surface, node);
+	}
 }

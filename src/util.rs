@@ -90,6 +90,8 @@ pub trait AppExtensions: BorrowMut<App> {
 
 impl<T> AppExtensions for T where T: BorrowMut<App> {}
 
+/* Individual Types */
+
 pub trait RegisterableType {
 	fn register(app: &mut App);
 }
@@ -104,7 +106,6 @@ macro_rules! impl_registerable_type {
     {
       fn register(app: &mut App) {
         $(
-          println!("registered {}", $name::get_type_registration().type_info().type_path());
           app.register_type::<$name>();
         )*
       }
@@ -113,6 +114,8 @@ macro_rules! impl_registerable_type {
 }
 
 variadics_please::all_tuples!(impl_registerable_type, 0, 12, T);
+
+/* Type Groups */
 
 pub trait RegisterableTypeGroup {
 	fn register(app: &mut App);

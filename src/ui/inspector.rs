@@ -1,3 +1,8 @@
+//! All credit for this goes to https://github.com/jakobhellermann/bevy-inspector-egui
+
+mod data;
+mod options;
+
 use crate::{TypeGroups, TypeList, util::AppExtensions};
 use bevy::prelude::*;
 use std::any::TypeId;
@@ -43,5 +48,16 @@ impl Plugin for InspectorPlugin {
 			// misc
 			TypeList<(bevy::color::Color, core::ops::Range<f32>, TypeId)>,
 		)>();
+
+		Self::configure_inspector(app);
+	}
+}
+
+impl InspectorPlugin {
+	fn configure_inspector(app: &mut App) {
+		let type_registry = app.world().resource::<AppTypeRegistry>();
+		let mut type_registry = type_registry.write();
+
+		data::register_type_data(&mut type_registry);
 	}
 }

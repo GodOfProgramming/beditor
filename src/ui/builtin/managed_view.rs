@@ -117,27 +117,32 @@ where
 		} else {
 			image_size_vec2
 		};
-		let size_in_points_arr = size_in_points.to_array();
 
 		let ui_area = ui.clip_rect();
 
-		let contains_pointer = ui
-			.scope_builder(egui::UiBuilder::new().max_rect(ui_area), |ui| {
-				ui.centered_and_justified(|ui| {
-					ui.image(egui::load::SizedTexture::new(tex, size_in_points_arr));
-				});
-			})
-			.response
-			.contains_pointer();
+		let texture_rect = egui::Rect::from_center_size(
+			ui_area.center(),
+			egui::vec2(size_in_points.x, size_in_points.y),
+		);
 
-		managed_camera.set_hovered(contains_pointer);
+		let response = ui
+			.scope_builder(
+				egui::UiBuilder::new()
+					.max_rect(texture_rect)
+					.layout(egui::Layout::centered_and_justified(
+						egui::Direction::TopDown,
+					)),
+				|ui| {
+					ui.image(egui::load::SizedTexture::new(tex, texture_rect.size()));
+				},
+			)
+			.response;
 
-		let egui_rect =
-			egui::Rect::from_center_size(ui_area.center(), egui::Vec2::from(size_in_points_arr));
+		managed_camera.set_hovered(response.contains_pointer());
 
 		let image_viewport_rect = Rect::from_corners(
-			Vec2::new(egui_rect.min.x, egui_rect.min.y) * ppp,
-			Vec2::new(egui_rect.max.x, egui_rect.max.y) * ppp,
+			Vec2::new(texture_rect.min.x, texture_rect.min.y) * ppp,
+			Vec2::new(texture_rect.max.x, texture_rect.max.y) * ppp,
 		);
 
 		managed_camera.set_viewport(image_viewport_rect);

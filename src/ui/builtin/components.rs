@@ -45,7 +45,7 @@ impl EditorUi for Components {
 		default()
 	}
 
-	fn render(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Self::Params {
 			component_registry,
 			mut searchable_vfs,

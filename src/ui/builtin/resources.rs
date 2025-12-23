@@ -28,7 +28,7 @@ impl EditorUi for Resources {
 		default()
 	}
 
-	fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
 		let type_registry = params.type_registry.read();
 
 		let mut resources: Vec<_> = type_registry

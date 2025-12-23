@@ -64,7 +64,7 @@ impl EditorUi for DebugMenu {
 		Self::default()
 	}
 
-	fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
 		self.diagnostics(ui, &params);
 
 		ui.separator();

@@ -29,7 +29,7 @@ impl EditorUi for Assets {
 		default()
 	}
 
-	fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
 		let app_type_registry = params.set.p1().app_type_registry.clone();
 		let type_registry = app_type_registry.read();
 

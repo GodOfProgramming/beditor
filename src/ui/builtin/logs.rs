@@ -34,7 +34,7 @@ impl EditorUi for Logs {
 		Self::default()
 	}
 
-	fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
 		self.log_level_selector(ui, &mut params);
 
 		ui.separator();

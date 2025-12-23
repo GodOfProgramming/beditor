@@ -48,7 +48,7 @@ impl EditorUiBundle for Hierarchy {
 		default()
 	}
 
-	fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
 		world.resource_scope(|world, mut selection: Mut<InspectorSelection>| {
 			if let InspectorSelection::Entities(selected_entities) = selection.as_mut() {
 				let previous = EntityHashSet::from_iter(selected_entities.iter());

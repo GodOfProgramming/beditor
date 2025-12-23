@@ -159,7 +159,7 @@ pub trait EditorUiBundle: Bundle + GetTypeRegistration + Send + Sync + Sized {
 		Self::NAME.into()
 	}
 
-	fn render(entity: Entity, ui: &mut egui::Ui, world: &mut World);
+	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World);
 
 	fn context_menu(
 		entity: Entity,
@@ -224,7 +224,7 @@ pub trait EditorUi: EditorUiBundle + Component {
 		<Self as EditorUi>::NAME.into()
 	}
 
-	fn render(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>);
+	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>);
 
 	fn context_menu(
 		&mut self,
@@ -289,9 +289,9 @@ where
 		Self::get_entity_mut(entity, world, EditorUi::title)
 	}
 
-	fn render(entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) {
 		Self::get_entity_mut(entity, world, |this, params| {
-			this.render(ui, params);
+			this.ui(ui, params);
 		})
 	}
 
@@ -409,7 +409,7 @@ impl UiManager {
 		self.vtables.insert(PersistentId(T::ID), &T::VTABLE);
 	}
 
-	pub fn render(&mut self, world: &mut World) {
+	pub fn ui(&mut self, world: &mut World) {
 		let Ok(ctx) = world
 			.query::<&mut bevy_egui::EguiContext>()
 			.single_mut(world)
@@ -587,7 +587,7 @@ impl VTable {
 			spawn: Self::spawn::<T>,
 			despawn: Self::despawn::<T>,
 			title: T::title,
-			render: T::render,
+			render: T::ui,
 			context_menu: T::context_menu,
 			handle_tab_response: T::handle_tab_response,
 			on_panel_changed: T::on_panel_changed,

@@ -25,7 +25,7 @@ impl EditorUi for CustomPanel {
 		Self::default()
 	}
 
-	fn render(&mut self, ui: &mut bevy_egui::egui::Ui, _params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut bevy_egui::egui::Ui, _params: Self::Params<'_, '_>) {
 		self.0.ui(ui);
 	}
 }

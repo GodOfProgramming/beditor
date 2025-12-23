@@ -71,7 +71,7 @@ impl EditorUi for ProjectSettingsUi {
 		default()
 	}
 
-	fn render(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
 		let selected = super::settings_display(
 			ui,
 			self.selected_category,

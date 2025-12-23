@@ -132,7 +132,7 @@ impl EditorUi for MissingUi {
 
 	const UNIQUE: bool = true;
 
-	fn render(&mut self, ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {
 		let mut job = LayoutJob::single_section(self.message.to_owned(), egui::TextFormat::default());
 		job.wrap = egui::text::TextWrapping::default();
 		ui.label(job);

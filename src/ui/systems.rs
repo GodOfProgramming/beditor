@@ -70,7 +70,7 @@ pub fn reset_ui_state(mut q_ui_infos: Query<&mut UiState>) {
 
 pub fn render(world: &mut World) {
 	world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-		ui_manager.render(world);
+		ui_manager.ui(world);
 	});
 }
 

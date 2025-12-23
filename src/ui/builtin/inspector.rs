@@ -41,7 +41,7 @@ impl EditorUiBundle for Inspector {
 		default()
 	}
 
-	fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
 		let app_type_registry = world.resource::<AppTypeRegistry>().clone();
 		let type_registry = app_type_registry.read();
 

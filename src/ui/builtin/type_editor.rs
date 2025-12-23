@@ -45,7 +45,7 @@ impl EditorUiBundle for TypeEditor {
 		default()
 	}
 
-	fn render(entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) {
 		let mut entity_mut = world.entity_mut(entity);
 		let Some(mut state) = entity_mut.get_mut::<TypeEditorState>() else {
 			return;

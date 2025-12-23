@@ -39,7 +39,7 @@ impl EditorUiBundle for PrefabsUi {
 		default()
 	}
 
-	fn render(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
 		world.resource_scope(|world, mut vfs_state: Mut<PrefabVfsState>| {
 			let PrefabVfsState {
 				vfs,

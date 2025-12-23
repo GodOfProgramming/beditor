@@ -4,14 +4,14 @@ pub mod log;
 pub mod reflection;
 pub mod storage;
 
-use std::borrow::BorrowMut;
-
 use bevy::{
 	camera::visibility::{Layer as CameraLayer, RenderLayers},
 	ecs::{bundle::NoBundleEffect, system::SystemParam},
 	prelude::*,
+	reflect::{GetTypeRegistration, Reflectable},
 	window::{CursorGrabMode, CursorIcon, CursorOptions},
 };
+use std::borrow::BorrowMut;
 
 pub fn show_cursor(cursor: &mut CursorOptions) {
 	cursor.visible = true;
@@ -81,6 +81,61 @@ pub trait AppExtensions: BorrowMut<App> {
 		}
 		self
 	}
+
+	fn register_types<T: RegisterableType>(&mut self) -> &mut Self {
+		T::register(self.borrow_mut());
+		self
+	}
+
+	fn register_type_groups<T: RegisterableTypeGroup>(&mut self) -> &mut Self {
+		T::register(self.borrow_mut());
+		self
+	}
 }
 
-impl AppExtensions for App {}
+impl<T> AppExtensions for T where T: BorrowMut<App> {}
+
+pub trait RegisterableType {
+	fn register(app: &mut App);
+}
+
+macro_rules! impl_registerable_type {
+  ($(#[$meta:meta])* $($name: ident),*) => {
+    #[allow(unused_variables)]
+    $(#[$meta])*
+    impl<$($name),*> RegisterableType for ($($name,)*)
+    where
+      $($name: GetTypeRegistration),*
+    {
+      fn register(app: &mut App) {
+        $(
+          println!("Registered {}", $name::get_type_registration().type_info().type_path());
+          app.register_type::<$name>();
+        )*
+      }
+    }
+  };
+}
+
+variadics_please::all_tuples!(impl_registerable_type, 0, 12, T);
+
+pub trait RegisterableTypeGroup {
+	fn register(app: &mut App);
+}
+
+macro_rules! impl_registerable_type_group {
+  ($(#[$meta:meta])* $($name: ident),*) => {
+    #[allow(unused_variables)]
+    $(#[$meta])*
+    impl<$($name),*> RegisterableTypeGroup for ($($name,)*)
+    where
+      $($name: RegisterableType),*
+    {
+      fn register(app: &mut App) {
+        $($name::register(app);)*
+      }
+    }
+  };
+}
+
+variadics_please::all_tuples!(impl_registerable_type_group, 0, 12, T);

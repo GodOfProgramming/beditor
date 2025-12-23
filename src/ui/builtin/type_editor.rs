@@ -216,6 +216,7 @@ fn on_editor_state_insert(
 		.collect();
 }
 
+// for future me, moving this to ui() is not worth it
 fn show_dialogs(
 	mut commands: Commands,
 	mut q_states: Query<(Entity, &mut TypeEditorState)>,

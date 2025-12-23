@@ -146,7 +146,7 @@ fn despawn_editor_cameras(mut commands: Commands, q_cams: Query<Entity, With<Edi
   GizmoCamera = GizmoCamera,
   AxesGizmoSyncCamera = AxesGizmoSyncCamera,
 )]
-#[id("c910a397-a017-4a29-99bc-6282b4b1a214")]
+#[id("00000000-0000-0000-0000-000000000000")]
 pub struct EditorCamera;
 
 #[derive(Component)]

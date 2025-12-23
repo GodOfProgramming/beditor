@@ -4,7 +4,10 @@ pub mod view3d;
 
 use crate::{
 	EditorState, input,
-	ui::{builtin::managed_view::EditorManagedView, misc::UiState},
+	ui::{
+		builtin::{editor_view::EditorView, managed_view::EditorManagedView},
+		misc::UiState,
+	},
 	view::cam::{ActiveEditorCamera, EditorCamPlugin, EditorCamera},
 };
 use bevy::{prelude::*, reflect::Reflectable};
@@ -90,7 +93,7 @@ enum CameraInputSystems {
 }
 
 pub fn mouse_hovered_in_editor_view(
-	q_editor_view_ui_info: Query<&UiState, With<EditorManagedView<EditorCamera>>>,
+	q_editor_view_ui_info: Query<&UiState, With<EditorView>>,
 ) -> bool {
 	q_editor_view_ui_info.iter().any(UiState::hovered)
 }

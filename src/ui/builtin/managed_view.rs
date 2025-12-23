@@ -55,7 +55,7 @@ where
 
 	const POPOUT: bool = true;
 
-	const SCROLL_BARS: [bool; 2] = [true, true];
+	const SCROLL_BARS: [bool; 2] = [false, false];
 
 	type Params<'w, 's> = Params<'w, 's, C>;
 
@@ -103,12 +103,12 @@ where
 			return;
 		};
 
-		let ppp = ui.ctx().pixels_per_point();
 		let Some(image) = images.get(target.handle.id()) else {
 			ui.label("No image");
 			return;
 		};
 
+		let ppp = ui.ctx().pixels_per_point();
 		let image_size = image.size();
 		let image_size_vec2 = image_size.as_vec2();
 		let tex_size = image_size_vec2 / ppp;
@@ -122,16 +122,17 @@ where
 
 		let ui_area = ui.clip_rect();
 
-		let inner_response = ui.centered_and_justified(|ui| {
-			ui.image(egui::load::SizedTexture::new(tex, tex_size_arr));
+		ui.scope_builder(egui::UiBuilder::new().max_rect(ui_area), |ui| {
+			ui.centered_and_justified(|ui| {
+				ui.image(egui::load::SizedTexture::new(tex, tex_size_arr));
+			});
 		});
 
-		let outer_rect = inner_response.response.rect;
-		let rect = egui::Rect::from_center_size(outer_rect.center(), egui::Vec2::from(tex_size_arr));
+		let egui_rect = egui::Rect::from_center_size(ui_area.center(), egui::Vec2::from(tex_size_arr));
 
 		let image_viewport_rect = Rect::from_corners(
-			Vec2::new(rect.min.x, rect.min.y) * ppp,
-			Vec2::new(rect.max.x, rect.max.y) * ppp,
+			Vec2::new(egui_rect.min.x, egui_rect.min.y) * ppp,
+			Vec2::new(egui_rect.max.x, egui_rect.max.y) * ppp,
 		);
 
 		managed_camera.set_viewport(image_viewport_rect);

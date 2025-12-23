@@ -9,6 +9,7 @@ use crate::{
 	EditorState, RuntimeSettings, Settings,
 	ui::{
 		builtin::{
+			editor_view::EditorView,
 			managed_view::EditorManagedView,
 			settings::{EditorSettingsUi, ProjectSettingsUi},
 		},
@@ -345,7 +346,7 @@ impl UiManager {
 		this.register::<Components>(app);
 		this.register::<DebugMenu>(app);
 		this.register::<EditorSettingsUi>(app);
-		this.register::<EditorManagedView<EditorCamera>>(app);
+		this.register::<EditorView>(app);
 		this.register::<Hierarchy>(app);
 		this.register::<Inspector>(app);
 		this.register::<Logs>(app);
@@ -502,9 +503,7 @@ impl UiManager {
 	}
 
 	fn default_dock_state(&self, world: &mut World) -> DockState<TabState> {
-		let mut state = DockState::new(vec![TabState::spawn::<EditorManagedView<EditorCamera>>(
-			world,
-		)]);
+		let mut state = DockState::new(vec![TabState::spawn::<EditorView>(world)]);
 
 		let tree = state.main_surface_mut();
 

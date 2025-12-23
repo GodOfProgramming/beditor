@@ -274,12 +274,6 @@ fn on_new_ctx(
 			"Restored style of {}",
 			editor_settings.appearance_settings.current_theme
 		);
-	} else {
-		for theme in [egui::Theme::Dark, egui::Theme::Light] {
-			ctx.style_mut_of(theme, |style| {
-				style.spacing.window_margin = egui::Margin::same(0);
-			});
-		}
 	}
 }
 

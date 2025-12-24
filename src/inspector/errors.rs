@@ -9,11 +9,11 @@ use std::{any::TypeId, borrow::Cow};
 pub enum Error {
 	NoAccessToResource,
 	NoAccessToComponent(Entity),
-	ResourceDoesNotExist(TypeId),
+	ResourceDoesNotExist,
 	ComponentDoesNotExist(Entity),
-	NoComponentId(TypeId),
-	NoTypeRegistration(TypeId),
-	NoTypeData(TypeId, &'static str),
+	NoComponentId,
+	NoTypeRegistration,
+	NoTypeData(&'static str),
 }
 
 impl Error {
@@ -22,10 +22,10 @@ impl Error {
 			Error::NoAccessToResource => no_access_resource(ui, name_of_type),
 			Error::NoAccessToComponent(entity) => no_access_component(ui, entity, name_of_type),
 			Error::ComponentDoesNotExist(entity) => component_does_not_exist(ui, entity, name_of_type),
-			Error::ResourceDoesNotExist(_) => resource_does_not_exist(ui, name_of_type),
-			Error::NoComponentId(_) => no_component_id(ui, name_of_type),
-			Error::NoTypeRegistration(_) => reflect::not_in_type_registry(ui, name_of_type),
-			Error::NoTypeData(_, data) => no_type_data(ui, name_of_type, data),
+			Error::ResourceDoesNotExist => resource_does_not_exist(ui, name_of_type),
+			Error::NoComponentId => no_component_id(ui, name_of_type),
+			Error::NoTypeRegistration => reflect::not_in_type_registry(ui, name_of_type),
+			Error::NoTypeData(data) => no_type_data(ui, name_of_type, data),
 		}
 	}
 }

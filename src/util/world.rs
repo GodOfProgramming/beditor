@@ -298,7 +298,7 @@ impl<'w> RestrictedWorldView<'w> {
 			self
 				.world()
 				.get_resource_mut::<R>()
-				.ok_or(Error::ResourceDoesNotExist(type_id))
+				.ok_or(Error::ResourceDoesNotExist)
 		}
 	}
 
@@ -320,14 +320,14 @@ impl<'w> RestrictedWorldView<'w> {
 			.world()
 			.components()
 			.get_resource_id(type_id)
-			.ok_or(Error::ResourceDoesNotExist(type_id))?;
+			.ok_or(Error::ResourceDoesNotExist)?;
 
 		// SAFETY: we have access to `type_id` and borrow `&mut self`
 		let value = unsafe {
 			self
 				.world()
 				.get_resource_mut_by_id(component_id)
-				.ok_or(Error::ResourceDoesNotExist(type_id))?
+				.ok_or(Error::ResourceDoesNotExist)?
 		};
 
 		// SAFETY: value is of type type_id
@@ -356,7 +356,7 @@ impl<'w> RestrictedWorldView<'w> {
 			.world()
 			.components()
 			.get_id(component)
-			.ok_or(Error::NoComponentId(component))?;
+			.ok_or(Error::NoComponentId)?;
 
 		let entity_ref = self
 			.world()
@@ -398,7 +398,7 @@ impl<'w> RestrictedWorldView<'w> {
 			.world()
 			.components()
 			.get_id(component)
-			.ok_or(Error::NoComponentId(component))?;
+			.ok_or(Error::NoComponentId)?;
 
 		// SAFETY: we have access to (entity, component) and caller ensures distinct access
 		let value = unsafe {
@@ -423,10 +423,10 @@ unsafe fn mut_untyped_to_reflect<'a>(
 ) -> Result<Mut<'a, dyn Reflect>, Error> {
 	let registration = type_registry
 		.get(type_id)
-		.ok_or(Error::NoTypeRegistration(type_id))?;
+		.ok_or(Error::NoTypeRegistration)?;
 	let reflect_from_ptr = registration
 		.data::<ReflectFromPtr>()
-		.ok_or(Error::NoTypeData(type_id, "ReflectFromPtr"))?;
+		.ok_or(Error::NoTypeData("ReflectFromPtr"))?;
 
 	assert_eq!(reflect_from_ptr.type_id(), type_id);
 
@@ -446,10 +446,10 @@ unsafe fn ptr_untyped_to_reflect<'a>(
 ) -> Result<&'a dyn Reflect, Error> {
 	let registration = type_registry
 		.get(type_id)
-		.ok_or(Error::NoTypeRegistration(type_id))?;
+		.ok_or(Error::NoTypeRegistration)?;
 	let reflect_from_ptr = registration
 		.data::<ReflectFromPtr>()
-		.ok_or(Error::NoTypeData(type_id, "ReflectFromPtr"))?;
+		.ok_or(Error::NoTypeData("ReflectFromPtr"))?;
 
 	assert_eq!(reflect_from_ptr.type_id(), type_id);
 

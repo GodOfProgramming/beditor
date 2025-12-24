@@ -168,7 +168,7 @@ pub fn ui_for_entities_shared_components(
 		return;
 	};
 
-	let Ok(mut components) = components_of_entity(&mut world.into(), first) else {
+	let Ok(mut components) = components_of_entity(&world.into(), first) else {
 		return errors::entity_does_not_exist(ui, first);
 	};
 

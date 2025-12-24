@@ -12,7 +12,6 @@ use crate::{
 };
 use bevy::{
 	camera::visibility::RenderLayers,
-	ecs::world::CommandQueue,
 	gizmos::config::GizmoConfigStore,
 	mesh::Indices,
 	platform::collections::{HashMap, HashSet, hash_map},

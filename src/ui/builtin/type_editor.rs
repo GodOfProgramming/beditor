@@ -1,5 +1,6 @@
 use crate::{
 	EditorUiBundle,
+	inspector::ui::WorldExtensions,
 	ui::{TabState, UiManager, widgets},
 	util::reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 };
@@ -102,7 +103,7 @@ impl EditorUiBundle for TypeEditor {
 
 		ui.separator();
 
-		bevy_inspector_egui::bevy_inspector::ui_for_value(&mut **value, ui, world);
+		world.ui_for_value(ui, &mut **value);
 
 		if let Some(msg) = message {
 			world.write_message(msg);

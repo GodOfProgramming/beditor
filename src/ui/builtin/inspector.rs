@@ -1,9 +1,11 @@
 use std::any::TypeId;
 
 use super::BundleDnd;
-use crate::ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui};
+use crate::{
+	inspector::ui::WorldExtensions,
+	ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui},
+};
 use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
-use bevy_inspector_egui::bevy_inspector::by_type_id::{ui_for_asset, ui_for_resource};
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
@@ -52,11 +54,10 @@ impl EditorUiBundle for Inspector {
 				InspectorSelection::Entities(selected_entities) => match selected_entities.as_slice() {
 					&[entity] => {
 						Self::dnd_ui([entity], world, ui, |world, ui| {
-							bevy_inspector_egui::bevy_inspector::mods::ui_for_entity(
-								world,
+							world.ui_for_entity(
 								entity,
 								ui,
-								Some(|ui, entity, world, type_registry, component_id, type_id| {
+								|ui, entity, world, type_registry, component_id, type_id| {
 									context_menu(
 										ui,
 										std::iter::once(entity),
@@ -65,40 +66,37 @@ impl EditorUiBundle for Inspector {
 										component_id,
 										type_id,
 									);
-								}),
+								},
 								highlight_changes,
 							);
 						});
 					}
 					entities => {
 						Self::dnd_ui(entities, world, ui, |world, ui| {
-							bevy_inspector_egui::bevy_inspector::mods::ui_for_entities_shared_components(
-								world,
-								entities,
+							world.ui_for_entities(
 								ui,
-								Some(
-									|ui, entities, world, type_registry, component_id, type_id| {
-										context_menu(
-											ui,
-											entities.iter().cloned(),
-											world,
-											type_registry,
-											component_id,
-											type_id,
-										);
-									},
-								),
+								entities,
+								|ui, entities, world, type_registry, component_id, type_id| {
+									context_menu(
+										ui,
+										entities.iter().cloned(),
+										world,
+										type_registry,
+										component_id,
+										type_id,
+									);
+								},
 							);
 						});
 					}
 				},
 				InspectorSelection::Resource(type_id, name) => {
 					ui.label(name);
-					ui_for_resource(world, *type_id, ui, name, &type_registry)
+					world.ui_for_resource_type(ui, &type_registry, *type_id, name);
 				}
 				InspectorSelection::Asset(type_id, name, handle) => {
 					ui.label(name);
-					ui_for_asset(world, *type_id, *handle, ui, &type_registry);
+					world.ui_for_asset(ui, &type_registry, *type_id, *handle);
 				}
 			},
 		);

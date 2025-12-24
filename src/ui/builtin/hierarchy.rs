@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+	inspector,
 	ui::{
 		EditorUiBundle, InspectorSelection, SelectedEntities, builtin::BundleDnd,
 		events::SyncGizmoTargetsEvent, notifications::Notification,
@@ -8,7 +9,6 @@ use crate::{
 	util::reflection,
 };
 use bevy::{ecs::entity::EntityHashSet, prelude::*};
-use bevy_inspector_egui::bevy_inspector;
 use egui_file_dialog::FileDialog;
 use uuid::{Uuid, uuid};
 
@@ -80,7 +80,7 @@ impl Hierarchy {
 		let type_registry = app_type_registry.read();
 
 		let ctx_menu = &mut Self::context_menu;
-		let mut hierarchy = bevy_inspector::hierarchy::Hierarchy {
+		let mut hierarchy = inspector::ui::hierarchy::Hierarchy {
 			world,
 			type_registry: &type_registry,
 			selected,
@@ -168,7 +168,7 @@ impl ReparentMessage {
 
 fn select_entity(selection: &mut InspectorSelection, entity: Entity) {
 	let mut entities = SelectedEntities::default();
-	entities.0.select_replace(entity);
+	entities.select_replace(entity);
 	*selection = InspectorSelection::Entities(entities)
 }
 

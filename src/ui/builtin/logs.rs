@@ -1,9 +1,9 @@
 use crate::{
 	EditorUi,
+	inspector::ui::TypeRegistryExtensions,
 	util::log::{ChangeLogLevelEvent, EventCollectorHandle, LogLevel, LogLevelChangedEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_inspector_egui::reflect_inspector::ui_for_value;
 use uuid::{Uuid, uuid};
 
 #[derive(Default, Component, Reflect)]
@@ -51,7 +51,7 @@ impl Logs {
 
 				ui.label("Log Level");
 				let mut log_level = self.log_level;
-				if ui_for_value(&mut log_level, ui, &type_registry) {
+				if type_registry.ui_for_value(ui, &mut log_level) {
 					params.commands.trigger(ChangeLogLevelEvent::new(log_level));
 				}
 			});

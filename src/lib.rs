@@ -4,6 +4,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod input;
+mod inspector;
 mod ui;
 mod util;
 mod view;
@@ -11,6 +12,7 @@ mod view;
 use std::{path::PathBuf, sync::LazyLock};
 
 use crate::{
+	inspector::InspectorPlugin,
 	ui::builtin::managed_view::EditorManagedView,
 	util::{
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
@@ -56,7 +58,6 @@ pub mod prelude {
 		},
 	};
 	pub use bevy_egui;
-	pub use bevy_inspector_egui as inspector;
 	pub use brefabs;
 	pub use macros::{self, Identifiable};
 	pub use persistent_id::{self, Identifiable};
@@ -231,6 +232,7 @@ impl Plugin for EditorPlugin {
 				ReflectionExtensionsPlugin,
 				TransformGizmoPlugin,
 				AxesGizmoPlugin::default(),
+				InspectorPlugin,
 			))
 			.add_observer(EnableGameUiEvent::handle)
 			.add_observer(DisableGameUiEvent::handle)
@@ -314,7 +316,7 @@ fn finish_exit(mut app_exit: MessageWriter<AppExit>) {
 
 fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 	for mut cursor in &mut q_cursors {
-		util::show_cursor(&mut cursor);
+		util::window::show_cursor(&mut cursor);
 	}
 }
 

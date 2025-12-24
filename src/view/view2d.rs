@@ -86,7 +86,7 @@ pub(super) fn mouse_input_actions(
 	let (window_entity, window) = *primary_window;
 	for action_state in &q_action_states {
 		if action_state.just_pressed(&EditorActions::PanCamera) {
-			util::set_cursor_icon(&mut commands, window_entity, SystemCursorIcon::Grab);
+			util::window::set_cursor_icon(&mut commands, window_entity, SystemCursorIcon::Grab);
 
 			for mut cam_state in &mut q_cam_states {
 				cam_state.pan_viewport_start = window.cursor_position();
@@ -105,7 +105,7 @@ pub(super) fn released_mouse_input_actions(
 ) {
 	for action_state in &q_action_states {
 		if action_state.just_released(&EditorActions::PanCamera) {
-			util::set_cursor_icon(&mut commands, *primary_window, SystemCursorIcon::default());
+			util::window::set_cursor_icon(&mut commands, *primary_window, SystemCursorIcon::default());
 
 			pan_state.set(PanState::Inactive);
 		}

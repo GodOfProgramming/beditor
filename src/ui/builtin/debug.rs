@@ -1,5 +1,6 @@
 use crate::{
 	RuntimeSettings,
+	inspector::ui::TypeRegistryExtensions,
 	ui::{EditorUi, builtin::inspector::InspectorSettings},
 	util::log::LogLevel,
 	view::cam::{RenderCameras, SyncRenderCamerasEvent},
@@ -91,11 +92,7 @@ impl EditorUi for DebugMenu {
 		);
 
 		let type_registry = params.type_registry.read();
-		bevy_inspector_egui::reflect_inspector::ui_for_value(
-			&mut *params.editor_settings,
-			ui,
-			&type_registry,
-		);
+		type_registry.ui_for_value(ui, &mut *params.editor_settings);
 	}
 }
 

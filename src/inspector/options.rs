@@ -1,7 +1,166 @@
-use bevy::prelude::*;
-use std::collections::VecDeque;
+use bevy::{
+	platform::collections::HashMap,
+	prelude::*,
+	reflect::{self, FromType, GetTypeRegistration, TypeData, TypeInfo, TypeRegistry, VariantInfo},
+};
+use std::{any::Any, collections::VecDeque, fmt::Debug};
 
-use crate::ui::inspector::data::{InspectorOptions, InspectorOptionsType, Target};
+use crate::inspector::ui::components::EntityComponentContextMenu;
+
+#[derive(Default)]
+pub struct InspectorOptions {
+	options: HashMap<Target, Box<dyn TypeData>>,
+}
+
+impl Debug for InspectorOptions {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut options = f.debug_struct("InspectorOptions");
+		for entry in self.options.keys() {
+			options.field(&format!("{entry:?}"), &"..");
+		}
+		options.finish()
+	}
+}
+
+impl Clone for InspectorOptions {
+	fn clone(&self) -> Self {
+		Self {
+			options: self
+				.options
+				.iter()
+				.map(|(target, data)| (*target, TypeData::clone_type_data(&**data)))
+				.collect(),
+		}
+	}
+}
+impl InspectorOptions {
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	pub fn insert<T: TypeData>(&mut self, path: Target, options: T) {
+		self.options.insert(path, Box::new(options));
+	}
+	pub fn insert_boxed(&mut self, path: Target, options: Box<dyn TypeData>) {
+		self.options.insert(path, options);
+	}
+	pub fn get(&self, path: Target) -> Option<&dyn Any> {
+		self.options.get(&path).map(|value| value.as_any())
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item = (Target, &dyn TypeData)> + '_ {
+		self.options.iter().map(|(path, data)| (*path, &**data))
+	}
+}
+
+#[derive(Clone)]
+pub struct ReflectInspectorOptions(pub InspectorOptions);
+
+impl<T> FromType<T> for ReflectInspectorOptions
+where
+	InspectorOptions: FromType<T>,
+{
+	fn from_type() -> Self {
+		ReflectInspectorOptions(InspectorOptions::from_type())
+	}
+}
+
+pub trait InspectorOptionsType {
+	type DeriveOptions: Default;
+	type Options: TypeData + Clone;
+	fn options_from_derive(options: Self::DeriveOptions) -> Self::Options;
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
+#[non_exhaustive]
+pub enum Target {
+	Field(usize),
+	VariantField {
+		variant_index: usize,
+		field_index: usize,
+	},
+}
+
+pub fn insert_options_struct<T: 'static + GetTypeRegistration + reflect::Struct>(
+	type_registry: &mut TypeRegistry,
+	fields: &[(&'static str, &dyn TypeData)],
+) {
+	type_registry.register::<T>();
+
+	let Some(registration) = type_registry.get_mut(std::any::TypeId::of::<T>()) else {
+		unreachable!("Just registered the type");
+	};
+
+	if registration.data::<ReflectInspectorOptions>().is_none() {
+		let mut options = InspectorOptions::new();
+
+		for (field, data) in fields {
+			let info = match registration.type_info() {
+				TypeInfo::Struct(info) => info,
+				_ => unreachable!("Struct reflect restriction"),
+			};
+
+			let Some(field_index) = info.index_of(field) else {
+				let name = T::get_type_registration().type_info().type_path();
+				panic!("Field '{field}' does not exist on type {name}");
+			};
+
+			options.insert_boxed(Target::Field(field_index), TypeData::clone_type_data(*data));
+		}
+
+		registration.insert(ReflectInspectorOptions(options));
+	}
+}
+
+pub fn insert_options_enum<T: 'static + GetTypeRegistration + reflect::Enum>(
+	type_registry: &mut TypeRegistry,
+	fields: &[((&'static str, &'static str), &dyn TypeData)],
+) {
+	type_registry.register::<T>();
+
+	let Some(registration) = type_registry.get_mut(std::any::TypeId::of::<T>()) else {
+		unreachable!("Just registered the type");
+	};
+
+	if registration.data::<ReflectInspectorOptions>().is_none() {
+		let mut options = InspectorOptions::new();
+		for ((variant, field), data) in fields {
+			let info = match registration.type_info() {
+				TypeInfo::Enum(info) => info,
+				_ => unreachable!("Enum reflect restriction"),
+			};
+			let variant_index = info.index_of(variant).unwrap();
+			let field_index = match info.variant_at(variant_index).unwrap() {
+				VariantInfo::Struct(s) => {
+					let Some(i) = s.index_of(field) else {
+						let name = T::get_type_registration().type_info().type_path();
+						panic!("Could not find field '{field}' on type {name}::{variant}");
+					};
+					i
+				}
+				VariantInfo::Tuple(_) => {
+					let Ok(i) = field.parse() else {
+						let name = T::get_type_registration().type_info().type_path();
+						panic!("Could not find field '{field}' on type {name}::{variant}");
+					};
+					i
+				}
+				VariantInfo::Unit(_) => {
+					let name = T::get_type_registration().type_info().type_path();
+					panic!("Tried to access field '{field}' on unit type {name}::{variant}");
+				}
+			};
+			options.insert_boxed(
+				Target::VariantField {
+					variant_index,
+					field_index,
+				},
+				TypeData::clone_type_data(*data),
+			);
+		}
+		registration.insert(ReflectInspectorOptions(options));
+	}
+}
 
 #[derive(Clone)]
 #[non_exhaustive]
@@ -158,6 +317,7 @@ pub enum QuatDisplay {
 pub struct EntityOptions {
 	pub display: EntityDisplay,
 	pub despawnable: bool,
+	pub context_menu: EntityComponentContextMenu,
 }
 
 impl Default for EntityOptions {
@@ -165,6 +325,7 @@ impl Default for EntityOptions {
 		Self {
 			display: EntityDisplay::default(),
 			despawnable: true,
+			context_menu: |_, _, _, _, _, _| {},
 		}
 	}
 }

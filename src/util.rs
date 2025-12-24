@@ -1,42 +1,45 @@
 pub mod components;
 pub mod debug;
+pub mod egui;
+pub mod entity;
 pub mod log;
 pub mod reflection;
 pub mod storage;
+pub mod window;
+pub mod world;
 
 use bevy::{
 	camera::visibility::{Layer as CameraLayer, RenderLayers},
 	ecs::{bundle::NoBundleEffect, system::SystemParam},
 	prelude::*,
 	reflect::GetTypeRegistration,
-	window::{CursorGrabMode, CursorIcon, CursorOptions},
 };
-use std::{borrow::BorrowMut, marker::PhantomData};
+use std::{
+	borrow::{Borrow, BorrowMut},
+	marker::PhantomData,
+};
 
-pub fn show_cursor(cursor: &mut CursorOptions) {
-	cursor.visible = true;
-	cursor.grab_mode = CursorGrabMode::None;
+pub fn pretty_type_name<T>() -> String {
+	format!("{:?}", disqualified::ShortName::of::<T>())
+}
+pub fn pretty_type_name_str(val: &str) -> String {
+	format!("{:?}", disqualified::ShortName(val))
 }
 
-pub fn hide_cursor(cursor: &mut CursorOptions) {
-	cursor.visible = false;
-	cursor.grab_mode = CursorGrabMode::Locked;
-}
-
-pub fn set_cursor_icon(commands: &mut Commands, entity: Entity, cursor: impl Into<CursorIcon>) {
-	commands.entity(entity).insert(cursor.into());
+// Replace this when || becomes an operator
+pub fn or(a: bool, b: bool) -> bool {
+	a || b
 }
 
 #[allow(unused)]
-pub trait WindowExtensions {
-	fn center(&self) -> [f32; 2];
-}
-
-impl WindowExtensions for Window {
+pub trait WindowExtensions: Borrow<Window> {
 	fn center(&self) -> [f32; 2] {
-		[self.width() / 2.0, self.height() / 2.0]
+		let window = self.borrow();
+		[window.width() / 2.0, window.height() / 2.0]
 	}
 }
+
+impl<T> WindowExtensions for T where T: Borrow<Window> {}
 
 #[derive(Resource, Reflect, Default)]
 #[reflect(Resource, Default)]

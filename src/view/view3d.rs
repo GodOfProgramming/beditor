@@ -68,7 +68,7 @@ pub(super) fn mouse_input_actions(
 
 		if orbit_active || pan_active {
 			for mut cursor in &mut q_cursors {
-				util::hide_cursor(&mut cursor);
+				util::window::hide_cursor(&mut cursor);
 			}
 		}
 
@@ -96,7 +96,7 @@ pub(super) fn released_mouse_input_actions(
 			|| (pan_inactive && action_state.released(&EditorActions::OrbitCamera))
 		{
 			for mut cursor in &mut q_cursors {
-				util::show_cursor(&mut cursor);
+				util::window::show_cursor(&mut cursor);
 			}
 		}
 

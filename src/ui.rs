@@ -1,6 +1,5 @@
 pub mod builtin;
 pub mod events;
-pub mod inspector;
 pub mod misc;
 pub mod notifications;
 mod systems;
@@ -8,13 +7,13 @@ pub mod widgets;
 
 use crate::{
 	EditorState, RuntimeSettings, Settings,
+	inspector::ui::hierarchy::SelectedEntities,
 	ui::{
 		builtin::{
 			editor_view::EditorView,
 			settings::{EditorSettingsUi, ProjectSettingsUi},
 		},
 		events::{OpenSingleUiMessage, OpenUiMessage, SyncGizmoTargetsEvent},
-		inspector::InspectorPlugin,
 	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
 	view::cam::EditorCamera,
@@ -33,7 +32,6 @@ use bevy::{
 	reflect::GetTypeRegistration,
 };
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
-use bevy_inspector_egui::{DefaultInspectorConfigPlugin, bevy_inspector};
 use builtin::{
 	assets::Assets, components::Components, debug::DebugMenu, hierarchy::Hierarchy,
 	inspector::Inspector, logs::Logs, menu_bar, prefabs::PrefabsUi, resources::Resources,
@@ -90,12 +88,7 @@ impl Plugin for UiPlugin {
 			.add_message::<OpenUiMessage>()
 			.add_message::<OpenSingleUiMessage>()
 			.configure_sets(EguiPrimaryContextPass, EditorUiSystems)
-			.add_plugins((
-				EguiPlugin::default(),
-				DefaultInspectorConfigPlugin,
-				NotificationPlugin,
-			))
-			.add_plugins(InspectorPlugin)
+			.add_plugins((EguiPlugin::default(), NotificationPlugin))
 			.add_observer(systems::on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
 			.add_observer(SyncGizmoTargetsEvent::on_event)
@@ -798,9 +791,6 @@ fn handle_click_events(
 
 	commands.trigger(event);
 }
-
-#[derive(Default, Deref, DerefMut, Debug)]
-pub struct SelectedEntities(bevy_inspector::hierarchy::SelectedEntities);
 
 /// Component that stores all ui components as children for organization
 #[derive(Component)]

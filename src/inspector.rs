@@ -1,7 +1,9 @@
 //! All credit for this goes to https://github.com/jakobhellermann/bevy-inspector-egui
 
 mod data;
-mod options;
+pub mod errors;
+pub mod options;
+pub mod ui;
 
 use crate::{TypeGroups, TypeList, util::AppExtensions};
 use bevy::prelude::*;

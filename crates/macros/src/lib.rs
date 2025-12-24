@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use proc_macro_crate::{FoundCrate, crate_name};
 use proc_macro_error::{abort, proc_macro_error};
-use proc_macro2::{Literal, Span, TokenTree};
+use proc_macro2::{Literal, Span};
 use quote::quote;
 use syn::{
 	DeriveInput, Ident, Lit, LitInt, parse::Parse, parse_macro_input, punctuated::Punctuated, token,

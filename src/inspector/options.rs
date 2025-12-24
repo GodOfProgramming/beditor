@@ -5,8 +5,6 @@ use bevy::{
 };
 use std::{any::Any, collections::VecDeque, fmt::Debug};
 
-use crate::inspector::ui::components::EntityComponentContextMenu;
-
 #[derive(Default)]
 pub struct InspectorOptions {
 	options: HashMap<Target, Box<dyn TypeData>>,
@@ -317,7 +315,6 @@ pub enum QuatDisplay {
 pub struct EntityOptions {
 	pub display: EntityDisplay,
 	pub despawnable: bool,
-	pub context_menu: EntityComponentContextMenu,
 	pub highlight_changes: bool,
 }
 
@@ -326,7 +323,6 @@ impl Default for EntityOptions {
 		Self {
 			display: EntityDisplay::default(),
 			despawnable: true,
-			context_menu: |_, _, _, _, _, _| {},
 			highlight_changes: false,
 		}
 	}

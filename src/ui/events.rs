@@ -98,12 +98,16 @@ pub struct SyncGizmoTargetsEvent {
 
 impl SyncGizmoTargetsEvent {
 	pub fn on_event(event: On<Self>, mut commands: Commands) {
-		for entity in event.current.iter() {
-			commands.entity(*entity).insert(GizmoTarget::default());
+		for &entity in event.current.iter() {
+			if let Ok(mut entity) = commands.get_entity(entity) {
+				entity.insert(GizmoTarget::default());
+			}
 		}
 
-		for entity in event.removed.iter() {
-			commands.entity(*entity).remove::<GizmoTarget>();
+		for &entity in event.removed.iter() {
+			if let Ok(mut entity) = commands.get_entity(entity) {
+				entity.remove::<GizmoTarget>();
+			}
 		}
 	}
 }

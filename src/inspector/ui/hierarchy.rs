@@ -1,104 +1,35 @@
 use super::{EntityFilter, Filter};
+use crate::util::egui::{CollapsingResponseExtensions, ResponseConditions};
 use crate::util::entity;
-use bevy::reflect::TypeRegistry;
 use bevy::{ecs::query::QueryFilter, prelude::*};
-use egui::{CollapsingHeader, RichText};
+use egui::{CollapsingHeader, CollapsingResponse, RichText};
 use std::collections::HashSet;
 use std::sync::Arc;
 
 pub struct UnusedPayload;
 
-type DndHandlerFn<P> = fn(ui: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc<P>);
+pub type DndHandlerFn<P> =
+	fn(ui: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc<P>);
 
-/// Display UI of the entity hierarchy.
-///
-/// Returns `true` if a new entity was selected.
-pub fn hierarchy_ui(world: &mut World, ui: &mut egui::Ui, selected: &mut SelectedEntities) -> bool {
-	let type_registry = world.resource::<AppTypeRegistry>().clone();
-	let type_registry = type_registry.read();
-
-	Hierarchy {
-		world,
-		type_registry: &type_registry,
-		selected,
-		context_menu: None,
-		shortcircuit_entity: None,
-		extra_state: &mut (),
-		dnd: Option::<DndHandlerFn<UnusedPayload>>::None,
-	}
-	.show::<()>(ui)
-}
-
-/// Display UI of the entity hierarchy with a [QueryFilter].
-///
-/// Returns `true` if a new entity was selected.
-pub fn hierarchy_ui_filtered<QF>(
-	world: &mut World,
-	ui: &mut egui::Ui,
-	selected: &mut SelectedEntities,
-) -> bool
+pub struct Hierarchy<'a, P = UnusedPayload>
 where
-	QF: QueryFilter,
-{
-	let type_registry = world.resource::<AppTypeRegistry>().clone();
-	let type_registry = type_registry.read();
-
-	Hierarchy {
-		world,
-		type_registry: &type_registry,
-		selected,
-		context_menu: None,
-		shortcircuit_entity: None,
-		extra_state: &mut (),
-		dnd: Option::<DndHandlerFn<UnusedPayload>>::None,
-	}
-	.show::<QF>(ui)
-}
-
-pub struct Hierarchy<'a, T = (), P = UnusedPayload>
-where
-	P: Send + Sync + 'static,
+	P: 'static + Send + Sync,
 {
 	pub world: &'a mut World,
-	pub type_registry: &'a TypeRegistry,
 	pub selected: &'a mut SelectedEntities,
-	pub context_menu: Option<&'a mut dyn FnMut(&mut egui::Ui, Entity, &mut World, &mut T)>,
-	pub shortcircuit_entity:
-		Option<&'a mut dyn FnMut(&mut egui::Ui, Entity, &mut World, &mut T) -> bool>,
-	pub extra_state: &'a mut T,
-	pub dnd: Option<DndHandlerFn<P>>,
+	pub dnd: DndHandlerFn<P>,
 }
 
-impl<T, P> Hierarchy<'_, T, P>
+impl<P> Hierarchy<'_, P>
 where
-	P: Send + Sync + 'static,
+	P: 'static + Send + Sync,
 {
-	pub fn show<QF>(&mut self, ui: &mut egui::Ui) -> bool
-	where
-		QF: QueryFilter,
-	{
-		let filter: Filter = Filter::all();
-		self._show::<QF, _>(ui, filter)
-	}
-	pub fn show_with_default_filter<QF>(&mut self, ui: &mut egui::Ui) -> bool
+	pub fn show<QF>(&mut self, ui: &mut egui::Ui) -> Option<CollapsingResponse<Entity>>
 	where
 		QF: QueryFilter,
 	{
 		let filter: Filter = Filter::from_ui(ui, egui::Id::new("default_hierarchy_filter"));
-		self._show::<QF, _>(ui, filter)
-	}
-	pub fn show_with_filter<QF, F>(&mut self, ui: &mut egui::Ui, filter: F) -> bool
-	where
-		QF: QueryFilter,
-		F: EntityFilter,
-	{
-		self._show::<QF, F>(ui, filter)
-	}
-	fn _show<QF, F>(&mut self, ui: &mut egui::Ui, filter: F) -> bool
-	where
-		QF: QueryFilter,
-		F: EntityFilter,
-	{
+
 		let mut root_query = self
 			.world
 			.query_filtered::<Entity, (Without<ChildOf>, QF)>();
@@ -118,10 +49,12 @@ where
 		filter.filter_entities(self.world, &mut entities);
 		entities.sort();
 
-		let mut selected = false;
+		let mut selected = None;
+
 		for &entity in &entities {
-			selected |= self.entity_ui(ui, entity, &always_open, &entities, &filter);
+			selected.maybe_take(self.entity_ui(ui, entity, &always_open, &entities, &filter));
 		}
+
 		selected
 	}
 
@@ -132,11 +65,11 @@ where
 		always_open: &HashSet<Entity>,
 		at_same_level: &[Entity],
 		filter: &F,
-	) -> bool
+	) -> Option<CollapsingResponse<Entity>>
 	where
 		F: EntityFilter,
 	{
-		let mut new_selection = false;
+		let mut new_selection = None;
 		let selected = self.selected.contains(entity);
 
 		let entity_name = entity::guess_entity_name(self.world, entity);
@@ -158,12 +91,6 @@ where
 			None
 		};
 
-		if let Some(shortcircuit_entity) = self.shortcircuit_entity.as_mut()
-			&& shortcircuit_entity(ui, entity, self.world, self.extra_state)
-		{
-			return false;
-		}
-
 		let frame = egui::Frame::default();
 		let mut frame = frame.begin(ui);
 
@@ -178,11 +105,12 @@ where
 			.open(open)
 			.show(&mut frame.content_ui, |ui| {
 				let children = self.world.get::<Children>(entity);
+
 				if let Some(children) = children {
 					let mut children = children.to_vec();
 					filter.filter_entities(self.world, &mut children);
 					for &child in &children {
-						new_selection |= self.entity_ui(ui, child, always_open, &children, filter);
+						new_selection.maybe_take(self.entity_ui(ui, child, always_open, &children, filter));
 					}
 				} else {
 					ui.label("No children");
@@ -191,15 +119,24 @@ where
 
 		let dnd_response = frame.allocate_space(ui);
 
-		let header_response = response.header_response;
-
-		if header_response.clicked() {
+		if response.header_response.clicked() {
 			let selection_mode = ui
 				.input(|input| SelectionMode::from_ctrl_shift(input.modifiers.ctrl, input.modifiers.shift));
+
 			let extend_with = |from, to| {
-				// PERF: this could be done in one scan
-				let from_position = at_same_level.iter().position(|&entity| entity == from);
-				let to_position = at_same_level.iter().position(|&entity| entity == to);
+				let mut from_position = None;
+				let mut to_position = None;
+
+				for (i, &entity) in at_same_level.iter().enumerate() {
+					if entity == from {
+						from_position = Some(i);
+					}
+
+					if entity == to {
+						to_position = Some(i)
+					}
+				}
+
 				from_position
 					.zip(to_position)
 					.map(|(from, to)| {
@@ -209,16 +146,32 @@ where
 					.into_iter()
 					.flatten()
 			};
+
 			self.selected.select(selection_mode, entity, extend_with);
-			new_selection = true;
+
+			new_selection.maybe_take(Some(egui::CollapsingResponse {
+				header_response: response.header_response,
+				body_response: response.body_response,
+				body_returned: Some(entity),
+				openness: response.openness,
+			}));
+		} else if ResponseConditions::from(&response.header_response).any()
+			|| response
+				.body_response
+				.as_ref()
+				.map(|r| ResponseConditions::from(r).any())
+				.unwrap_or(false)
+		{
+			new_selection.maybe_take(Some(egui::CollapsingResponse {
+				header_response: response.header_response,
+				body_response: response.body_response,
+				body_returned: Some(entity),
+				openness: response.openness,
+			}));
 		}
 
-		if let Some(context_menu) = self.context_menu.as_mut() {
-			header_response.context_menu(|ui| context_menu(ui, entity, self.world, self.extra_state));
-		}
-
-		if let Some((dnd, payload)) = self.dnd.zip(dnd_response.dnd_release_payload::<P>()) {
-			(dnd)(ui, entity, self.world, payload)
+		if let Some(payload) = dnd_response.dnd_release_payload::<P>() {
+			(self.dnd)(ui, entity, self.world, payload)
 		}
 
 		new_selection

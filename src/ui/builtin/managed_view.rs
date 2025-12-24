@@ -42,6 +42,15 @@ where
 	images: ResMut<'w, Assets<Image>>,
 }
 
+impl<C> Params<'_, '_, C>
+where
+	C: Component,
+{
+	pub fn has_camera(&mut self) -> bool {
+		self.managed_camera.p1().is_some()
+	}
+}
+
 impl<C> EditorUi for EditorManagedView<C>
 where
 	C: Component + Reflectable + Identifiable,

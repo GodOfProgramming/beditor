@@ -5,7 +5,7 @@ use crate::{
 	},
 	util::{
 		self,
-		egui::set_highlight_style,
+		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
 		world::{ReflectBorrow, RestrictedWorldView},
 	},
 };
@@ -16,11 +16,67 @@ use bevy::{
 };
 use std::any::TypeId;
 
-pub type EntityComponentContextMenu =
-	fn(&mut egui::Ui, Entity, &mut World, &TypeRegistry, ComponentId, TypeId);
+pub struct ComponentInfo {
+	pub changed: bool,
+	pub type_id: TypeId,
+	pub component_id: ComponentId,
+}
 
-pub type EntitiesComponentContextMenu =
-	fn(&mut egui::Ui, &[Entity], &mut World, &TypeRegistry, ComponentId, TypeId);
+impl ComponentInfo {
+	fn from_response(
+		response: egui::Response,
+		changed: bool,
+		type_id: TypeId,
+		component_id: ComponentId,
+	) -> Option<egui::CollapsingResponse<Self>> {
+		if Self::satisfies_response(&response) {
+			Some(egui::CollapsingResponse {
+				header_response: response,
+				body_response: None,
+				body_returned: Some(ComponentInfo {
+					changed,
+					type_id,
+					component_id,
+				}),
+				openness: 0.0,
+			})
+		} else {
+			None
+		}
+	}
+
+	fn from_collapsing<T>(
+		response: egui::CollapsingResponse<T>,
+		changed: bool,
+		type_id: TypeId,
+		component_id: ComponentId,
+	) -> Option<egui::CollapsingResponse<Self>> {
+		if Self::satisfies_response(&response.header_response)
+			|| response
+				.body_response
+				.as_ref()
+				.map(Self::satisfies_response)
+				.unwrap_or(false)
+		{
+			Some(egui::CollapsingResponse {
+				header_response: response.header_response,
+				body_response: response.body_response,
+				body_returned: Some(ComponentInfo {
+					changed,
+					type_id,
+					component_id,
+				}),
+				openness: response.openness,
+			})
+		} else {
+			None
+		}
+	}
+
+	fn satisfies_response(response: &egui::Response) -> bool {
+		ResponseConditions::from(response).any()
+	}
+}
 
 pub fn ui_for_entity_components(
 	ctx: &mut Context<'_>,
@@ -28,81 +84,64 @@ pub fn ui_for_entity_components(
 	ui: &mut egui::Ui,
 	id: egui::Id,
 	type_registry: &TypeRegistry,
-	context_menu: EntityComponentContextMenu,
 	highlight_changes: bool,
-) {
+) -> Option<egui::CollapsingResponse<ComponentInfo>> {
 	let Ok(components) = components_of_entity(&ctx.world, entity) else {
 		errors::entity_does_not_exist(ui, entity);
-		return;
+		return None;
 	};
 
-	for (name, component_id, component_type_id, size) in components {
+	let mut clicked_header = None;
+
+	for (name, component_id, type_id, size) in components {
 		let id = id.with(component_id);
 
 		let header = egui::CollapsingHeader::new(&name).id_salt(id);
 
-		let Some(component_type_id) = component_type_id else {
+		let Some(type_id) = type_id else {
 			header.show(ui, |ui| errors::no_type_id(ui, &name));
 			continue;
 		};
 
-		let type_docs = type_registry
-			.get_type_info(component_type_id)
-			.and_then(|info| info.docs());
-
 		if size == 0 {
-			ui.indent(id, |ui| {
-				let response = ui.label(&name);
+			let response = ui.indent(id, |ui| ui.label(&name));
 
-				response.context_menu(|ui| {
-					(context_menu)(
-						ui,
-						entity,
-						// SAFETY: Components is cloned, nothing depends on the world elsewhere
-						unsafe { ctx.world.world().world_mut() },
-						type_registry,
-						component_id,
-						component_type_id,
-					);
-				});
+			clicked_header.maybe_take(ComponentInfo::from_response(
+				response.inner,
+				false,
+				type_id,
+				component_id,
+			));
 
-				util::egui::show_docs(response, type_docs);
-			});
 			continue;
 		}
 
 		// create a context with access to the world except for the currently viewed component
-		let (mut component_view, world) = ctx.world.split_off_component((entity, component_type_id));
+		let (mut component_view, world) = ctx.world.split_off_component((entity, type_id));
 
 		let mut cx = Context {
 			world,
 			queue: ctx.queue,
 		};
 
-		let value =
-			match component_view.get_entity_component_reflect(entity, component_type_id, type_registry) {
-				Ok(value) => value,
-				Err(_) => {
-					ui.indent(id, |ui| {
-						let response = ui
-							.label(egui::RichText::new(&name).underline())
-							.on_hover_ui(|ui| errors::no_access_component(ui, entity, &name));
+		let value = match component_view.get_entity_component_reflect(entity, type_id, type_registry) {
+			Ok(value) => value,
+			Err(_) => {
+				let response = ui.indent(id, |ui| {
+					ui.label(egui::RichText::new(&name).underline())
+						.on_hover_ui(|ui| errors::no_access_component(ui, entity, &name))
+				});
 
-						response.context_menu(|ui| {
-							(context_menu)(
-								ui,
-								entity,
-								// SAFETY: Will continue after this finishes
-								unsafe { component_view.world().world_mut() },
-								type_registry,
-								component_id,
-								component_type_id,
-							);
-						});
-					});
-					continue;
-				}
-			};
+				clicked_header.maybe_take(ComponentInfo::from_response(
+					response.inner,
+					false,
+					type_id,
+					component_id,
+				));
+
+				continue;
+			}
+		};
 
 		if highlight_changes && value.is_changed() {
 			set_highlight_style(ui);
@@ -127,48 +166,43 @@ pub fn ui_for_entity_components(
 					if changed {
 						value.set_changed();
 					}
+
+					changed
 				}
 				ReflectBorrow::Immutable(value) => {
-					env.ui_for_reflect_readonly_with_options(value.as_partial_reflect(), ui, id, options)
+					env.ui_for_reflect_readonly_with_options(value.as_partial_reflect(), ui, id, options);
+					false
 				}
-			};
+			}
 		});
 
-		let response = response.header_response;
-
-		response.context_menu(|ui| {
-			(context_menu)(
-				ui,
-				entity,
-				// SAFETY: Nothing after this point requires the world
-				unsafe { component_view.world().world_mut() },
-				type_registry,
-				component_id,
-				component_type_id,
-			);
-		});
-
-		util::egui::show_docs(response, type_docs);
+		let changed = response.body_returned.unwrap_or_default();
+		clicked_header.maybe_take(ComponentInfo::from_collapsing(
+			response,
+			changed,
+			type_id,
+			component_id,
+		));
 
 		ui.reset_style();
 	}
+
+	clicked_header
 }
 
-pub fn ui_for_entities_shared_components(
+pub fn ui_for_entities_with_shared_components(
 	world: &mut World,
 	entities: &[Entity],
 	ui: &mut egui::Ui,
-	context_menu: EntitiesComponentContextMenu,
-) {
+) -> Option<egui::CollapsingResponse<ComponentInfo>> {
 	let type_registry = world.resource::<AppTypeRegistry>().0.clone();
 	let type_registry = type_registry.read();
 
-	let Some(&first) = entities.first() else {
-		return;
-	};
+	let &first = entities.first()?;
 
 	let Ok(mut components) = components_of_entity(&world.into(), first) else {
-		return errors::entity_does_not_exist(ui, first);
+		errors::entity_does_not_exist(ui, first);
+		return None;
 	};
 
 	for &entity in entities.iter().skip(1) {
@@ -181,19 +215,21 @@ pub fn ui_for_entities_shared_components(
 
 	let mut queue = CommandQueue::default();
 
+	let mut clicked_header = None;
+
 	let id = egui::Id::NULL;
 	for (name, component_id, component_type_id, size) in components {
 		let id = id.with(component_id);
 
 		let header = egui::CollapsingHeader::new(&name).id_salt(id);
 
-		let Some(component_type_id) = component_type_id else {
+		let Some(type_id) = component_type_id else {
 			header.show(ui, |ui| errors::no_type_id(ui, &name));
 			continue;
 		};
 
 		let type_docs = type_registry
-			.get_type_info(component_type_id)
+			.get_type_info(type_id)
 			.and_then(|info| info.docs());
 
 		if size == 0 {
@@ -219,18 +255,14 @@ pub fn ui_for_entities_shared_components(
 
 			// SAFETY: entities are distinct, env has a context with just resources
 			match unsafe {
-				components_view.get_entity_component_reflect_unchecked(
-					entity,
-					component_type_id,
-					&type_registry,
-				)
+				components_view.get_entity_component_reflect_unchecked(entity, type_id, &type_registry)
 			} {
 				Ok(value) => {
 					values.push(value);
 				}
 				Err(error) => {
-					errors::show_error(error, ui, &name);
-					return;
+					error.ui(ui, &name);
+					continue;
 				}
 			}
 		}
@@ -248,7 +280,7 @@ pub fn ui_for_entities_shared_components(
 				.collect();
 
 			let changed = env.ui_for_reflect_many_with_options(
-				component_type_id,
+				type_id,
 				&name,
 				ui,
 				id,
@@ -262,21 +294,22 @@ pub fn ui_for_entities_shared_components(
 					value.set_changed();
 				}
 			}
+
+			changed
 		});
 
-		response.header_response.context_menu(|ui| {
-			(context_menu)(
-				ui,
-				entities,
-				world,
-				&type_registry,
-				component_id,
-				component_type_id,
-			);
-		});
+		let changed = response.body_returned.unwrap_or_default();
+		clicked_header.maybe_take(ComponentInfo::from_collapsing(
+			response,
+			changed,
+			type_id,
+			component_id,
+		));
 	}
 
 	queue.apply(world);
+
+	clicked_header
 }
 
 fn components_of_entity(

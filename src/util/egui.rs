@@ -1,5 +1,6 @@
 use egui::FontId;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use std::borrow::BorrowMut;
 
 pub fn layout_job(text: &[(FontId, &str)]) -> egui::epaint::text::LayoutJob {
 	let mut job = egui::epaint::text::LayoutJob::default();
@@ -29,6 +30,7 @@ struct IconButton {
 	painter: egui::Painter,
 	stroke: egui::Stroke,
 }
+
 impl IconButton {
 	fn new(ui: &mut egui::Ui) -> Self {
 		let button_size = egui::Vec2::splat(ui.spacing().icon_width);
@@ -47,9 +49,11 @@ impl IconButton {
 			stroke,
 		}
 	}
+
 	fn line(&self, points: [egui::Pos2; 2]) {
 		self.painter.line_segment(points, self.stroke);
 	}
+
 	fn add_button(self) -> egui::Response {
 		// paints |
 		self.line([self.rect.center_top(), self.rect.center_bottom()]);
@@ -57,11 +61,13 @@ impl IconButton {
 		self.line([self.rect.left_center(), self.rect.right_center()]);
 		self.response
 	}
+
 	fn remove_button(self) -> egui::Response {
 		// paints -
 		self.line([self.rect.left_center(), self.rect.right_center()]);
 		self.response
 	}
+
 	fn up_button(self) -> egui::Response {
 		// paints |
 		self.line([self.rect.center_top(), self.rect.center_bottom()]);
@@ -71,6 +77,7 @@ impl IconButton {
 		self.line([self.rect.center_top(), self.rect.right_center()]);
 		self.response
 	}
+
 	fn down_button(self) -> egui::Response {
 		// paints |
 		self.line([self.rect.center_top(), self.rect.center_bottom()]);
@@ -169,21 +176,78 @@ pub fn set_highlight_style(ui: &mut egui::Ui) {
 	let highlight_color = egui::Color32::GOLD;
 
 	let visuals = &mut ui.style_mut().visuals;
+
 	visuals.collapsing_header_frame = true;
+
 	visuals.widgets.inactive.bg_stroke = egui::Stroke {
 		width: 1.0,
 		color: highlight_color,
 	};
+
 	visuals.widgets.active.bg_stroke = egui::Stroke {
 		width: 1.0,
 		color: highlight_color,
 	};
+
 	visuals.widgets.hovered.bg_stroke = egui::Stroke {
 		width: 1.0,
 		color: highlight_color,
 	};
+
 	visuals.widgets.noninteractive.bg_stroke = egui::Stroke {
 		width: 1.0,
 		color: highlight_color,
 	};
+}
+
+pub trait CollapsingResponseExtensions<T>: BorrowMut<Option<egui::CollapsingResponse<T>>> {
+	fn maybe_take(&mut self, other: Option<egui::CollapsingResponse<T>>) {
+		match (self.borrow(), other) {
+			(None, that @ Some(_)) => *self.borrow_mut() = that,
+			(Some(this), that @ Some(_)) => {
+				let header_context_menu_opened =
+					ResponseConditions::from(&this.header_response).context_menu_opened;
+
+				let body_context_menu_opened = this
+					.body_response
+					.as_ref()
+					.map(|r| ResponseConditions::from(r).context_menu_opened)
+					.unwrap_or(false);
+
+				if !header_context_menu_opened && !body_context_menu_opened {
+					*self.borrow_mut() = that;
+				}
+			}
+			_ => (),
+		}
+	}
+}
+
+impl<T, U> CollapsingResponseExtensions<U> for T where
+	T: BorrowMut<Option<egui::CollapsingResponse<U>>>
+{
+}
+
+pub struct ResponseConditions {
+	context_menu_opened: bool,
+	secondary_clicked: bool,
+	hovered: bool,
+	should_show_tooltip: bool,
+}
+
+impl ResponseConditions {
+	pub fn any(&self) -> bool {
+		self.context_menu_opened | self.secondary_clicked | self.hovered | self.should_show_tooltip
+	}
+}
+
+impl From<&egui::Response> for ResponseConditions {
+	fn from(response: &egui::Response) -> Self {
+		Self {
+			context_menu_opened: response.context_menu_opened(),
+			secondary_clicked: response.secondary_clicked(),
+			hovered: response.hovered(),
+			should_show_tooltip: egui::Tooltip::should_show_tooltip(response, true),
+		}
+	}
 }

@@ -1,6 +1,6 @@
 use crate::{
 	EditorUi,
-	inspector::ui::TypeRegistryExtensions,
+	inspector::TypeRegistryExtensions,
 	util::log::{ChangeLogLevelEvent, EventCollectorHandle, LogLevel, LogLevelChangedEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};

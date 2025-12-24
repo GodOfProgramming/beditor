@@ -72,7 +72,6 @@ impl InspectorPrimitive for Entity {
 							ui,
 							id,
 							env.type_registry,
-							options.context_menu,
 							options.highlight_changes,
 						);
 						if options.despawnable

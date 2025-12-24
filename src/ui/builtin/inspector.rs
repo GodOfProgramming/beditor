@@ -1,11 +1,9 @@
-use std::any::TypeId;
-
 use super::BundleDnd;
 use crate::{
-	inspector::ui::WorldExtensions,
+	inspector::{TypeRegistryExtensions, WorldExtensions},
 	ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui},
 };
-use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
+use bevy::prelude::*;
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
@@ -16,12 +14,12 @@ impl Inspector {
 	where
 		F: FnOnce(&mut World, &mut egui::Ui),
 	{
-		let (_, component_id) = panel_dnd_drop_ui::<BundleDnd, ()>(ui, |ui| {
+		let (_, payload) = panel_dnd_drop_ui::<BundleDnd, ()>(ui, |ui| {
 			render_fn(world, ui);
 		});
 
-		if let Some(dnd) = component_id {
-			dnd.spawn_on(entities.as_ref().iter().cloned(), world);
+		if let Some(payload) = payload {
+			payload.spawn_on(entities.as_ref().iter().cloned(), world);
 		}
 	}
 }
@@ -54,39 +52,44 @@ impl EditorUiBundle for Inspector {
 				InspectorSelection::Entities(selected_entities) => match selected_entities.as_slice() {
 					&[entity] => {
 						Self::dnd_ui([entity], world, ui, |world, ui| {
-							world.ui_for_entity(
-								entity,
-								ui,
-								|ui, entity, world, type_registry, component_id, type_id| {
-									context_menu(
-										ui,
-										std::iter::once(entity),
-										world,
-										type_registry,
-										component_id,
-										type_id,
-									);
-								},
-								highlight_changes,
-							);
+							let Some(response) = world.ui_for_entity(entity, ui, highlight_changes) else {
+								return;
+							};
+
+							let Some(info) = response.body_returned else {
+								return;
+							};
+
+							response.header_response.context_menu(|ui| {
+								if ui.button("Remove").clicked() {
+									world.entity_mut(entity).remove_by_id(info.component_id);
+								}
+							});
+
+							type_registry.show_docs(response.header_response, info.type_id);
 						});
 					}
 					entities => {
 						Self::dnd_ui(entities, world, ui, |world, ui| {
-							world.ui_for_entities(
-								ui,
-								entities,
-								|ui, entities, world, type_registry, component_id, type_id| {
-									context_menu(
-										ui,
-										entities.iter().cloned(),
-										world,
-										type_registry,
-										component_id,
-										type_id,
-									);
-								},
-							);
+							let Some(response) = world.ui_for_entities(ui, entities) else {
+								return;
+							};
+
+							let Some(component_info) = response.body_returned else {
+								return;
+							};
+
+							response.header_response.context_menu(|ui| {
+								if ui.button("Remove").clicked() {
+									for entity in entities {
+										world
+											.entity_mut(*entity)
+											.remove_by_id(component_info.component_id);
+									}
+								}
+							});
+
+							type_registry.show_docs(response.header_response, component_info.type_id);
 						});
 					}
 				},
@@ -106,19 +109,4 @@ impl EditorUiBundle for Inspector {
 #[derive(Resource, Default)]
 pub struct InspectorSettings {
 	pub highlight_changes: bool,
-}
-
-fn context_menu(
-	ui: &mut egui::Ui,
-	entities: impl Iterator<Item = Entity>,
-	world: &mut World,
-	_type_registry: &TypeRegistry,
-	component_id: ComponentId,
-	_type_id: TypeId,
-) {
-	if ui.button("Remove").clicked() {
-		for entity in entities {
-			world.entity_mut(entity).remove_by_id(component_id);
-		}
-	}
 }

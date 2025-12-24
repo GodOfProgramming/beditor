@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-	inspector,
+	inspector::{self, WorldExtensions},
 	ui::{
 		EditorUiBundle, InspectorSelection, SelectedEntities, builtin::BundleDnd,
 		events::SyncGizmoTargetsEvent, notifications::Notification,
@@ -52,13 +52,14 @@ impl EditorUiBundle for Hierarchy {
 		world.resource_scope(|world, mut selection: Mut<InspectorSelection>| {
 			if let InspectorSelection::Entities(selected_entities) = selection.as_mut() {
 				let previous = EntityHashSet::from_iter(selected_entities.iter());
-				Self::show(ui, world, selected_entities);
-				let current = EntityHashSet::from_iter(selected_entities.iter());
 
-				world.trigger(SyncGizmoTargetsEvent::new(
-					selected_entities.as_slice().into(),
-					previous.difference(&current).cloned().collect(),
-				));
+				if Self::show(ui, world, selected_entities) {
+					let current = EntityHashSet::from_iter(selected_entities.iter());
+					world.trigger(SyncGizmoTargetsEvent::new(
+						selected_entities.as_slice().into(),
+						previous.difference(&current).cloned().collect(),
+					));
+				}
 			} else {
 				let mut selected_entities = SelectedEntities::default();
 
@@ -76,64 +77,61 @@ impl EditorUiBundle for Hierarchy {
 
 impl Hierarchy {
 	fn show(ui: &mut egui::Ui, world: &mut World, selected: &mut SelectedEntities) -> bool {
-		let app_type_registry = world.resource::<AppTypeRegistry>().clone();
-		let type_registry = app_type_registry.read();
-
-		let ctx_menu = &mut Self::context_menu;
-		let mut hierarchy = inspector::ui::hierarchy::Hierarchy {
-			world,
-			type_registry: &type_registry,
-			selected,
-			context_menu: Some(ctx_menu),
-			shortcircuit_entity: None,
-			extra_state: &mut (),
-			dnd: Some(dnd_handler),
-		};
-
 		let bg_fill = ui.style().visuals.window_fill();
 		ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
-		hierarchy.show_with_default_filter::<()>(ui)
-	}
 
-	fn context_menu(ui: &mut egui::Ui, entity: Entity, world: &mut World, _: &mut ()) {
-		if ui.button("Select").clicked() {
-			world.write_message(SelectEntityMessage(entity));
-		}
+		let Some(response) = world.hierarchy_ui::<(), BundleDnd>(ui, selected, dnd_handler) else {
+			return false;
+		};
 
-		if ui.button("Reparent Selected").clicked() {
-			world.write_message(ReparentMessage(entity));
-		}
+		let Some(entity) = response.body_returned else {
+			return false;
+		};
 
-		let mut entity_ref = world.entity_mut(entity);
-		if entity_ref.get::<ChildOf>().is_some() && ui.button("Remove Parent").clicked() {
-			entity_ref.remove::<ChildOf>();
-		}
+		response.header_response.context_menu(|ui| {
+			if ui.button("Select").clicked() {
+				world.write_message(SelectEntityMessage(entity));
+			}
 
-		let state = world
-			.resource::<HierarchyState>()
-			.file_dialog
-			.state()
-			.clone();
-		ui.add_enabled_ui(state != egui_file_dialog::DialogState::Open, |ui| {
-			if ui.button("Save As Scene").clicked() {
-				match reflection::scenes::serialize_to_scene(entity, world) {
-					Ok(data) => {
-						let mut state = world.resource_mut::<HierarchyState>();
-						state.file_dialog.save_file();
-						state.data = data;
+			if ui.button("Reparent Selected").clicked() {
+				world.write_message(ReparentMessage(entity));
+			}
+
+			let mut entity_ref = world.entity_mut(entity);
+			if entity_ref.get::<ChildOf>().is_some() && ui.button("Remove Parent").clicked() {
+				entity_ref.remove::<ChildOf>();
+			}
+
+			let state = world
+				.resource::<HierarchyState>()
+				.file_dialog
+				.state()
+				.clone();
+			ui.add_enabled_ui(state != egui_file_dialog::DialogState::Open, |ui| {
+				if ui.button("Save As Scene").clicked() {
+					match reflection::scenes::serialize_to_scene(entity, world) {
+						Ok(data) => {
+							let mut state = world.resource_mut::<HierarchyState>();
+							state.file_dialog.save_file();
+							state.data = data;
+						}
+						Err(err) => {
+							world.trigger(Notification::error("Failed to save scene").with_context(err))
+						}
 					}
-					Err(err) => world.trigger(Notification::error("Failed to save scene").with_context(err)),
 				}
+			});
+
+			if ui.button("Despawn").clicked() {
+				world.write_message(DespawnEntityMessage(entity));
+			}
+
+			if ui.button("Clear Selected").clicked() {
+				world.write_message(ClearSelectedMessage);
 			}
 		});
 
-		if ui.button("Despawn").clicked() {
-			world.write_message(DespawnEntityMessage(entity));
-		}
-
-		if ui.button("Clear Selected").clicked() {
-			world.write_message(ClearSelectedMessage);
-		}
+		true
 	}
 }
 
@@ -248,5 +246,7 @@ fn show_dialogs(
 fn dnd_handler(_: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc<BundleDnd>) {
 	let new_entity = world.spawn_empty().id();
 	world.entity_mut(entity).add_child(new_entity);
-	payload.spawn_on(std::iter::once(new_entity), world);
+	if !payload.spawn_on(std::iter::once(new_entity), world) {
+		world.trigger(Notification::error("Failed to spawn"));
+	}
 }

@@ -1,6 +1,6 @@
 use crate::{
 	RuntimeSettings,
-	inspector::ui::TypeRegistryExtensions,
+	inspector::TypeRegistryExtensions,
 	ui::{EditorUi, builtin::inspector::InspectorSettings},
 	util::log::LogLevel,
 	view::cam::{RenderCameras, SyncRenderCamerasEvent},

@@ -48,7 +48,12 @@ impl EditorUi for EditorView {
 	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
 		let window_rect = ui.clip_rect();
 
+		let has_camera = params.managed_view_params.has_camera();
 		params.managed_view.ui(ui, params.managed_view_params);
+
+		if !has_camera {
+			return;
+		}
 
 		let margin = ui.style().spacing.window_margin;
 		let outer_ui = egui::Rect::from_min_max(

@@ -1,6 +1,6 @@
 use crate::{
 	EditorUiBundle,
-	inspector::ui::WorldExtensions,
+	inspector::WorldExtensions,
 	ui::{TabState, UiManager, widgets},
 	util::reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 };

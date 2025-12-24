@@ -55,37 +55,31 @@ impl InspectorPrimitive for Entity {
 				ui.label(format!("{entity:?}"));
 			}
 			EntityDisplay::Components => {
-				let Context {
-					world: Some(world),
-					queue,
-				} = &mut env.context
-				else {
+				let Some(ctx) = &mut env.context else {
 					no_world_in_context(ui, "Entity");
 					return false;
 				};
 
 				let entity_name =
-					util::entity::guess_entity_name_restricted(unsafe { world.world().world() }, entity);
+					util::entity::guess_entity_name_restricted(unsafe { ctx.world.world().world() }, entity);
 
 				egui::CollapsingHeader::new(entity_name)
 					.id_salt(id)
 					.show(ui, |ui| {
 						crate::inspector::ui::components::ui_for_entity_components(
-							world,
-							queue.as_deref_mut(),
+							ctx,
 							entity,
 							ui,
 							id,
 							env.type_registry,
 							options.context_menu,
-							false,
+							options.highlight_changes,
 						);
 						if options.despawnable
-							&& world.contains_entity(entity)
-							&& let Some(queue) = queue
+							&& ctx.world.contains_entity(entity)
 							&& util::egui::label_button(ui, "✖ Despawn", egui::Color32::RED)
 						{
-							queue.push(move |world: &mut World| {
+							ctx.queue.push(move |world: &mut World| {
 								world.entity_mut(entity).despawn();
 							});
 						}
@@ -103,10 +97,7 @@ impl InspectorPrimitive for Entity {
 impl InspectorPrimitive for Handle<Mesh> {
 	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, env: InspectorUi<'_, '_>) -> bool {
 		let handle = &*self;
-		let Context {
-			world: Some(world), ..
-		} = env.context
-		else {
+		let Some(Context { world, .. }) = env.context else {
 			no_world_in_context(ui, "Handle<Mesh>");
 			return false;
 		};
@@ -142,10 +133,7 @@ impl InspectorPrimitive for Handle<Mesh> {
 	}
 
 	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, env: InspectorUi<'_, '_>) {
-		let Context {
-			world: Some(world), ..
-		} = env.context
-		else {
+		let Some(Context { world, .. }) = env.context else {
 			no_world_in_context(ui, "Handle<Mesh>");
 			return;
 		};
@@ -167,10 +155,7 @@ impl InspectorPrimitive for Handle<Mesh> {
 
 impl InspectorPrimitive for Handle<Image> {
 	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, id: egui::Id, env: InspectorUi<'_, '_>) -> bool {
-		let Context {
-			world: Some(world), ..
-		} = env.context
-		else {
+		let Some(Context { world, .. }) = env.context else {
 			let immutable_self: &Handle<Image> = self;
 			no_world_in_context(ui, immutable_self.reflect_short_type_path());
 			return false;
@@ -254,10 +239,7 @@ impl InspectorPrimitive for Handle<Image> {
 	}
 
 	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, env: InspectorUi<'_, '_>) {
-		let Context {
-			world: Some(world), ..
-		} = env.context
-		else {
+		let Some(Context { world, .. }) = env.context else {
 			no_world_in_context(ui, self.reflect_short_type_path());
 			return;
 		};

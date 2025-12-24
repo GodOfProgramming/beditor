@@ -23,8 +23,7 @@ pub type EntitiesComponentContextMenu =
 	fn(&mut egui::Ui, &[Entity], &mut World, &TypeRegistry, ComponentId, TypeId);
 
 pub fn ui_for_entity_components(
-	world: &mut RestrictedWorldView<'_>,
-	mut queue: Option<&mut CommandQueue>,
+	ctx: &mut Context<'_>,
 	entity: Entity,
 	ui: &mut egui::Ui,
 	id: egui::Id,
@@ -32,7 +31,7 @@ pub fn ui_for_entity_components(
 	context_menu: EntityComponentContextMenu,
 	highlight_changes: bool,
 ) {
-	let Ok(components) = components_of_entity(world, entity) else {
+	let Ok(components) = components_of_entity(&ctx.world, entity) else {
 		errors::entity_does_not_exist(ui, entity);
 		return;
 	};
@@ -60,7 +59,7 @@ pub fn ui_for_entity_components(
 						ui,
 						entity,
 						// SAFETY: Components is cloned, nothing depends on the world elsewhere
-						unsafe { world.world().world_mut() },
+						unsafe { ctx.world.world().world_mut() },
 						type_registry,
 						component_id,
 						component_type_id,
@@ -73,11 +72,11 @@ pub fn ui_for_entity_components(
 		}
 
 		// create a context with access to the world except for the currently viewed component
-		let (mut component_view, world) = world.split_off_component((entity, component_type_id));
+		let (mut component_view, world) = ctx.world.split_off_component((entity, component_type_id));
 
 		let mut cx = Context {
-			world: Some(world),
-			queue: queue.as_deref_mut(),
+			world,
+			queue: ctx.queue,
 		};
 
 		let value =
@@ -112,7 +111,7 @@ pub fn ui_for_entity_components(
 		let response = header.show(ui, |ui| {
 			ui.reset_style();
 
-			let mut env = InspectorUi::new(type_registry, &mut cx);
+			let mut env = InspectorUi::new(type_registry, Some(&mut cx));
 			let id = id.with(component_id);
 			let options = &();
 
@@ -207,8 +206,8 @@ pub fn ui_for_entities_shared_components(
 
 		let (resources_view, components_view) = RestrictedWorldView::resources_components(world);
 		let mut cx = Context {
-			world: Some(resources_view),
-			queue: Some(&mut queue),
+			world: resources_view,
+			queue: &mut queue,
 		};
 
 		let mut values = Vec::with_capacity(entities.len());
@@ -239,7 +238,7 @@ pub fn ui_for_entities_shared_components(
 		let response = header.show(ui, |ui| {
 			ui.reset_style();
 
-			let mut env = InspectorUi::new(&type_registry, &mut cx);
+			let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
 			let id = id.with(component_id);
 			let options = &();
 

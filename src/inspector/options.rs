@@ -318,6 +318,7 @@ pub struct EntityOptions {
 	pub display: EntityDisplay,
 	pub despawnable: bool,
 	pub context_menu: EntityComponentContextMenu,
+	pub highlight_changes: bool,
 }
 
 impl Default for EntityOptions {
@@ -326,6 +327,7 @@ impl Default for EntityOptions {
 			display: EntityDisplay::default(),
 			despawnable: true,
 			context_menu: |_, _, _, _, _, _| {},
+			highlight_changes: false,
 		}
 	}
 }

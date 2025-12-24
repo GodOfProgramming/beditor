@@ -40,23 +40,23 @@ pub trait ProjectorReflect: Fn(&mut dyn PartialReflect) -> &mut dyn PartialRefle
 
 impl<T> ProjectorReflect for T where T: Fn(&mut dyn PartialReflect) -> &mut dyn PartialReflect {}
 
-#[derive(new, Default)]
+#[derive(new)]
 pub struct Context<'c> {
-	pub world: Option<RestrictedWorldView<'c>>,
-	pub queue: Option<&'c mut CommandQueue>,
+	pub world: RestrictedWorldView<'c>,
+	pub queue: &'c mut CommandQueue,
 }
 
 #[derive(new)]
 pub struct InspectorUi<'i, 'c> {
 	pub type_registry: &'i TypeRegistry,
-	pub context: &'i mut Context<'c>,
+	pub context: Option<&'i mut Context<'c>>,
 }
 
 impl<'i, 'c> InspectorUi<'i, 'c> {
 	pub fn reborrow<'s>(&'s mut self) -> InspectorUi<'s, 'c> {
 		InspectorUi {
 			type_registry: self.type_registry,
-			context: self.context,
+			context: self.context.as_deref_mut(),
 		}
 	}
 
@@ -2098,11 +2098,7 @@ pub mod short_circuit {
 		id: egui::Id,
 		options: &dyn Any,
 	) -> Option<bool> {
-		let Context {
-			world: Some(world),
-			queue,
-		} = &mut env.context
-		else {
+		let Some(Context { world, queue }) = &mut env.context else {
 			return Some(false);
 		};
 
@@ -2146,7 +2142,7 @@ pub mod short_circuit {
 
 		let mut restricted_env = InspectorUi {
 			type_registry: env.type_registry,
-			context: &mut Context::new(Some(world), queue.as_deref_mut()),
+			context: Some(&mut Context::new(world, queue)),
 		};
 
 		Some(restricted_env.ui_for_reflect_with_options(
@@ -2166,11 +2162,7 @@ pub mod short_circuit {
 		values: &mut [&mut dyn PartialReflect],
 		projector: &dyn ProjectorReflect,
 	) -> Option<bool> {
-		let Context {
-			world: Some(world),
-			queue,
-		} = &mut env.context
-		else {
+		let Some(Context { world, queue }) = &mut env.context else {
 			return Some(false);
 		};
 
@@ -2229,7 +2221,7 @@ pub mod short_circuit {
 
 		let mut restricted_env = InspectorUi {
 			type_registry: env.type_registry,
-			context: &mut Context::new(Some(world), queue.as_deref_mut()),
+			context: Some(&mut Context::new(world, queue)),
 		};
 
 		Some(restricted_env.ui_for_reflect_many_with_options(
@@ -2250,11 +2242,7 @@ pub mod short_circuit {
 		id: egui::Id,
 		options: &dyn Any,
 	) -> Option<()> {
-		let Context {
-			world: Some(world),
-			queue,
-		} = &mut env.context
-		else {
+		let Some(Context { world, queue }) = &mut env.context else {
 			return Some(());
 		};
 
@@ -2301,7 +2289,7 @@ pub mod short_circuit {
 
 		let mut restricted_env = InspectorUi {
 			type_registry: env.type_registry,
-			context: &mut Context::new(Some(world), queue.as_deref_mut()),
+			context: Some(&mut Context::new(world, queue)),
 		};
 
 		restricted_env.ui_for_reflect_readonly_with_options(asset_value, ui, id.with("asset"), options);
@@ -2313,12 +2301,12 @@ pub mod short_circuit {
 pub trait TypeRegistryExtensions: Borrow<TypeRegistry> {
 	fn ui_for_value(&self, ui: &mut egui::Ui, value: &mut dyn PartialReflect) -> bool {
 		let type_registry = self.borrow();
-		InspectorUi::new(type_registry, &mut Context::default()).ui_for_reflect(value, ui)
+		InspectorUi::new(type_registry, None).ui_for_reflect(value, ui)
 	}
 
 	fn ui_for_value_readonly(&self, ui: &mut egui::Ui, value: &dyn PartialReflect) {
 		let type_registry = self.borrow();
-		InspectorUi::new(type_registry, &mut Context::default()).ui_for_reflect_readonly(value, ui);
+		InspectorUi::new(type_registry, None).ui_for_reflect_readonly(value, ui);
 	}
 }
 
@@ -2333,8 +2321,8 @@ pub trait WorldExtensions: BorrowMut<World> {
 
 		let mut queue = CommandQueue::default();
 
-		let mut cx = Context::new(Some(RestrictedWorldView::new(world)), Some(&mut queue));
-		let mut env = InspectorUi::new(&type_registry, &mut cx);
+		let mut cx = Context::new(RestrictedWorldView::new(world), &mut queue);
+		let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
 
 		let changed = env.ui_for_reflect(value.as_partial_reflect_mut(), ui);
 
@@ -2359,9 +2347,11 @@ pub trait WorldExtensions: BorrowMut<World> {
 		ui.label(entity_name);
 
 		let mut queue = CommandQueue::default();
+
+		let mut ctx = Context::new(RestrictedWorldView::new(world), &mut queue);
+
 		components::ui_for_entity_components(
-			&mut world.into(),
-			Some(&mut queue),
+			&mut ctx,
 			entity,
 			ui,
 			egui::Id::new(entity),
@@ -2397,10 +2387,10 @@ pub trait WorldExtensions: BorrowMut<World> {
 		};
 		let mut queue = CommandQueue::default();
 		let mut cx = Context {
-			world: Some(world_view),
-			queue: Some(&mut queue),
+			world: world_view,
+			queue: &mut queue,
 		};
-		let mut env = InspectorUi::new(&type_registry, &mut cx);
+		let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
 
 		if env.ui_for_reflect(resource.bypass_change_detection(), ui) {
 			resource.set_changed();
@@ -2425,10 +2415,10 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let mut world_view = RestrictedWorldView::new(world);
 			let (mut resource_view, world_view) = world_view.split_off_resource(resource_type_id);
 			let mut cx = Context {
-				world: Some(world_view),
-				queue: Some(&mut queue),
+				world: world_view,
+				queue: &mut queue,
 			};
-			let mut env = InspectorUi::new(type_registry, &mut cx);
+			let mut env = InspectorUi::new(type_registry, Some(&mut cx));
 
 			let mut resource =
 				match resource_view.get_resource_reflect_mut_by_id(resource_type_id, type_registry) {
@@ -2490,8 +2480,8 @@ pub trait WorldExtensions: BorrowMut<World> {
 		let world_view = RestrictedWorldView::new(world);
 		let mut queue = CommandQueue::default();
 		let mut cx = Context {
-			world: Some(world_view),
-			queue: Some(&mut queue),
+			world: world_view,
+			queue: &mut queue,
 		};
 
 		let id = egui::Id::new(handle);
@@ -2501,7 +2491,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 				.typed(UntypedHandle::Uuid { uuid, type_id })
 				.into_partial_reflect();
 
-			let mut env = InspectorUi::new(type_registry, &mut cx);
+			let mut env = InspectorUi::new(type_registry, Some(&mut cx));
 			let changed = env.ui_for_reflect_with_options(&mut *handle, ui, id, &());
 
 			queue.apply(world);

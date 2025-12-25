@@ -56,6 +56,7 @@ pub mod prelude {
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 			storage::{Layouts, Project, ProjectSettings, SettingKey, Settings, SettingsGroup},
 		},
+		view::cam::EditorCamera,
 	};
 	pub use bevy_egui;
 	pub use brefabs;

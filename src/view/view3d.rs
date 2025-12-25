@@ -10,12 +10,18 @@ use crate::{
 use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorOptions};
 use leafwing_input_manager::prelude::ActionState;
 use serde::{Deserialize, Serialize};
+use transform_gizmo_bevy::GizmoCamera;
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 pub struct View3d;
 
 #[derive(Component, Default)]
-#[require(EditorCamera, Camera3d, CameraSettings)]
+#[require(
+  EditorCamera,
+  Camera3d,
+  CameraSettings,
+  GizmoCamera = GizmoCamera,
+)]
 pub struct EditorCamera3d;
 
 pub fn enable(

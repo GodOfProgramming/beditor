@@ -143,7 +143,6 @@ fn despawn_editor_cameras(mut commands: Commands, q_cams: Query<Entity, With<Edi
 #[require(
   MeshPickingCamera,
   EditorManagedCamera,
-  GizmoCamera = GizmoCamera,
   AxesGizmoSyncCamera = AxesGizmoSyncCamera,
 )]
 #[id("00000000-0000-0000-0000-000000000000")]
@@ -261,7 +260,7 @@ impl EditorManagedCamera {
 	}
 
 	fn sync_gizmos(
-		editor_camera: Single<&Self, With<EditorCamera>>,
+		editor_camera: Single<&Self, With<GizmoCamera>>,
 		mut gizmos_options: ResMut<GizmoOptions>,
 	) {
 		gizmos_options.viewport_rect = editor_camera.viewport_rect;

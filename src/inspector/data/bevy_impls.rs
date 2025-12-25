@@ -567,9 +567,9 @@ struct ScaledDownTextures {
 
 const RESCALE_TO_FIT: (u32, u32) = (100, 100);
 
-fn rescaled_image<'a>(
+fn rescaled_image(
 	handle: &Handle<Image>,
-	scaled_down_textures: &'a mut ScaledDownTextures,
+	scaled_down_textures: &mut ScaledDownTextures,
 	textures: &mut Assets<Image>,
 	egui_usere_textures: &mut EguiUserTextures,
 ) -> Option<(Handle<Image>, egui::TextureId)> {

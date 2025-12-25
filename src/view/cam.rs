@@ -78,7 +78,6 @@ fn on_manage_camera(
 	contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
 
 	commands.entity(event.event_target()).insert(Camera {
-		order: isize::MIN,
 		target: RenderTarget::Image(ImageRenderTarget::from(image_handle)),
 		..default()
 	});

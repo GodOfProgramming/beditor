@@ -3,9 +3,7 @@ use crate::{EditorUiBundle, ui::TabState};
 use bevy::prelude::*;
 use derive_new::new;
 use egui_dock::{NodeIndex, SurfaceIndex};
-use smallvec::SmallVec;
 use std::marker::PhantomData;
-use transform_gizmo_bevy::GizmoTarget;
 
 #[derive(new, Message)]
 pub struct OpenUiMessage(Vec<TabState>);
@@ -87,27 +85,5 @@ impl RemoveUiEvent {
 	pub fn on_event(event: On<Self>, mut commands: Commands) {
 		let RemoveUiEvent(tab) = *event;
 		commands.entity(tab).despawn();
-	}
-}
-
-#[derive(new, Event)]
-pub struct SyncGizmoTargetsEvent {
-	current: SmallVec<[Entity; 8]>,
-	removed: SmallVec<[Entity; 8]>,
-}
-
-impl SyncGizmoTargetsEvent {
-	pub fn on_event(event: On<Self>, mut commands: Commands) {
-		for &entity in event.current.iter() {
-			if let Ok(mut entity) = commands.get_entity(entity) {
-				entity.insert(GizmoTarget::default());
-			}
-		}
-
-		for &entity in event.removed.iter() {
-			if let Ok(mut entity) = commands.get_entity(entity) {
-				entity.remove::<GizmoTarget>();
-			}
-		}
 	}
 }

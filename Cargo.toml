@@ -15,6 +15,7 @@ bevy = "0.17.3"
 bevy-axes-gizmo = "0.2.0"
 bevy_egui = "0.38.0"
 bevy_infinite_grid = "0.17.0"
+bevy_mesh_outline = { git = "https://github.com/gylleus/bevy_mesh_outline", rev = "01504266cdce9fece397128eef1b682eef3c3b40" }
 brefabs = "0.7.0"
 bytemuck = "1.24.0"
 camino = "1.2.1"
@@ -102,6 +103,7 @@ bevy = { workspace = true, features = [
 ] }
 bevy-axes-gizmo = { workspace = true }
 bevy_infinite_grid = { workspace = true }
+bevy_mesh_outline = { workspace = true }
 brefabs = { workspace = true }
 bytemuck = { workspace = true }
 camino = { workspace = true }

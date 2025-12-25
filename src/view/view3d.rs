@@ -7,7 +7,11 @@ use crate::{
 	},
 	view::cam::EditorCamera,
 };
-use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorOptions};
+use bevy::{
+	core_pipeline::prepass::DepthPrepass, input::mouse::MouseMotion, prelude::*,
+	window::CursorOptions,
+};
+use bevy_mesh_outline::OutlineCamera;
 use leafwing_input_manager::prelude::ActionState;
 use serde::{Deserialize, Serialize};
 use transform_gizmo_bevy::GizmoCamera;
@@ -17,10 +21,11 @@ pub struct View3d;
 
 #[derive(Component, Default)]
 #[require(
-  EditorCamera,
   Camera3d,
+  EditorCamera,
   CameraSettings,
   GizmoCamera = GizmoCamera,
+  OutlineCamera = OutlineCamera, Msaa::Off, DepthPrepass,
 )]
 pub struct EditorCamera3d;
 

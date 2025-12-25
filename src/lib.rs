@@ -37,6 +37,7 @@ use bevy::{
 	winit::WINIT_WINDOWS,
 };
 use bevy_axes_gizmo::AxesGizmoPlugin;
+use bevy_mesh_outline::MeshOutlinePlugin;
 use brefabs::PrefabPlugin;
 use input::InputPlugin;
 use platform_dirs::AppDirs;
@@ -49,7 +50,7 @@ use view::EditorViewPlugin;
 pub mod prelude {
 	pub use crate::{
 		EditorPlugin,
-		ui::{EditorUi, EditorUiBundle, NoParams, notifications::Notification},
+		ui::{EditorUi, EditorUiBundle, NoParams, notifications::Notification, widgets},
 		util::{
 			AppExtensions, EntityManager, GameEntity, GameRenderLayer, RegisterableType, TypeGroups,
 			TypeList,
@@ -225,14 +226,15 @@ impl Plugin for EditorPlugin {
 			.add_plugin_if_not_present(SystemInformationDiagnosticsPlugin)
 			.add_plugin_if_not_present(RemotePlugin::default())
 			.add_plugin_if_not_present(RemoteHttpPlugin::default())
+			.add_plugin_if_not_present(MeshOutlinePlugin)
+			.add_plugin_if_not_present(TransformGizmoPlugin)
+			.add_plugin_if_not_present(AxesGizmoPlugin::default())
 			.add_plugins((
 				EditorViewPlugin,
 				InputPlugin,
 				UiPlugin,
 				LogPlugin,
 				ReflectionExtensionsPlugin,
-				TransformGizmoPlugin,
-				AxesGizmoPlugin::default(),
 				InspectorPlugin,
 			))
 			.add_observer(EnableGameUiEvent::handle)

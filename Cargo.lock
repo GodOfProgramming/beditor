@@ -520,6 +520,7 @@ dependencies = [
  "bevy-axes-gizmo",
  "bevy_egui",
  "bevy_infinite_grid",
+ "bevy_mesh_outline",
  "brefabs",
  "bytemuck",
  "camino",
@@ -1289,6 +1290,20 @@ dependencies = [
  "hexasphere",
  "serde",
  "thiserror 2.0.17",
+ "tracing",
+ "wgpu-types",
+]
+
+[[package]]
+name = "bevy_mesh_outline"
+version = "0.2.0"
+source = "git+https://github.com/gylleus/bevy_mesh_outline?rev=01504266cdce9fece397128eef1b682eef3c3b40#01504266cdce9fece397128eef1b682eef3c3b40"
+dependencies = [
+ "bevy",
+ "bevy_render",
+ "bytemuck",
+ "nonmax",
+ "rand 0.9.2",
  "tracing",
  "wgpu-types",
 ]

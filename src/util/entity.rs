@@ -1,9 +1,8 @@
-use std::any::TypeId;
-
 use bevy::{
 	ecs::{archetype::Archetype, prelude::*},
 	prelude::*,
 };
+use std::any::TypeId;
 
 /// Guesses an appropriate entity name like `Light (6)` or falls back to `Entity (8)`
 pub fn guess_entity_name(world: &World, entity: Entity) -> String {

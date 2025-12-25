@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use crate::{
-	inspector::{self, WorldExtensions},
+	inspector::WorldExtensions,
 	ui::{
 		EditorUiBundle, InspectorSelection, SelectedEntities, builtin::BundleDnd,
-		events::SyncGizmoTargetsEvent, notifications::Notification,
+		notifications::Notification,
 	},
 	util::reflection,
 };
-use bevy::{ecs::entity::EntityHashSet, prelude::*};
+use bevy::prelude::*;
 use egui_file_dialog::FileDialog;
 use uuid::{Uuid, uuid};
 
@@ -28,7 +28,6 @@ impl EditorUiBundle for Hierarchy {
 	fn init(app: &mut App) {
 		app
 			.init_resource::<HierarchyState>()
-			.add_message::<SelectEntityMessage>()
 			.add_message::<ReparentMessage>()
 			.add_message::<ClearSelectedMessage>()
 			.add_message::<DespawnEntityMessage>()
@@ -36,7 +35,6 @@ impl EditorUiBundle for Hierarchy {
 			.add_systems(
 				FixedUpdate,
 				(
-					SelectEntityMessage::handle,
 					ReparentMessage::handle,
 					ClearSelectedMessage::handle,
 					DespawnEntityMessage::handle,
@@ -51,23 +49,10 @@ impl EditorUiBundle for Hierarchy {
 	fn ui(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
 		world.resource_scope(|world, mut selection: Mut<InspectorSelection>| {
 			if let InspectorSelection::Entities(selected_entities) = selection.as_mut() {
-				let previous = EntityHashSet::from_iter(selected_entities.iter());
-
-				if Self::show(ui, world, selected_entities) {
-					let current = EntityHashSet::from_iter(selected_entities.iter());
-					world.trigger(SyncGizmoTargetsEvent::new(
-						selected_entities.as_slice().into(),
-						previous.difference(&current).cloned().collect(),
-					));
-				}
+				Self::show(ui, world, selected_entities);
 			} else {
 				let mut selected_entities = SelectedEntities::default();
-
 				if Self::show(ui, world, &mut selected_entities) {
-					world.trigger(SyncGizmoTargetsEvent::new(
-						selected_entities.as_slice().into(),
-						default(),
-					));
 					*selection = InspectorSelection::Entities(selected_entities);
 				}
 			}
@@ -89,10 +74,6 @@ impl Hierarchy {
 		};
 
 		response.header_response.context_menu(|ui| {
-			if ui.button("Select").clicked() {
-				world.write_message(SelectEntityMessage(entity));
-			}
-
 			if ui.button("Reparent Selected").clicked() {
 				world.write_message(ReparentMessage(entity));
 			}
@@ -136,17 +117,6 @@ impl Hierarchy {
 }
 
 #[derive(Message)]
-struct SelectEntityMessage(Entity);
-
-impl SelectEntityMessage {
-	fn handle(mut message_reader: MessageReader<Self>, mut selection: ResMut<InspectorSelection>) {
-		for msg in message_reader.read() {
-			select_entity(&mut selection, msg.0);
-		}
-	}
-}
-
-#[derive(Message)]
 struct ReparentMessage(Entity);
 
 impl ReparentMessage {
@@ -158,16 +128,15 @@ impl ReparentMessage {
 		for msg in message_reader.read() {
 			if let InspectorSelection::Entities(selected) = &*selection {
 				commands.entity(msg.0).add_children(selected.as_slice());
-				select_entity(&mut selection, msg.0);
+
+				let mut entities = SelectedEntities::default();
+				let event = entities.select_replace(msg.0);
+				commands.trigger(event);
+
+				*selection = InspectorSelection::Entities(entities)
 			}
 		}
 	}
-}
-
-fn select_entity(selection: &mut InspectorSelection, entity: Entity) {
-	let mut entities = SelectedEntities::default();
-	entities.select_replace(entity);
-	*selection = InspectorSelection::Entities(entities)
 }
 
 #[derive(Message)]
@@ -197,11 +166,8 @@ impl ClearSelectedMessage {
 		messages.clear();
 
 		if let InspectorSelection::Entities(selected) = inspector_selection.as_mut() {
-			commands.trigger(SyncGizmoTargetsEvent::new(
-				default(),
-				selected.as_slice().into(),
-			));
-			selected.clear();
+			let event = selected.scoped_clear();
+			commands.trigger(event);
 		}
 	}
 }

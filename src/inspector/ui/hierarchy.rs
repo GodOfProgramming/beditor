@@ -1,8 +1,11 @@
 use super::{EntityFilter, Filter};
 use crate::util::egui::{CollapsingResponseExtensions, ResponseConditions};
 use crate::util::entity;
+use bevy::ecs::entity::EntityHashSet;
 use bevy::{ecs::query::QueryFilter, prelude::*};
+use derive_new::new;
 use egui::{CollapsingHeader, CollapsingResponse, RichText};
+use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -147,7 +150,8 @@ where
 					.flatten()
 			};
 
-			self.selected.select(selection_mode, entity, extend_with);
+			let event = self.selected.select(selection_mode, entity, extend_with);
+			self.world.trigger(event);
 
 			new_selection.maybe_take(Some(egui::CollapsingResponse {
 				header_response: response.header_response,
@@ -200,14 +204,12 @@ fn paint_default_icon(ui: &mut egui::Ui, openness: f32, response: &egui::Respons
 	ui.painter().add(egui::Shape::closed_line(points, stroke));
 }
 
-/// Collection of currently selected entities
 #[derive(Default, Debug)]
 pub struct SelectedEntities {
 	entities: Vec<Entity>,
 	last_action: Option<(SelectionMode, Entity)>,
 }
 
-/// Kind of selection modifier
 #[derive(Debug, Clone, Copy)]
 pub enum SelectionMode {
 	/// No modifiers
@@ -229,17 +231,19 @@ impl SelectionMode {
 }
 
 impl SelectedEntities {
-	pub fn select_replace(&mut self, entity: Entity) {
-		self.insert_replace(entity);
-		self.last_action = Some((SelectionMode::Replace, entity));
+	pub fn select_replace(&mut self, entity: Entity) -> SelectedEntitiesChangedEvent {
+		self.scope(|this| {
+			this.insert_replace(entity);
+			this.last_action = Some((SelectionMode::Replace, entity));
+		})
 	}
 
-	pub fn select_maybe_add(&mut self, entity: Entity, add: bool) {
+	pub fn select_maybe_add(&mut self, entity: Entity, add: bool) -> SelectedEntitiesChangedEvent {
 		let mode = match add {
 			true => SelectionMode::Add,
 			false => SelectionMode::Replace,
 		};
-		self.select(mode, entity, |_, _| std::iter::empty());
+		SelectedEntities::select(self, mode, entity, |_, _| std::iter::empty())
 	}
 
 	pub fn select<I: IntoIterator<Item = Entity>>(
@@ -247,35 +251,42 @@ impl SelectedEntities {
 		mode: SelectionMode,
 		entity: Entity,
 		extend_with: impl Fn(Entity, Entity) -> I,
-	) {
-		match (self.len(), mode) {
-			(0, _) => {
-				self.insert(entity);
-			}
-			(_, SelectionMode::Replace) => {
-				self.insert_replace(entity);
-			}
-			(_, SelectionMode::Add) => {
-				self.toggle(entity);
-			}
-			(_, SelectionMode::Extend) => {
-				match self.last_action {
-					None => self.insert(entity),
-					Some((last_mode, last_entity)) => {
-						if let SelectionMode::Add | SelectionMode::Replace = last_mode {
-							self.clear()
-						}
-						for entity in extend_with(entity, last_entity) {
-							self.insert(entity);
-						}
-
-						// extending doesn't update last action
-						return;
+	) -> SelectedEntitiesChangedEvent {
+		self.scope(|this| {
+			match (this.len(), mode) {
+				(0, _) => {
+					this.insert(entity);
+				}
+				(_, SelectionMode::Replace) => {
+					this.insert_replace(entity);
+				}
+				(_, SelectionMode::Add) => {
+					// toggle
+					if let Some(idx) = this.entities.iter().position(|&e| e == entity) {
+						this.entities.remove(idx);
+					} else {
+						this.entities.push(entity);
 					}
-				};
+				}
+				(_, SelectionMode::Extend) => {
+					match this.last_action {
+						None => this.insert(entity),
+						Some((last_mode, last_entity)) => {
+							if let SelectionMode::Add | SelectionMode::Replace = last_mode {
+								this.clear();
+							}
+							for entity in extend_with(entity, last_entity) {
+								this.insert(entity);
+							}
+
+							// extending doesn't update last action
+							return;
+						}
+					};
+				}
 			}
-		}
-		self.last_action = Some((mode, entity));
+			this.last_action = Some((mode, entity));
+		})
 	}
 
 	pub fn contains(&self, entity: Entity) -> bool {
@@ -292,40 +303,70 @@ impl SelectedEntities {
 		self.entities.push(entity);
 	}
 
-	fn toggle(&mut self, entity: Entity) {
-		if self.remove(entity).is_none() {
-			self.entities.push(entity);
-		}
-	}
+	pub fn scope(&mut self, f: impl FnOnce(&mut Self)) -> SelectedEntitiesChangedEvent {
+		let previous = EntityHashSet::from_iter(self.iter());
+		f(self);
+		let current = EntityHashSet::from_iter(self.iter());
 
-	pub fn remove(&mut self, entity: Entity) -> Option<Entity> {
-		if let Some(idx) = self.entities.iter().position(|&e| e == entity) {
-			Some(self.entities.remove(idx))
-		} else {
-			None
-		}
+		SelectedEntitiesChangedEvent::new(
+			self.as_slice().into(),
+			previous.difference(&current).cloned().collect(),
+		)
 	}
 
 	pub fn last_action(&self) -> Option<(SelectionMode, Entity)> {
 		self.last_action
 	}
 
-	pub fn clear(&mut self) {
+	pub fn scoped_clear(&mut self) -> SelectedEntitiesChangedEvent {
+		self.scope(|this| {
+			this.clear();
+		})
+	}
+
+	fn clear(&mut self) {
 		self.entities.clear();
 	}
-	pub fn retain(&mut self, f: impl Fn(Entity) -> bool) {
-		self.entities.retain(|entity| f(*entity));
-	}
+
 	pub fn len(&self) -> usize {
 		self.entities.len()
 	}
+
 	pub fn is_empty(&self) -> bool {
 		self.entities.len() == 0
 	}
+
 	pub fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
 		self.entities.iter().copied()
 	}
+
 	pub fn as_slice(&self) -> &[Entity] {
 		self.entities.as_slice()
 	}
 }
+
+#[must_use]
+#[derive(new, Event)]
+pub struct SelectedEntitiesChangedEvent {
+	current: SmallVec<[Entity; 8]>,
+	removed: SmallVec<[Entity; 8]>,
+}
+
+impl SelectedEntitiesChangedEvent {
+	pub fn on_event(event: On<Self>, mut commands: Commands) {
+		for &entity in event.current.iter() {
+			if let Ok(mut entity) = commands.get_entity(entity) {
+				entity.insert(Selected);
+			}
+		}
+
+		for &entity in event.removed.iter() {
+			if let Ok(mut entity) = commands.get_entity(entity) {
+				entity.remove::<Selected>();
+			}
+		}
+	}
+}
+
+#[derive(Component)]
+pub struct Selected;

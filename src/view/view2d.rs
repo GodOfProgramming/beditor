@@ -52,10 +52,6 @@ pub fn enable(
 		settings,
 		transform,
 		Projection::Orthographic(ortho),
-		Camera {
-			order: isize::MIN,
-			..default()
-		},
 	));
 }
 

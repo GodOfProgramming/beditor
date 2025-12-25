@@ -7,13 +7,13 @@ pub mod widgets;
 
 use crate::{
 	EditorState, RuntimeSettings, Settings,
-	inspector::ui::hierarchy::SelectedEntities,
+	inspector::ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
 	ui::{
 		builtin::{
 			editor_view::EditorView,
 			settings::{EditorSettingsUi, ProjectSettingsUi},
 		},
-		events::{OpenSingleUiMessage, OpenUiMessage, SyncGizmoTargetsEvent},
+		events::{OpenSingleUiMessage, OpenUiMessage},
 	},
 	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
 	view::cam::EditorCamera,
@@ -23,7 +23,6 @@ use bevy::{
 	camera::visibility::{Layer, RenderLayers},
 	ecs::{
 		component::Mutable,
-		entity::EntityHashSet,
 		system::{SystemParam, SystemState},
 	},
 	picking::pointer::PointerId,
@@ -32,6 +31,7 @@ use bevy::{
 	reflect::GetTypeRegistration,
 };
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_mesh_outline::MeshOutline;
 use builtin::{
 	assets::Assets, components::Components, debug::DebugMenu, hierarchy::Hierarchy,
 	inspector::Inspector, logs::Logs, menu_bar, prefabs::PrefabsUi, resources::Resources,
@@ -47,6 +47,7 @@ use misc::{MissingUi, UiExtensions, UiState};
 use notifications::NotificationPlugin;
 use persistent_id::PersistentId;
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
+use transform_gizmo_bevy::GizmoTarget;
 use uuid::Uuid;
 
 pub const EDITOR_UI_LAYER: Layer = 31;
@@ -91,8 +92,9 @@ impl Plugin for UiPlugin {
 			.add_plugins((EguiPlugin::default(), NotificationPlugin))
 			.add_observer(systems::on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
-			.add_observer(SyncGizmoTargetsEvent::on_event)
 			.add_observer(handle_click_events)
+			.add_observer(handle_selected)
+			.add_observer(handle_deselected)
 			.add_systems(Startup, (systems::startup, UiManager::init))
 			.add_systems(OnEnter(EditorState::Exiting), systems::on_app_exit)
 			.add_systems(
@@ -747,26 +749,14 @@ impl Default for InspectorSelection {
 }
 
 impl InspectorSelection {
-	pub fn add_selected(&mut self, entity: Entity, add: bool) -> SyncGizmoTargetsEvent {
+	pub fn add_selected(&mut self, entity: Entity, add: bool) -> SelectedEntitiesChangedEvent {
 		if let InspectorSelection::Entities(selected_entities) = self {
-			let previous = EntityHashSet::from_iter(selected_entities.iter());
-			selected_entities.select_maybe_add(entity, add);
-			let current = EntityHashSet::from_iter(selected_entities.iter());
-
-			SyncGizmoTargetsEvent::new(
-				selected_entities.as_slice().into(),
-				previous.difference(&current).cloned().collect(),
-			)
+			selected_entities.select_maybe_add(entity, add)
 		} else {
 			let mut selected_entities = SelectedEntities::default();
-			selected_entities.select_replace(entity);
-
+			let event = selected_entities.select_replace(entity);
 			*self = Self::Entities(selected_entities);
-			let InspectorSelection::Entities(selected_entities) = self else {
-				unreachable!();
-			};
-
-			SyncGizmoTargetsEvent::new(selected_entities.as_slice().into(), default())
+			event
 		}
 	}
 }
@@ -790,6 +780,25 @@ fn handle_click_events(
 	);
 
 	commands.trigger(event);
+}
+
+fn handle_selected(
+	event: On<Add, Selected>,
+	mut commands: Commands,
+	q_3d_meshes: Query<(), With<Mesh3d>>,
+) {
+	if let Ok(mut entity) = commands.get_entity(event.event_target()) {
+		entity.insert(GizmoTarget::default());
+		if q_3d_meshes.contains(entity.id()) {
+			entity.insert(MeshOutline::new(2.0));
+		}
+	}
+}
+
+fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
+	if let Ok(mut entity) = commands.get_entity(event.event_target()) {
+		entity.remove::<(GizmoTarget, MeshOutline)>();
+	}
 }
 
 /// Component that stores all ui components as children for organization

@@ -1,7 +1,8 @@
 use super::UP;
 use crate::{
+	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
 	ui::EditorUiHitCaptureNode,
-	util::storage::{ActiveEditorCameraSetting, ProjectSettings, RenderCamerasSetting},
+	util::storage::ProjectSettings,
 };
 use bevy::{
 	camera::{ImageRenderTarget, NormalizedRenderTarget, RenderTarget},
@@ -62,7 +63,7 @@ fn init_camera(
 	mut settings: ProjectSettings,
 	mut next_state: ResMut<NextState<ActiveEditorCamera>>,
 ) {
-	let state = settings.get_or_default::<ActiveEditorCameraSetting>();
+	let state = settings.get(ActiveEditorCameraSetting).unwrap_or_default();
 	next_state.set(state);
 }
 
@@ -302,7 +303,7 @@ fn track_editor_camera_changes(
 	cam_state: Res<State<ActiveEditorCamera>>,
 	mut settings: ProjectSettings,
 ) -> Result {
-	settings.set::<ActiveEditorCameraSetting>(**cam_state)
+	settings.set(ActiveEditorCameraSetting, **cam_state)
 }
 
 #[derive(new, Event)]
@@ -336,7 +337,7 @@ impl SyncRenderCamerasEvent {
 		render_cameras: Res<RenderCameras>,
 		mut settings: ProjectSettings,
 	) -> Result {
-		settings.set::<RenderCamerasSetting>(**render_cameras)?;
+		settings.set(RenderCamerasSetting, **render_cameras)?;
 		Ok(())
 	}
 }
@@ -345,7 +346,7 @@ fn retrieve_show_cameras_value(
 	mut render_cameras: ResMut<RenderCameras>,
 	mut settings: ProjectSettings,
 ) {
-	**render_cameras = settings.get_or_default::<RenderCamerasSetting>();
+	**render_cameras = settings.get(RenderCamerasSetting).unwrap_or_default();
 }
 
 pub fn should_show_cameras(render_cameras: Res<RenderCameras>) -> bool {

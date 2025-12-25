@@ -1,20 +1,16 @@
-mod settings;
+pub mod settings;
 
+use crate::{APP_DIR, Notification};
 use bevy::{ecs::system::SystemParam, prelude::*};
-use derive_more::derive::DerefMut;
-use derive_new::new;
-use egui_dock::DockState;
 use include_dir::{Dir, include_dir};
 use parking_lot::Mutex;
-use persistent_id::PersistentId;
-use rusqlite::Connection;
+use rusqlite::{
+	Connection,
+	types::{ToSqlOutput, ValueRef},
+};
 use rusqlite_migration::Migrations;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Borrow, marker::PhantomData, path::PathBuf, sync::LazyLock};
-
-pub use settings::*;
-
-use crate::APP_DIR;
+use std::{marker::PhantomData, path::PathBuf, sync::LazyLock};
 
 static EMBEDDED_GLOBAL_EDITOR_MIGRATIONS: Dir =
 	include_dir!("$CARGO_MANIFEST_DIR/migrations/global");
@@ -29,15 +25,57 @@ static PROJECT_MIGRATIONS: LazyLock<Migrations<'static>> =
 pub type GlobalEditorSettingsRes<'w> = ResMut<'w, Settings<Global>>;
 
 #[derive(SystemParam, Deref, DerefMut)]
-pub struct GlobalEditorSettings<'w> {
+pub struct GlobalEditorSettings<'w, 's> {
+	#[deref]
 	settings: GlobalEditorSettingsRes<'w>,
+	commands: Commands<'w, 's>,
+}
+
+impl GlobalEditorSettings<'_, '_> {
+	pub fn set<D>(&mut self, data: D, value: D::Type) -> Result
+	where
+		D: PersistentData<Type: Clone + Send + Sync>,
+	{
+		self
+			.settings
+			.set(data, value.clone())
+			.inspect(|_| {
+				self.commands.trigger(SettingChanged::<D>::new(value));
+			})
+			.inspect_err(|err| {
+				self
+					.commands
+					.trigger(Notification::error("Failed save setting").with_context(err.to_string()));
+			})
+	}
 }
 
 pub type ProjectSettingsRes<'w> = ResMut<'w, Settings<Project>>;
 
 #[derive(SystemParam, Deref, DerefMut)]
-pub struct ProjectSettings<'w> {
+pub struct ProjectSettings<'w, 's> {
+	#[deref]
 	settings: ProjectSettingsRes<'w>,
+	commands: Commands<'w, 's>,
+}
+
+impl ProjectSettings<'_, '_> {
+	pub fn set<D>(&mut self, data: D, value: D::Type) -> Result
+	where
+		D: PersistentData<Type: Clone + Send + Sync>,
+	{
+		self
+			.settings
+			.set(data, value.clone())
+			.inspect(|_| {
+				self.commands.trigger(SettingChanged::<D>::new(value));
+			})
+			.inspect_err(|err| {
+				self
+					.commands
+					.trigger(Notification::error("Failed save setting").with_context(err.to_string()));
+			})
+	}
 }
 
 #[derive(Resource)]
@@ -62,59 +100,76 @@ where
 		})
 	}
 
-	pub fn set<S>(&mut self, value: impl Borrow<S::Type>) -> Result
+	pub fn set<D>(&mut self, data: D, value: D::Type) -> Result
 	where
-		S: Setting,
+		D: PersistentData,
 	{
-		let serialized = ron::to_string(value.borrow())?;
+		let serialized = D::serialize(value)?;
+		let value = serialized.into();
 
-		let key = S::field();
+		let key = data.to_key();
+
+		let sql = format!(
+			include_str!("sql/set.sql"),
+			table = D::Table::TABLE,
+			key = D::Table::KEY_COLUMN,
+			value = D::Table::VALUE_COLUMN
+		);
 
 		self.db.lock().execute(
-      "INSERT INTO [settings]([key], [value]) VALUES(?1, ?2) ON CONFLICT([key]) DO UPDATE SET [value]=?2",
-      (&key, &serialized),
-    )?;
-
-		debug!("Updated setting {key} to {serialized}");
+			&sql,
+			[
+				ToSqlOutput::Borrowed(ValueRef::from(key.as_str())),
+				ToSqlOutput::Borrowed(ValueRef::from(&value)),
+			],
+		)?;
 
 		Ok(())
 	}
 
-	pub fn get<S>(&mut self) -> Result<S::Type>
+	pub fn get<D>(&mut self, data: D) -> Result<D::Type>
 	where
-		S: Setting,
+		D: PersistentData,
 	{
-		let key = S::field();
+		let key = data.to_key();
 
-		let result: String = {
-			self.db.lock().query_one(
-				"SELECT [value] FROM [settings] WHERE [key] == ?1",
-				(&key,),
-				|row| row.get(0).inspect_err(|err| error!("{err}")),
-			)?
+		let sql = format!(
+			include_str!("sql/get.sql"),
+			table = D::Table::TABLE,
+			key = D::Table::KEY_COLUMN,
+			value = D::Table::VALUE_COLUMN
+		);
+
+		let result: <D::Table as DataTable>::DataType = {
+			self.db.lock().query_one(&sql, [&key], |row| {
+				row.get(0).inspect_err(|err| error!("{err}"))
+			})?
 		};
 
-		let value = ron::de::from_str(&result)?;
-
-		debug!("Queried setting {key} = {result}");
+		let value = D::deserialize(result)?;
 
 		Ok(value)
 	}
 
-	pub fn get_or<S>(&mut self, alt: S::Type) -> S::Type
+	pub fn list_keys<T>(&mut self) -> Result<Vec<String>>
 	where
-		S: Setting,
-		S::Type: Default,
+		T: DataTable,
 	{
-		self.get::<S>().unwrap_or(alt)
-	}
+		let db = self.db.lock();
 
-	pub fn get_or_default<S>(&mut self) -> S::Type
-	where
-		S: Setting,
-		S::Type: Default,
-	{
-		self.get::<S>().unwrap_or_default()
+		let mut stmt = db.prepare(&format!(
+			include_str!("sql/list.sql"),
+			table = T::TABLE,
+			key = T::KEY_COLUMN
+		))?;
+
+		let names = stmt
+			.query_map([], |row| row.get(0))?
+			.filter_map(Result::ok)
+			.filter(|name: &String| !name.is_empty())
+			.collect::<Vec<String>>();
+
+		Ok(names)
 	}
 }
 
@@ -158,61 +213,37 @@ impl LocalStorage for Project {
 	}
 }
 
-#[derive(SystemParam, new)]
-pub struct Layouts<'w> {
-	storage: ResMut<'w, Settings<Project>>,
+pub trait DataTable {
+	type DataType: Into<rusqlite::types::Value> + rusqlite::types::FromSql;
+	const TABLE: &str;
+	const KEY_COLUMN: &str;
+	const VALUE_COLUMN: &str;
 }
 
-impl Layouts<'_> {
-	pub fn list(&mut self) -> Result<Vec<String>> {
-		let db = self.storage.db.lock();
-		let mut stmt = db.prepare("SELECT [name] FROM [layouts]")?;
-		let names = stmt
-			.query_map((), |row| row.get(0))?
-			.filter_map(Result::ok)
-			.filter(|name: &String| !name.is_empty())
-			.collect::<Vec<String>>();
-		Ok(names)
-	}
+pub trait PersistentData: 'static + Send + Sync {
+	type Table: DataTable;
+	type Type: Serialize + for<'de> Deserialize<'de>;
 
-	pub fn save_layout(&mut self, name: impl AsRef<str>, layout: DockState<LayoutInfo>) -> Result {
-		let name = name.as_ref();
-		let bytes = postcard::to_stdvec(&layout)?;
-		self.storage.db.lock().execute(
-      "INSERT INTO [layouts]([name], [data]) VALUES(?1, ?2) ON CONFLICT([name]) DO UPDATE SET [data]=?2",
-      (name, &bytes))?;
-		Ok(())
-	}
+	fn to_key(self) -> String;
 
-	pub fn get_layout(&mut self, name: impl AsRef<str>) -> Result<DockState<LayoutInfo>> {
-		let name = name.as_ref();
+	fn serialize(value: Self::Type) -> Result<<Self::Table as DataTable>::DataType>;
 
-		let result: Vec<u8> = {
-			self.storage.db.lock().query_one(
-				"SELECT [data] FROM [layouts] WHERE [name] == ?1",
-				[name],
-				|row| row.get(0).inspect_err(|err| error!("{err}")),
-			)?
-		};
-
-		let value = postcard::from_bytes(&result)?;
-
-		Ok(value)
-	}
+	fn deserialize(input: <Self::Table as DataTable>::DataType) -> Result<Self::Type>;
 }
 
-#[derive(Clone, Serialize, Deserialize, new)]
-pub struct LayoutInfo {
-	id: PersistentId,
-	name: String,
+#[derive(Event)]
+pub struct SettingChanged<D>
+where
+	D: PersistentData,
+{
+	pub value: D::Type,
 }
 
-impl LayoutInfo {
-	pub fn id(&self) -> PersistentId {
-		self.id
-	}
-
-	pub fn name(&self) -> &str {
-		&self.name
+impl<D> SettingChanged<D>
+where
+	D: PersistentData,
+{
+	fn new(value: D::Type) -> Self {
+		Self { value }
 	}
 }

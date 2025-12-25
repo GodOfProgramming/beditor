@@ -1,7 +1,8 @@
 use crate::{
-	EditorUi, Layouts, Notification,
-	ui::{DockExtensions, LayoutManager, UiManager, misc::MissingUi, widgets},
-	util::storage::{ProjectSettings, SaveLayoutOnExitSetting, StartEditorInTestingSetting},
+	EditorUi, Notification,
+	settings::{SaveLayoutOnExitSetting, StartEditorInTestingSetting},
+	ui::{DockExtensions, LayoutManager, SavedLayout, UiManager, misc::MissingUi, widgets},
+	util::storage::ProjectSettings,
 	view::cam::ActiveEditorCamera,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -20,7 +21,7 @@ pub struct ProjectSettingsUi {
 #[derive(SystemParam)]
 pub struct ProjectSettingsUiParams<'w, 's> {
 	commands: Commands<'w, 's>,
-	project_settings: ProjectSettings<'w>,
+	project_settings: ProjectSettings<'w, 's>,
 	active_camera_state: Res<'w, State<ActiveEditorCamera>>,
 	next_active_camera: ResMut<'w, NextState<ActiveEditorCamera>>,
 	layout_manager: ResMut<'w, LayoutManager>,
@@ -59,11 +60,13 @@ impl EditorUi for ProjectSettingsUi {
 	fn spawn(mut params: Self::Params<'_, '_>) -> Self {
 		*params.save_layout_on_exit = params
 			.project_settings
-			.get_or::<SaveLayoutOnExitSetting>(true);
+			.get(SaveLayoutOnExitSetting)
+			.unwrap_or(true);
 
 		*params.start_in_testing = params
 			.project_settings
-			.get_or_default::<StartEditorInTestingSetting>();
+			.get(StartEditorInTestingSetting)
+			.unwrap_or_default();
 
 		params.save_layout_dialog.set_title("Save Layout");
 		params.reset_layout_dialog.set_title("Reset Layout?");
@@ -129,14 +132,11 @@ impl ProjectSettingCategory {
 		match self {
 			Self::Core => {
 				ui.label("Start In Testing");
-				if ui.checkbox(&mut params.start_in_testing, ()).clicked()
-					&& let Err(err) = params
-						.project_settings
-						.set::<StartEditorInTestingSetting>(*params.start_in_testing)
-				{
+				if ui.checkbox(&mut params.start_in_testing, ()).clicked() {
 					params
-						.commands
-						.trigger(Notification::error("Failed to save setting").with_context(err));
+						.project_settings
+						.set(StartEditorInTestingSetting, *params.start_in_testing)
+						.ok();
 				}
 			}
 			Self::Camera => {
@@ -190,7 +190,7 @@ impl ProjectSettingCategory {
 					if ui.checkbox(&mut params.save_layout_on_exit, ()).clicked()
 						&& let Err(err) = params
 							.project_settings
-							.set::<SaveLayoutOnExitSetting>(*params.save_layout_on_exit)
+							.set(SaveLayoutOnExitSetting, *params.save_layout_on_exit)
 					{
 						params
 							.commands
@@ -207,21 +207,18 @@ struct SaveLayoutMessage(String);
 
 impl SaveLayoutMessage {
 	fn handle(
-		mut commands: Commands,
 		mut reader: MessageReader<Self>,
 		ui_manager: Res<UiManager>,
 		mut layout_manager: ResMut<LayoutManager>,
 		q_uuids: Query<&PersistentId, Without<MissingUi>>,
 		q_missing: Query<&MissingUi>,
-		mut layouts: Layouts,
+		mut settings: ProjectSettings,
 	) {
 		for msg in reader.read() {
 			let dock = ui_manager
 				.state()
 				.decouple(&ui_manager, &q_uuids, &q_missing);
-			if let Err(err) = layouts.save_layout(&msg.0, dock) {
-				commands.trigger(Notification::error("Failed to save layout").with_context(err));
-			} else {
+			if settings.set(SavedLayout(msg.0.clone()), dock).is_ok() {
 				layout_manager.insert(msg.0.clone());
 			}
 		}
@@ -235,11 +232,11 @@ impl LoadLayoutMessage {
 	fn handle(
 		mut reader: MessageReader<Self>,
 		mut commands: Commands,
-		mut layouts: Layouts,
+		mut settings: ProjectSettings,
 	) -> Result {
 		for msg in reader.read() {
 			let layout_name = msg.0.clone();
-			let dock = layouts.get_layout(layout_name)?;
+			let dock = settings.get(SavedLayout(layout_name))?;
 			commands.queue(move |world: &mut World| {
 				world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
 					let new_state = DockState::restore(&dock, ui_manager.vtables(), world);

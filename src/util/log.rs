@@ -1,4 +1,4 @@
-use crate::util::storage::{LogLevelSetting, ProjectSettings};
+use crate::{SettingChanged, settings::LogLevelSetting, util::storage::ProjectSettings};
 use bevy::{
 	ecs::system::SystemState,
 	log::{
@@ -34,11 +34,9 @@ impl Plugin for LogPlugin {
 	fn build(&self, app: &mut App) {
 		let mut system_state = SystemState::<ProjectSettings>::new(app.world_mut());
 		let mut settings = system_state.get_mut(app.world_mut());
-		let level = settings.get_or_default::<LogLevelSetting>();
+		let level = settings.get(LogLevelSetting).unwrap_or_default();
 
-		app
-			.add_observer(ChangeLogLevelEvent::handle.pipe(fire_log_level_changed))
-			.add_systems(Startup, (move || level).pipe(fire_log_level_changed));
+		app.add_observer(on_setting_changed);
 
 		let finished_subscriber;
 		let subscriber = Registry::default();
@@ -113,29 +111,13 @@ impl Plugin for LogPlugin {
 	}
 }
 
-#[derive(new, Event, Deref, DerefMut)]
-pub struct ChangeLogLevelEvent(LogLevel);
-
-impl ChangeLogLevelEvent {
-	pub fn handle(
-		event: On<Self>,
-		mut settings: ProjectSettings,
-		log_handle: Res<LogHandle>,
-	) -> Result<LogLevel> {
-		settings.set::<LogLevelSetting>(**event)?;
-		log_handle
-			.modify(|filter| *filter = (**event).into())
-			.inspect_err(|err| {
-				eprintln!("Failed to set log level filter: {err}");
-			})
-			.ok();
-
-		Ok(**event)
-	}
-}
-
-fn fire_log_level_changed(level: In<LogLevel>, mut commands: Commands) {
-	commands.trigger(LogLevelChangedEvent(*level));
+pub fn on_setting_changed(event: On<SettingChanged<LogLevelSetting>>, log_handle: Res<LogHandle>) {
+	log_handle
+		.modify(|filter| *filter = event.value.into())
+		.inspect_err(|err| {
+			eprintln!("Failed to set log level filter: {err}");
+		})
+		.ok();
 }
 
 #[derive(Event, Deref, DerefMut, new)]

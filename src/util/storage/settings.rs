@@ -1,38 +1,53 @@
 use crate::{
-	RuntimeSettings,
-	util::log::LogLevel,
+	DataTable, RuntimeSettings,
+	util::{log::LogLevel, storage::PersistentData},
 	view::{cam::ActiveEditorCamera, view2d, view3d},
 };
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
+
+pub struct SettingsTable;
+
+impl DataTable for SettingsTable {
+	type DataType = String;
+	const TABLE: &str = "settings";
+	const KEY_COLUMN: &str = "key";
+	const VALUE_COLUMN: &str = "value";
+}
 
 pub trait SettingsGroup {
-	const GROUP: &str;
+	type Table: DataTable;
+	const NAME: &str;
 }
 
-pub trait SettingKey {
+pub trait Setting: 'static + Send + Sync {
 	type Type: Serialize + for<'de> Deserialize<'de>;
 	type Group: SettingsGroup;
-	const KEY: &str;
+	const NAME: &str;
 }
 
-pub trait Setting {
-	type Type: Serialize + for<'de> Deserialize<'de>;
-	const GROUP: &str;
-	const KEY: &str;
-
-	fn field() -> String {
-		format!("{}.{}", Self::GROUP, Self::KEY)
-	}
-}
-
-impl<T> Setting for T
+impl<T> PersistentData for T
 where
-	Self: SettingKey,
+	T: Setting,
+	<T::Group as SettingsGroup>::Table: DataTable<DataType = String>,
 {
-	type Type = <Self as SettingKey>::Type;
-	const GROUP: &str = <Self as SettingKey>::Group::GROUP;
-	const KEY: &str = <Self as SettingKey>::KEY;
+	type Table = <<T as Setting>::Group as SettingsGroup>::Table;
+	type Type = T::Type;
+
+	fn to_key(self) -> String {
+		format!("{}.{}", T::Group::NAME, T::NAME)
+	}
+
+	fn serialize(value: Self::Type) -> Result<String> {
+		let value = ron::to_string(value.borrow())?;
+		Ok(value)
+	}
+
+	fn deserialize(input: String) -> Result<Self::Type> {
+		let value = ron::de::from_str(&input)?;
+		Ok(value)
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -40,33 +55,34 @@ where
 pub struct EditorSettingsGroup;
 
 impl SettingsGroup for EditorSettingsGroup {
-	const GROUP: &str = "editor";
+	type Table = SettingsTable;
+	const NAME: &str = "editor";
 }
 
 pub struct EditorSettingsSetting;
 
-impl SettingKey for EditorSettingsSetting {
+impl Setting for EditorSettingsSetting {
 	type Type = RuntimeSettings;
 	type Group = EditorSettingsGroup;
-	const KEY: &str = "settings";
+	const NAME: &str = "settings";
 }
 
 pub struct StartEditorInTestingSetting;
 
-impl SettingKey for StartEditorInTestingSetting {
+impl Setting for StartEditorInTestingSetting {
 	type Type = bool;
 	type Group = EditorSettingsGroup;
-	const KEY: &str = "start_in_testing";
+	const NAME: &str = "start_in_testing";
 }
 
 pub struct EditorEguiSettings;
 
-impl SettingKey for EditorEguiSettings {
+impl Setting for EditorEguiSettings {
 	type Type = bevy_egui::egui::Options;
 
 	type Group = EditorSettingsGroup;
 
-	const KEY: &str = "egui_settings";
+	const NAME: &str = "egui_settings";
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -74,23 +90,24 @@ impl SettingKey for EditorEguiSettings {
 pub struct WindowSettingsGroup;
 
 impl SettingsGroup for WindowSettingsGroup {
-	const GROUP: &str = "window";
+	type Table = SettingsTable;
+	const NAME: &str = "window";
 }
 
 pub struct WindowMaximizedSetting;
 
-impl SettingKey for WindowMaximizedSetting {
+impl Setting for WindowMaximizedSetting {
 	type Type = bool;
 	type Group = WindowSettingsGroup;
-	const KEY: &str = "maximized";
+	const NAME: &str = "maximized";
 }
 
 pub struct WindowSizeSetting;
 
-impl SettingKey for WindowSizeSetting {
+impl Setting for WindowSizeSetting {
 	type Type = Vec2;
 	type Group = WindowSettingsGroup;
-	const KEY: &str = "size";
+	const NAME: &str = "size";
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -98,31 +115,32 @@ impl SettingKey for WindowSizeSetting {
 pub struct UiSettingsGroup;
 
 impl SettingsGroup for UiSettingsGroup {
-	const GROUP: &str = "ui";
+	type Table = SettingsTable;
+	const NAME: &str = "ui";
 }
 
 pub struct SaveLayoutOnExitSetting;
 
-impl SettingKey for SaveLayoutOnExitSetting {
+impl Setting for SaveLayoutOnExitSetting {
 	type Type = bool;
 	type Group = UiSettingsGroup;
-	const KEY: &str = "save_layout_on_exit";
+	const NAME: &str = "save_layout_on_exit";
 }
 
 pub struct CurrentLayoutSetting;
 
-impl SettingKey for CurrentLayoutSetting {
+impl Setting for CurrentLayoutSetting {
 	type Type = String;
 	type Group = UiSettingsGroup;
-	const KEY: &str = "current_layout";
+	const NAME: &str = "current_layout";
 }
 
 pub struct CurrentThemeSetting;
 
-impl SettingKey for CurrentThemeSetting {
+impl Setting for CurrentThemeSetting {
 	type Type = String;
 	type Group = UiSettingsGroup;
-	const KEY: &str = "current_theme";
+	const NAME: &str = "current_theme";
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -130,15 +148,16 @@ impl SettingKey for CurrentThemeSetting {
 pub struct LogSettingsGroup;
 
 impl SettingsGroup for LogSettingsGroup {
-	const GROUP: &str = "log";
+	type Table = SettingsTable;
+	const NAME: &str = "log";
 }
 
 pub struct LogLevelSetting;
 
-impl SettingKey for LogLevelSetting {
+impl Setting for LogLevelSetting {
 	type Type = LogLevel;
 	type Group = LogSettingsGroup;
-	const KEY: &str = "level";
+	const NAME: &str = "level";
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -146,39 +165,38 @@ impl SettingKey for LogLevelSetting {
 pub struct ViewSettingsGroup;
 
 impl SettingsGroup for ViewSettingsGroup {
-	const GROUP: &str = "view";
+	type Table = SettingsTable;
+	const NAME: &str = "view";
 }
 
 pub struct RenderCamerasSetting;
 
-impl SettingKey for RenderCamerasSetting {
+impl Setting for RenderCamerasSetting {
 	type Type = bool;
 	type Group = ViewSettingsGroup;
-	const KEY: &str = "render_cameras";
+	const NAME: &str = "render_cameras";
 }
 
 pub struct ActiveEditorCameraSetting;
 
-impl SettingKey for ActiveEditorCameraSetting {
+impl Setting for ActiveEditorCameraSetting {
 	type Type = ActiveEditorCamera;
 	type Group = ViewSettingsGroup;
-	const KEY: &str = "active_editor_camera";
+	const NAME: &str = "active_editor_camera";
 }
 
 pub struct CamStateSetting2d;
 
-impl SettingKey for CamStateSetting2d {
+impl Setting for CamStateSetting2d {
 	type Type = view2d::CameraSaveData;
 	type Group = ViewSettingsGroup;
-	const KEY: &str = "2d_cam_state";
+	const NAME: &str = "2d_cam_state";
 }
 
 pub struct CamStateSetting3d;
 
-impl SettingKey for CamStateSetting3d {
+impl Setting for CamStateSetting3d {
 	type Type = view3d::CameraSaveData;
 	type Group = ViewSettingsGroup;
-	const KEY: &str = "3d_cam_state";
+	const NAME: &str = "3d_cam_state";
 }
-
-///////////////////////////////////////////////////////////////////////////////

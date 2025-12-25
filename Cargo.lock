@@ -515,6 +515,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 name = "beditor"
 version = "0.17.3"
 dependencies = [
+ "anyhow",
  "async-std",
  "bevy",
  "bevy-axes-gizmo",
@@ -532,6 +533,8 @@ dependencies = [
  "dotenvy",
  "egui",
  "egui-file-dialog",
+ "egui-probe",
+ "egui-snarl",
  "egui-toast",
  "egui_commonmark",
  "egui_demo_lib",
@@ -543,7 +546,9 @@ dependencies = [
  "fuzzy-matcher",
  "image",
  "include_dir",
+ "inventory",
  "itertools 0.14.0",
+ "lazy_static",
  "leafwing-input-manager",
  "log",
  "macros",
@@ -556,17 +561,21 @@ dependencies = [
  "platform-dirs",
  "postcard",
  "profiling",
+ "quote",
  "ron 0.12.0",
  "rusqlite",
  "rusqlite_migration",
  "serde",
- "serde_derive",
  "serde_json",
  "smallvec",
+ "smartstring",
+ "smol_str 0.3.4",
+ "speculoos",
  "static_assertions",
  "strum",
  "strum_macros",
  "thiserror 2.0.17",
+ "toml",
  "tracing",
  "tracing-log",
  "tracing-tracy",
@@ -574,6 +583,8 @@ dependencies = [
  "uuid",
  "variadics_please",
  "vfs",
+ "walkdir",
+ "xml-rs 1.0.0",
 ]
 
 [[package]]
@@ -1120,7 +1131,7 @@ dependencies = [
  "derive_more 2.0.1",
  "log",
  "serde",
- "smol_str",
+ "smol_str 0.2.2",
  "thiserror 2.0.17",
 ]
 
@@ -1452,7 +1463,7 @@ dependencies = [
  "petgraph",
  "serde",
  "smallvec",
- "smol_str",
+ "smol_str 0.2.2",
  "thiserror 2.0.17",
  "uuid",
  "variadics_please",
@@ -2003,6 +2014,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "borsh"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d1da5ab77c1437701eeff7c88d968729e7766172279eab0676857b3d63af7a6f"
+dependencies = [
+ "cfg_aliases",
+]
+
+[[package]]
 name = "brefabs"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2420,7 +2440,7 @@ dependencies = [
  "rustc-hash 1.1.0",
  "rustybuzz",
  "self_cell",
- "smol_str",
+ "smol_str 0.2.2",
  "swash",
  "sys-locale",
  "ttf-parser 0.21.1",
@@ -2854,6 +2874,36 @@ dependencies = [
  "egui",
  "serde",
  "sysinfo",
+]
+
+[[package]]
+name = "egui-probe"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15e4e0e99aeb685e65ff85d983d890a2bfa241f4f1d857af347b13a85801c24e"
+dependencies = [
+ "egui",
+]
+
+[[package]]
+name = "egui-scale"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7964ad2697e2b2df7157e5a0104c812c3773172c2a7b7dea95b57d9b5fd285f"
+dependencies = [
+ "egui",
+]
+
+[[package]]
+name = "egui-snarl"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6358986338c35fe268c0647b410725babd5de772010e8e739e88cb11f5665da"
+dependencies = [
+ "egui",
+ "egui-scale",
+ "slab",
+ "smallvec",
 ]
 
 [[package]]
@@ -3573,7 +3623,7 @@ checksum = "1a95dfc23a2b4a9a2f5ab41d194f8bfda3cabec42af4e39f08c339eb2a0c124d"
 dependencies = [
  "khronos_api",
  "log",
- "xml-rs",
+ "xml-rs 0.8.27",
 ]
 
 [[package]]
@@ -4876,12 +4926,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "num"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35bd024e8b2ff75562e5f34e7f4905839deb4b22955ef5e73d2fea1b9813cb23"
+dependencies = [
+ "num-bigint",
+ "num-complex",
+ "num-integer",
+ "num-iter",
+ "num-rational",
+ "num-traits",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
 dependencies = [
  "num-integer",
+ "num-traits",
+]
+
+[[package]]
+name = "num-complex"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495"
+dependencies = [
  "num-traits",
 ]
 
@@ -4902,6 +4975,17 @@ version = "0.1.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7969661fd2958a5cb096e56c8e1ad0444ac2bbcd0061bd28660485a44879858f"
 dependencies = [
+ "num-traits",
+]
+
+[[package]]
+name = "num-iter"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1429034a0490724d0075ebb2bc9e875d6503c3cf69e235a8941aa757d83ef5bf"
+dependencies = [
+ "autocfg",
+ "num-integer",
  "num-traits",
 ]
 
@@ -6335,6 +6419,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_spanned"
+version = "1.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8bbf91e5a4d6315eee45e704372590b30e260ee83af6639d64557f51b067776"
+dependencies = [
+ "serde_core",
+]
+
+[[package]]
 name = "sharded-slab"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6469,6 +6562,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd538fb6910ac1099850255cf94a94df6551fbdd602454387d0adb2d1ca6dead"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "smol_str"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3498b0a27f93ef1402f20eefacfaa1691272ac4eca1cdc8c596cb0a245d6cbf5"
+dependencies = [
+ "borsh",
+ "serde_core",
+]
+
+[[package]]
+name = "speculoos"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00c84ba5fa63b0de837c0d3cef5373ac1c3c6342053b7f446a210a1dde79a034"
+dependencies = [
+ "num",
+ "serde_json",
 ]
 
 [[package]]
@@ -6780,10 +6893,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "toml_datetime"
-version = "0.7.3"
+name = "toml"
+version = "0.9.10+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2cdb639ebbc97961c51720f858597f7f24c4fc295327923af55b74c3c724533"
+checksum = "0825052159284a1a8b4d6c0c86cbc801f2da5afd2b225fa548c72f2e74002f48"
+dependencies = [
+ "indexmap",
+ "serde_core",
+ "serde_spanned",
+ "toml_datetime",
+ "toml_parser",
+ "toml_writer",
+ "winnow",
+]
+
+[[package]]
+name = "toml_datetime"
+version = "0.7.5+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92e1cfed4a3038bc5a127e35a2d360f145e1f4b971b551a2ba5fd7aedf7e1347"
 dependencies = [
  "serde_core",
 ]
@@ -6802,12 +6930,18 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.0.2"
+version = "1.0.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b551886f449aa90d4fe2bdaa9f4a2577ad2dde302c61ecf262d80b116db95c10"
+checksum = "a3198b4b0a8e11f09dd03e133c0280504d0801269e9afa46362ffde1cbeebf44"
 dependencies = [
  "winnow",
 ]
+
+[[package]]
+name = "toml_writer"
+version = "1.0.6+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab16f14aed21ee8bfd8ec22513f7287cd4a91aa92e44edfe2c17ddd004e92607"
 
 [[package]]
 name = "tracing"
@@ -8171,7 +8305,7 @@ dependencies = [
  "rustix 0.38.44",
  "sctk-adwaita",
  "smithay-client-toolkit",
- "smol_str",
+ "smol_str 0.2.2",
  "tracing",
  "unicode-segmentation",
  "wasm-bindgen",
@@ -8190,9 +8324,9 @@ dependencies = [
 
 [[package]]
 name = "winnow"
-version = "0.7.12"
+version = "0.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3edebf492c8125044983378ecb5766203ad3b4c2f7a922bd7dd207f6d443e95"
+checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
 dependencies = [
  "memchr",
 ]
@@ -8270,10 +8404,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9cc00251562a284751c9973bace760d86c0276c471b4be569fe6b068ee97a56"
 
 [[package]]
+name = "xml"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2df5825faced2427b2da74d9100f1e2e93c533fff063506a81ede1cf517b2e7e"
+
+[[package]]
 name = "xml-rs"
 version = "0.8.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fd8403733700263c6eb89f192880191f1b83e332f7a20371ddcf421c4a337c7"
+
+[[package]]
+name = "xml-rs"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3a56132a0d6ecbe77352edc10232f788fc4ceefefff4cab784a98e0e16b6b51"
+dependencies = [
+ "xml",
+]
 
 [[package]]
 name = "xmlwriter"

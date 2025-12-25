@@ -1,7 +1,8 @@
 use crate::{
-	EditorUi,
+	EditorUi, ProjectSettings, SettingChanged,
 	inspector::TypeRegistryExtensions,
-	util::log::{ChangeLogLevelEvent, EventCollectorHandle, LogLevel, LogLevelChangedEvent},
+	settings::LogLevelSetting,
+	util::log::{EventCollectorHandle, LogLevel},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use uuid::{Uuid, uuid};
@@ -13,7 +14,7 @@ pub struct Logs {
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
-	commands: Commands<'w, 's>,
+	project_settings: ProjectSettings<'w, 's>,
 	log_collector: Res<'w, EventCollectorHandle>,
 	type_registry: Res<'w, AppTypeRegistry>,
 }
@@ -27,7 +28,9 @@ impl EditorUi for Logs {
 	type Params<'w, 's> = Params<'w, 's>;
 
 	fn init(app: &mut App) {
-		app.add_observer(handle_log_level_changes);
+		app
+			.add_observer(on_log_level_changed.pipe(apply_new_level))
+			.add_systems(Startup, load_log_level.pipe(apply_new_level));
 	}
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
@@ -52,15 +55,23 @@ impl Logs {
 				ui.label("Log Level");
 				let mut log_level = self.log_level;
 				if type_registry.ui_for_value(ui, &mut log_level) {
-					params.commands.trigger(ChangeLogLevelEvent::new(log_level));
+					params.project_settings.set(LogLevelSetting, log_level).ok();
 				}
 			});
 		});
 	}
 }
 
-fn handle_log_level_changes(event: On<LogLevelChangedEvent>, mut q_logs: Query<&mut Logs>) {
-	for mut this in &mut q_logs {
-		this.log_level = **event;
+fn load_log_level(mut project_settings: ProjectSettings) -> LogLevel {
+	project_settings.get(LogLevelSetting).unwrap_or_default()
+}
+
+fn on_log_level_changed(event: On<SettingChanged<LogLevelSetting>>) -> LogLevel {
+	event.value
+}
+
+fn apply_new_level(log_level: In<LogLevel>, mut q_logs: Query<&mut Logs>) {
+	for mut log_ui in &mut q_logs {
+		log_ui.log_level = *log_level;
 	}
 }

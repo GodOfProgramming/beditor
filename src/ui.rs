@@ -6,8 +6,9 @@ mod systems;
 pub mod widgets;
 
 use crate::{
-	EditorState, RuntimeSettings, Settings,
+	DataTable, EditorState, PersistentData, ProjectSettings, RuntimeSettings,
 	inspector::ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
+	settings::CurrentLayoutSetting,
 	ui::{
 		builtin::{
 			editor_view::EditorView,
@@ -15,7 +16,6 @@ use crate::{
 		},
 		events::{OpenSingleUiMessage, OpenUiMessage},
 	},
-	util::storage::{CurrentLayoutSetting, LayoutInfo, Layouts, Project},
 	view::cam::EditorCamera,
 };
 use bevy::{
@@ -46,6 +46,7 @@ use misc::{DockExtensions, EditorUiExtensions, UiResourceState};
 use misc::{MissingUi, UiExtensions, UiState};
 use notifications::NotificationPlugin;
 use persistent_id::PersistentId;
+use serde::{Deserialize, Serialize};
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
 use transform_gizmo_bevy::GizmoTarget;
 use uuid::Uuid;
@@ -364,23 +365,16 @@ impl UiManager {
 	}
 
 	pub fn restore_or_init(&mut self, world: &mut World) -> Result {
-		let mut sys_state = SystemState::<ParamSet<(ResMut<Settings<Project>>, Layouts)>>::new(world);
-		let mut params = sys_state.get_mut(world);
+		let mut sys_state = SystemState::<ProjectSettings>::new(world);
+		let mut project_settings = sys_state.get_mut(world);
 
-		let current_layout_name = {
-			let mut settings = params.p0();
-			settings.get::<CurrentLayoutSetting>().ok()
-		};
+		let current_layout_name = project_settings.get(CurrentLayoutSetting).ok();
 
-		let layouts = {
-			let mut layouts = params.p1();
-			BTreeSet::from_iter(layouts.list()?)
-		};
+		let layouts = BTreeSet::from_iter(project_settings.list_keys::<LayoutsTable>()?);
 
 		let mut dock = match current_layout_name {
 			Some(name) => {
-				let mut layouts = params.p1();
-				let layout = layouts.get_layout(name)?;
+				let layout = project_settings.get(SavedLayout(name))?;
 				DockState::restore(&layout, &self.vtables, world)
 			}
 			None => self.default_dock_state(world),
@@ -545,6 +539,52 @@ impl TabState {
 
 #[derive(new, Resource, Default, Deref, DerefMut)]
 pub struct LayoutManager(BTreeSet<String>);
+
+pub struct LayoutsTable;
+
+impl DataTable for LayoutsTable {
+	type DataType = Vec<u8>;
+	const TABLE: &str = "layouts";
+	const KEY_COLUMN: &str = "name";
+	const VALUE_COLUMN: &str = "data";
+}
+
+pub struct SavedLayout(String);
+
+impl PersistentData for SavedLayout {
+	type Table = LayoutsTable;
+	type Type = DockState<LayoutInfo>;
+
+	fn to_key(self) -> String {
+		self.0
+	}
+
+	fn serialize(value: Self::Type) -> Result<Vec<u8>> {
+		let bytes = postcard::to_stdvec(&value)?;
+		Ok(bytes)
+	}
+
+	fn deserialize(input: Vec<u8>) -> Result<Self::Type> {
+		let value = postcard::from_bytes(&input)?;
+		Ok(value)
+	}
+}
+
+#[derive(Clone, Serialize, Deserialize, new)]
+pub struct LayoutInfo {
+	id: PersistentId,
+	name: String,
+}
+
+impl LayoutInfo {
+	pub fn id(&self) -> PersistentId {
+		self.id
+	}
+
+	pub fn name(&self) -> &str {
+		&self.name
+	}
+}
 
 #[derive(Clone)]
 pub(crate) struct VTable {

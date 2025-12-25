@@ -4,7 +4,7 @@ use beditor::{
 };
 use bevy::prelude::*;
 use brefabs::PrefabPlugin;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 
 fn main() {
 	App::new()

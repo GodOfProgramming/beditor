@@ -1,6 +1,7 @@
 use crate::{
 	APP_DIR, EditorState, EditorUi, Notification, Settings,
-	util::storage::{CurrentThemeSetting, EditorEguiSettings, Global, GlobalEditorSettings},
+	settings::{CurrentThemeSetting, EditorEguiSettings},
+	util::storage::{Global, GlobalEditorSettings},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContexts, PrimaryEguiContext};
@@ -20,7 +21,7 @@ pub struct EditorSettingsUi {
 pub struct EditorSettingsUiParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	editor_settings: ResMut<'w, EditorSettings>,
-	global_settings: GlobalEditorSettings<'w>,
+	global_settings: GlobalEditorSettings<'w, 's>,
 }
 
 impl EditorUi for EditorSettingsUi {
@@ -75,7 +76,7 @@ struct EditorSettings {
 impl FromWorld for EditorSettings {
 	fn from_world(world: &mut World) -> Self {
 		let current_theme = world.resource_scope(|_, mut settings: Mut<Settings<Global>>| {
-			settings.get::<CurrentThemeSetting>().ok()
+			settings.get(CurrentThemeSetting).ok()
 		});
 
 		let themes_dir = APP_DIR.join("themes");
@@ -150,7 +151,8 @@ impl AppearanceSettings {
 							.selectable_value(&mut this.current_theme, key.clone(), key)
 							.clicked()
 						{
-							if let Err(err) = global_settings.set::<CurrentThemeSetting>(&this.current_theme) {
+							if let Err(err) = global_settings.set(CurrentThemeSetting, this.current_theme.clone())
+							{
 								error!("{err}");
 							}
 							ctx.set_style_of(egui::Theme::Dark, value.dark.clone());
@@ -248,7 +250,7 @@ impl EditorSettingCategory {
 fn save_settings(mut contexts: EguiContexts, mut settings: GlobalEditorSettings) {
 	if let Ok(ctx) = contexts.ctx_mut() {
 		let opts = ctx.options(|opts| opts.clone());
-		let _ = settings.set::<EditorEguiSettings>(opts);
+		let _ = settings.set(EditorEguiSettings, opts);
 	}
 }
 

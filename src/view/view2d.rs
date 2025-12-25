@@ -1,10 +1,8 @@
 use super::{PanState, UP};
 use crate::{
 	input::EditorActions,
-	util::{
-		self,
-		storage::{CamStateSetting2d, ProjectSettings},
-	},
+	settings::CamStateSetting2d,
+	util::{self, storage::ProjectSettings},
 	view::cam::{EditorCamera, EditorManagedCamera},
 };
 use bevy::{
@@ -37,7 +35,7 @@ pub fn enable(
 		settings,
 		transform,
 		orthographic_scale,
-	} = settings.get_or_default::<CamStateSetting2d>();
+	} = settings.get(CamStateSetting2d).unwrap_or_default();
 
 	let mut ortho = OrthographicProjection::default_2d();
 
@@ -61,11 +59,14 @@ pub fn save_settings(
 ) -> Result {
 	for (cam_transform, cam_settings, cam_proj) in &q_cam {
 		if let Projection::Orthographic(cam_ortho) = &cam_proj {
-			settings.set::<CamStateSetting2d>(CameraSaveData {
-				settings: cam_settings.clone(),
-				transform: *cam_transform,
-				orthographic_scale: Some(cam_ortho.scale),
-			})?;
+			settings.set(
+				CamStateSetting2d,
+				CameraSaveData {
+					settings: cam_settings.clone(),
+					transform: *cam_transform,
+					orthographic_scale: Some(cam_ortho.scale),
+				},
+			)?;
 		}
 	}
 
@@ -223,7 +224,7 @@ pub fn pan_system(
 	transform.translation.y += delta.y;
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Clone)]
 pub struct CameraSaveData {
 	settings: CameraSettings,
 	transform: Transform,

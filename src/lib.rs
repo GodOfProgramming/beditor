@@ -13,15 +13,15 @@ use std::{path::PathBuf, sync::LazyLock};
 
 use crate::{
 	inspector::InspectorPlugin,
+	settings::{
+		EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
+	},
 	ui::builtin::managed_view::EditorManagedView,
 	util::{
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 		log::LogPlugin,
 		reflection::ReflectionExtensionsPlugin,
-		storage::{
-			EditorSettingsSetting, Global, GlobalEditorSettings, StartEditorInTestingSetting,
-			WindowMaximizedSetting, WindowSizeSetting,
-		},
+		storage::{Global, GlobalEditorSettings},
 	},
 };
 use bevy::{
@@ -55,7 +55,9 @@ pub mod prelude {
 			AppExtensions, EntityManager, GameEntity, GameRenderLayer, RegisterableType, TypeGroups,
 			TypeList,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
-			storage::{Layouts, Project, ProjectSettings, SettingKey, Settings, SettingsGroup},
+			storage::{
+				DataTable, PersistentData, Project, ProjectSettings, SettingChanged, Settings, settings,
+			},
 		},
 		view::cam::EditorCamera,
 	};
@@ -263,7 +265,7 @@ struct EditorGlobalSystems;
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 struct EditingSystems;
 
-#[derive(Resource, Reflect, Serialize, Deserialize)]
+#[derive(Resource, Reflect, Serialize, Deserialize, Clone)]
 #[reflect(Resource, Default)]
 pub struct RuntimeSettings {
 	render_ui: bool,
@@ -279,7 +281,7 @@ fn save_editor_settings(
 	mut settings: ProjectSettings,
 	editor_settings: Res<RuntimeSettings>,
 ) -> Result {
-	settings.set::<EditorSettingsSetting>(&*editor_settings)
+	settings.set(EditorSettingsSetting, editor_settings.clone())
 }
 
 fn load_settings(
@@ -287,9 +289,11 @@ fn load_settings(
 	mut editor_settings: ResMut<RuntimeSettings>,
 	mut next_state: ResMut<NextState<EditorState>>,
 ) {
-	*editor_settings = settings.get_or_default::<EditorSettingsSetting>();
+	*editor_settings = settings.get(EditorSettingsSetting).unwrap_or_default();
 
-	let start_in_testing = settings.get_or_default::<StartEditorInTestingSetting>();
+	let start_in_testing = settings
+		.get(StartEditorInTestingSetting)
+		.unwrap_or_default();
 
 	if start_in_testing {
 		next_state.set(EditorState::Testing);
@@ -327,12 +331,11 @@ fn configure_windows(
 	mut settings: GlobalEditorSettings,
 	mut window: Single<&mut Window, With<PrimaryWindow>>,
 ) -> Result<()> {
-	let maximized = settings.get_or_default::<WindowMaximizedSetting>();
+	let maximized = settings.get(WindowMaximizedSetting).unwrap_or_default();
 	window.set_maximized(maximized);
-	if let Ok(size) = settings.get::<WindowSizeSetting>() {
+
+	if let Ok(size) = settings.get(WindowSizeSetting) {
 		window.resolution.set(size.x, size.y);
-	} else {
-		error!("No windows setting??");
 	}
 
 	Ok(())
@@ -397,7 +400,7 @@ fn handle_window_events(
 			{
 				let is_maximized = winit_window.is_maximized();
 				if *was_maximized != Some(is_maximized) {
-					settings.set::<WindowMaximizedSetting>(is_maximized)?;
+					settings.set(WindowMaximizedSetting, is_maximized)?;
 					*was_maximized = Some(is_maximized);
 				}
 			}
@@ -409,7 +412,7 @@ fn handle_window_events(
 	{
 		let size = window.resolution.size();
 		if *last_size != Some(size) {
-			settings.set::<WindowSizeSetting>(size)?;
+			settings.set(WindowSizeSetting, size)?;
 			*last_size = Some(size);
 		}
 	}

@@ -1,13 +1,10 @@
 use crate::{
-	Layouts,
+	settings::{CurrentLayoutSetting, EditorEguiSettings, SaveLayoutOnExitSetting},
 	ui::{
-		EditorUiCamera, EditorUiHitCaptureNode, UiManager,
+		EditorUiCamera, EditorUiHitCaptureNode, SavedLayout, UiManager,
 		misc::{MissingUi, UiState},
 	},
-	util::storage::{
-		CurrentLayoutSetting, EditorEguiSettings, GlobalEditorSettings, ProjectSettings,
-		SaveLayoutOnExitSetting,
-	},
+	util::storage::{GlobalEditorSettings, ProjectSettings},
 };
 use bevy::{prelude::*, ui::FocusPolicy};
 use bevy_egui::PrimaryEguiContext;
@@ -48,7 +45,7 @@ pub fn on_new_ctx(
 	egui_phosphor_icons::add_fonts(&mut fonts);
 	ctx.set_fonts(fonts.clone());
 
-	if let Ok(options) = settings.get::<EditorEguiSettings>() {
+	if let Ok(options) = settings.get(EditorEguiSettings) {
 		ctx.options_mut(|opts| {
 			// corrects this running after the other that deals with themes
 			let dark = opts.dark_style.clone();
@@ -78,32 +75,27 @@ pub fn on_app_exit(
 	ui_manager: Res<UiManager>,
 	q_uuids: Query<&PersistentId, Without<MissingUi>>,
 	q_missing: Query<&MissingUi>,
-	mut params: ParamSet<(ProjectSettings, Layouts)>,
+	mut settings: ProjectSettings,
 ) -> Result {
-	let current_layout = {
-		let mut settings = params.p0();
+	let save_on_exit = settings.get(SaveLayoutOnExitSetting).unwrap_or(true);
+	let current_layout = if save_on_exit {
+		let name = match settings.get(CurrentLayoutSetting).ok() {
+			Some(opt) => opt,
+			None => {
+				let default_layout = String::from("default");
+				settings.set(CurrentLayoutSetting, default_layout.clone())?;
+				default_layout
+			}
+		};
 
-		let save_on_exit = settings.get_or::<SaveLayoutOnExitSetting>(true);
-		if save_on_exit {
-			let name = match settings.get::<CurrentLayoutSetting>().ok() {
-				Some(opt) => opt,
-				None => {
-					let default_layout = String::from("default");
-					settings.set::<CurrentLayoutSetting>(&default_layout)?;
-					default_layout
-				}
-			};
-
-			Some(name)
-		} else {
-			None
-		}
+		Some(name)
+	} else {
+		None
 	};
 
 	if let Some(name) = current_layout {
-		let mut layouts = params.p1();
 		let new_state = ui_manager.save_current_layout(&q_uuids, &q_missing);
-		layouts.save_layout(name, new_state)?;
+		settings.set(SavedLayout(name), new_state)?;
 	}
 
 	Ok(())

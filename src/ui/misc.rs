@@ -1,5 +1,8 @@
 use super::{EditorUi, EditorUiBundle, VTable};
-use crate::{NoParams, UiManager, ui::TabState, util::storage::LayoutInfo};
+use crate::{
+	NoParams, UiManager,
+	ui::{LayoutInfo, TabState},
+};
 use bevy::{
 	ecs::{
 		component::Mutable,

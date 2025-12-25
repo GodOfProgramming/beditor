@@ -4,7 +4,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod input;
-mod inspector;
+pub mod inspector;
 mod ui;
 mod util;
 mod view;
@@ -19,8 +19,8 @@ use crate::{
 		log::LogPlugin,
 		reflection::ReflectionExtensionsPlugin,
 		storage::{
-			EditorSettingsSetting, Global, GlobalEditorSettings, Project, ProjectSettings,
-			StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
+			EditorSettingsSetting, Global, GlobalEditorSettings, StartEditorInTestingSetting,
+			WindowMaximizedSetting, WindowSizeSetting,
 		},
 	},
 };
@@ -54,7 +54,7 @@ pub mod prelude {
 			AppExtensions, EntityManager, GameEntity, GameRenderLayer, RegisterableType, TypeGroups,
 			TypeList,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
-			storage::{Layouts, SettingKey, Settings, SettingsGroup},
+			storage::{Layouts, Project, ProjectSettings, SettingKey, Settings, SettingsGroup},
 		},
 	};
 	pub use bevy_egui;

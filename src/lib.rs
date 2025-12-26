@@ -36,6 +36,7 @@ use bevy::{
 	winit::WINIT_WINDOWS,
 };
 use bevy_axes_gizmo::AxesGizmoPlugin;
+use bevy_infinite_grid::{InfiniteGrid, InfiniteGridBundle, InfiniteGridPlugin};
 use bevy_mesh_outline::MeshOutlinePlugin;
 use brefabs::PrefabPlugin;
 use input::InputPlugin;
@@ -231,6 +232,7 @@ impl Plugin for EditorPlugin {
 			.add_plugin_if_not_present(MeshOutlinePlugin)
 			.add_plugin_if_not_present(TransformGizmoPlugin)
 			.add_plugin_if_not_present(AxesGizmoPlugin::default())
+			.add_plugin_if_not_present(InfiniteGridPlugin)
 			.add_plugins((
 				EditorViewPlugin,
 				InputPlugin,
@@ -251,7 +253,11 @@ impl Plugin for EditorPlugin {
 				),
 			)
 			.add_systems(PostStartup, show_window)
-			.add_systems(OnEnter(EditorState::Editing), show_window_cursor)
+			.add_systems(
+				OnEnter(EditorState::Editing),
+				(show_window_cursor, show_infinite_grid),
+			)
+			.add_systems(OnExit(EditorState::Editing), remove_infinite_grid)
 			.add_systems(FixedUpdate, (on_close_requested, handle_window_events))
 			.add_systems(
 				OnEnter(EditorState::Exiting),
@@ -329,6 +335,16 @@ fn finish_exit(mut app_exit: MessageWriter<AppExit>) {
 fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 	for mut cursor in &mut q_cursors {
 		util::window::show_cursor(&mut cursor);
+	}
+}
+
+fn show_infinite_grid(mut commands: Commands) {
+	commands.spawn(InfiniteGridBundle::default());
+}
+
+fn remove_infinite_grid(mut commands: Commands, q_grids: Query<Entity, With<InfiniteGrid>>) {
+	for entity in &q_grids {
+		commands.entity(entity).despawn();
 	}
 }
 

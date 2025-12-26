@@ -28,7 +28,6 @@ use bevy::{
 	picking::pointer::PointerId,
 	platform::collections::HashMap,
 	prelude::*,
-	reflect::GetTypeRegistration,
 };
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
 use bevy_mesh_outline::MeshOutline;
@@ -119,7 +118,7 @@ impl Plugin for UiPlugin {
 	}
 }
 
-pub trait EditorUiBundle: Bundle + GetTypeRegistration + Send + Sync + Sized {
+pub trait EditorUiBundle: Bundle + Send + Sync + Sized {
 	type PrimaryComponent: Component;
 
 	const NAME: &str;
@@ -359,7 +358,6 @@ impl UiManager {
 
 	pub fn register<T: EditorUiBundle>(&mut self, app: &mut App) {
 		T::init(app);
-		app.register_type::<T>();
 		self.vtables.insert(PersistentId(T::ID), &T::VTABLE);
 	}
 

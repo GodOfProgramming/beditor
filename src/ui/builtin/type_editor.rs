@@ -152,10 +152,11 @@ struct TypeEditorState {
 
 	file_dialog: FileDialog,
 
-	type_selection_dialog: widgets::Dialog,
 	type_list: widgets::SelectableList<CachedType>,
 	type_filter: String,
 	type_list_cache: Vec<CachedType>,
+
+	type_selection_dialog: widgets::Dialog,
 }
 
 impl Default for TypeEditorState {
@@ -164,10 +165,13 @@ impl Default for TypeEditorState {
 			opened_file: None,
 			value: None,
 			file_dialog: FileDialog::default(),
-			type_selection_dialog: widgets::Dialog::new("Select Type"),
 			type_list: default(),
 			type_filter: default(),
 			type_list_cache: default(),
+			type_selection_dialog: widgets::Dialog::new(
+				egui::Id::new("type_editor_dialog"),
+				"Select a type",
+			),
 		}
 	}
 }
@@ -232,10 +236,10 @@ fn show_dialogs(
 	for (entity, mut state) in &mut q_states {
 		let TypeEditorState {
 			ref mut file_dialog,
-			ref mut type_selection_dialog,
 			ref mut type_list,
 			ref mut type_filter,
 			ref mut type_list_cache,
+			ref mut type_selection_dialog,
 			..
 		} = *state;
 
@@ -301,7 +305,7 @@ fn show_dialogs(
 
 		// this might be the dumbest thing I ever wrote
 		if let Some(response) = response
-			&& let Some(Some(value)) = response.inner
+			&& let Some(value) = response.inner
 		{
 			state.set_value(value);
 		}

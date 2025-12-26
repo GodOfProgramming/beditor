@@ -36,7 +36,11 @@ pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 }
 
 fn file_menu(ui: &mut egui::Ui) {
-	ui.menu_button("File", |_ui| {});
+	ui.menu_button("File", |ui| {
+		if ui.button("New Scene").clicked() {
+			//
+		}
+	});
 }
 
 fn edit_menu(ui: &mut egui::Ui, params: &mut Params<'_, '_>) {

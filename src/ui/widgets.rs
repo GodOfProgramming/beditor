@@ -1,14 +1,15 @@
 use itertools::Itertools;
 
-#[derive(Default)]
 pub struct Dialog {
+	id: egui::Id,
 	title: egui::WidgetText,
 	pub open: bool,
 }
 
 impl Dialog {
-	pub fn new(title: impl Into<egui::WidgetText>) -> Self {
+	pub fn new(id: egui::Id, title: impl Into<egui::WidgetText>) -> Self {
 		Self {
+			id,
 			title: title.into(),
 			open: false,
 		}
@@ -23,18 +24,13 @@ impl Dialog {
 		&mut self,
 		ctx: &egui::Context,
 		contents: impl FnOnce(&mut egui::Ui, &mut bool) -> R,
-	) -> Option<egui::InnerResponse<Option<R>>> {
-		let mut open = self.open;
-		let out = egui::Window::new(self.title.clone())
-			.open(&mut self.open)
-			.anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
-			.title_bar(true)
-			.resizable(false)
-			.movable(false)
-			.collapsible(false)
-			.show(ctx, |ui| (contents)(ui, &mut open));
-		self.open &= open;
-		out
+	) -> Option<egui::ModalResponse<R>> {
+		if self.open {
+			let response = egui::Modal::new(self.id).show(ctx, |ui| (contents)(ui, &mut self.open));
+			Some(response)
+		} else {
+			None
+		}
 	}
 }
 

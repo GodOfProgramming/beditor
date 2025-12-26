@@ -13,9 +13,11 @@ use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
 use uuid::uuid;
 
-#[derive(Default, Component, Reflect)]
+#[derive(Component)]
 pub struct ProjectSettingsUi {
 	selected_category: Option<ProjectSettingCategory>,
+	save_layout_dialog: widgets::Dialog,
+	reset_layout_dialog: widgets::Dialog,
 }
 
 #[derive(SystemParam)]
@@ -25,8 +27,6 @@ pub struct ProjectSettingsUiParams<'w, 's> {
 	active_camera_state: Res<'w, State<ActiveEditorCamera>>,
 	next_active_camera: ResMut<'w, NextState<ActiveEditorCamera>>,
 	layout_manager: ResMut<'w, LayoutManager>,
-	save_layout_dialog: Local<'s, widgets::Dialog>,
-	reset_layout_dialog: Local<'s, widgets::Dialog>,
 	layout_name: Local<'s, String>,
 
 	save_layout_on_exit: Local<'s, bool>,
@@ -68,20 +68,58 @@ impl EditorUi for ProjectSettingsUi {
 			.get(StartEditorInTestingSetting)
 			.unwrap_or_default();
 
-		params.save_layout_dialog.set_title("Save Layout");
-		params.reset_layout_dialog.set_title("Reset Layout?");
-
-		default()
+		Self {
+			selected_category: None,
+			save_layout_dialog: widgets::Dialog::new(egui::Id::new("save_layout_dialog"), "Save Layout"),
+			reset_layout_dialog: widgets::Dialog::new(
+				egui::Id::new("reset_layout_dialog"),
+				"Reset Layout?",
+			),
+		}
 	}
 
 	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+		self.save_layout_dialog.show(ui.ctx(), |ui, open| {
+			ui.horizontal(|ui| {
+				ui.label("Name");
+				ui.text_edit_singleline(&mut *params.layout_name);
+			});
+
+			ui.horizontal(|ui| {
+				if ui.button("Save").clicked() {
+					params
+						.commands
+						.write_message(SaveLayoutMessage(params.layout_name.take()));
+					*open = false;
+				}
+
+				if ui.button("Cancel").clicked() {
+					*open = false;
+				}
+			});
+		});
+
+		self.reset_layout_dialog.show(ui.ctx(), |ui, open| {
+			ui.label("This will reset your layout to the default configuration. Continue?");
+			ui.horizontal(|ui| {
+				if ui.button("Ok").clicked() {
+					params.commands.write_message(ResetLayoutMessage);
+					*open = false;
+				}
+
+				if ui.button("Cancel").clicked() {
+					*open = false;
+				}
+			});
+		});
+
 		let selected = super::settings_display(
 			ui,
 			self.selected_category,
 			ProjectSettingCategory::iter(),
 			|ui| {
 				if let Some(category) = self.selected_category {
-					category.ui(ui, &mut params);
+					category.ui(ui, &mut params, self);
 				} else {
 					ui.label("Select a category");
 				}
@@ -102,33 +140,12 @@ enum ProjectSettingCategory {
 }
 
 impl ProjectSettingCategory {
-	fn ui(self, ui: &mut egui::Ui, params: &mut ProjectSettingsUiParams<'_, '_>) {
-		params.save_layout_dialog.show(ui.ctx(), |ui, open| {
-			ui.horizontal(|ui| {
-				ui.label("Name");
-				ui.text_edit_singleline(&mut *params.layout_name);
-			});
-
-			ui.horizontal(|ui| {
-				if ui.button("Save").clicked() {
-					params
-						.commands
-						.write_message(SaveLayoutMessage(params.layout_name.take()));
-					*open = false;
-				}
-			});
-		});
-
-		params.reset_layout_dialog.show(ui.ctx(), |ui, open| {
-			ui.label("This will reset your layout to the default configuration. Continue?");
-			ui.horizontal(|ui| {
-				if ui.button("Ok").clicked() {
-					params.commands.write_message(ResetLayoutMessage);
-					*open = false;
-				}
-			});
-		});
-
+	fn ui(
+		self,
+		ui: &mut egui::Ui,
+		params: &mut ProjectSettingsUiParams<'_, '_>,
+		settings_ui: &mut ProjectSettingsUi,
+	) {
 		match self {
 			Self::Core => {
 				ui.label("Start In Testing");
@@ -156,15 +173,15 @@ impl ProjectSettingCategory {
 				});
 			}
 			Self::Layouts => {
-				ui.add_enabled_ui(!params.save_layout_dialog.open, |ui| {
+				ui.add_enabled_ui(!settings_ui.save_layout_dialog.open, |ui| {
 					if ui.button("Save Layout").clicked() {
-						params.save_layout_dialog.open = true;
+						settings_ui.save_layout_dialog.open = true;
 					}
 				});
 
 				if !params.layout_manager.is_empty() {
 					ui.add_enabled_ui(
-						!params.save_layout_dialog.open && !params.reset_layout_dialog.open,
+						!settings_ui.save_layout_dialog.open && !settings_ui.reset_layout_dialog.open,
 						|ui| {
 							ui.menu_button("Restore", |ui| {
 								for layout in params.layout_manager.iter() {
@@ -179,9 +196,9 @@ impl ProjectSettingCategory {
 					);
 				}
 
-				ui.add_enabled_ui(!params.reset_layout_dialog.open, |ui| {
+				ui.add_enabled_ui(!settings_ui.reset_layout_dialog.open, |ui| {
 					if ui.button("Restore Default").clicked() {
-						params.reset_layout_dialog.open = true;
+						settings_ui.reset_layout_dialog.open = true;
 					}
 				});
 

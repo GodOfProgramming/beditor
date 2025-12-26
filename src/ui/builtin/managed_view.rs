@@ -7,18 +7,17 @@ use bevy_egui::EguiContexts;
 use persistent_id::Identifiable;
 use std::marker::PhantomData;
 
-#[derive(Component, Reflect)]
+#[derive(Component)]
 pub struct EditorManagedViewUi<C>
 where
-	C: Component + Reflectable,
+	C: Component,
 {
-	#[reflect(ignore)]
 	_pd: PhantomData<C>,
 }
 
 impl<C> Default for EditorManagedViewUi<C>
 where
-	C: Component + Reflectable,
+	C: Component,
 {
 	fn default() -> Self {
 		Self { _pd: default() }
@@ -69,7 +68,9 @@ where
 	type Params<'w, 's> = Params<'w, 's, C>;
 
 	fn init(app: &mut App) {
-		app.add_observer(take_ownership_of_camera::<C>);
+		app
+			.add_observer(take_ownership_of_camera::<C>)
+			.add_observer(transfer_ownership_of_camera::<C>);
 	}
 
 	fn spawn(mut params: Self::Params<'_, '_>) -> Self {
@@ -223,4 +224,16 @@ fn take_ownership_of_camera<C: Component>(event: On<Add, C>, mut commands: Comma
 	commands
 		.entity(event.event_target())
 		.insert(EditorManagedCamera::default());
+}
+
+fn transfer_ownership_of_camera<C: Component>(
+	event: On<Add, EditorManagedViewUi<C>>,
+	mut commands: Commands,
+	q_cameras: Query<Entity, With<C>>,
+) {
+	for entity in q_cameras {
+		commands
+			.entity(entity)
+			.insert(EditorManagedCamera::default());
+	}
 }

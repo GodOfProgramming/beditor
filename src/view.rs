@@ -4,10 +4,7 @@ pub mod view3d;
 
 use crate::{
 	EditorState, input,
-	ui::{
-		builtin::{editor_view::EditorViewUi, managed_view::EditorManagedViewUi},
-		misc::UiState,
-	},
+	ui::{builtin::editor_view::EditorViewUi, misc::UiState},
 	view::cam::{ActiveEditorCamera, EditorCamPlugin},
 };
 use bevy::{prelude::*, reflect::Reflectable};
@@ -34,9 +31,6 @@ impl Plugin for EditorViewPlugin {
 						.run_if(mouse_movement_active),
 				),
 			)
-			.register_type::<ActiveEditorCamera>()
-			.register_type::<view2d::CameraSettings>()
-			.register_type::<view2d::CameraState>()
 			.insert_state(ActiveEditorCamera::None)
 			.insert_state(OrbitState::Inactive)
 			.insert_state(PanState::Inactive)
@@ -106,7 +100,7 @@ pub fn add_game_camera<C>(app: &mut App)
 where
 	C: Component + Reflectable,
 {
-	app.register_type::<EditorManagedViewUi<C>>().add_systems(
+	app.add_systems(
 		Update,
 		(
 			cam::render_2d_cameras::<C>

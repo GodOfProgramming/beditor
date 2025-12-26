@@ -8,7 +8,7 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use uuid::{Uuid, uuid};
 
 #[derive(Default, Component, Reflect)]
-pub struct Logs {
+pub struct LogUi {
 	log_level: LogLevel,
 }
 
@@ -19,7 +19,7 @@ pub struct Params<'w, 's> {
 	type_registry: Res<'w, AppTypeRegistry>,
 }
 
-impl EditorUi for Logs {
+impl EditorUi for LogUi {
 	const NAME: &str = stringify!(Logs);
 	const ID: Uuid = uuid!("22329413-2eff-4b95-85ad-d9b6656c9d76");
 
@@ -46,7 +46,7 @@ impl EditorUi for Logs {
 	}
 }
 
-impl Logs {
+impl LogUi {
 	fn log_level_selector(&self, ui: &mut egui::Ui, params: &mut Params) {
 		ui.push_id("log-level-selector", |ui| {
 			ui.horizontal(|ui| {
@@ -70,7 +70,7 @@ fn on_log_level_changed(event: On<SettingChanged<LogLevelSetting>>) -> LogLevel 
 	event.value
 }
 
-fn apply_new_level(log_level: In<LogLevel>, mut q_logs: Query<&mut Logs>) {
+fn apply_new_level(log_level: In<LogLevel>, mut q_logs: Query<&mut LogUi>) {
 	for mut log_ui in &mut q_logs {
 		log_ui.log_level = *log_level;
 	}

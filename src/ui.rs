@@ -11,7 +11,7 @@ use crate::{
 	settings::CurrentLayoutSetting,
 	ui::{
 		builtin::{
-			editor_view::EditorView,
+			editor_view::EditorViewUi,
 			settings::{EditorSettingsUi, ProjectSettingsUi},
 		},
 		events::{OpenSingleUiMessage, OpenUiMessage},
@@ -23,7 +23,7 @@ use bevy::{
 	camera::visibility::{Layer, RenderLayers},
 	ecs::{
 		component::Mutable,
-		system::{SystemParam, SystemState},
+		system::{SystemParam, SystemState, entity_command},
 	},
 	picking::pointer::PointerId,
 	platform::collections::HashMap,
@@ -33,9 +33,9 @@ use bevy::{
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
 use bevy_mesh_outline::MeshOutline;
 use builtin::{
-	assets::Assets, components::Components, debug::DebugMenu, hierarchy::Hierarchy,
-	inspector::Inspector, logs::Logs, menu_bar, prefabs::PrefabsUi, resources::Resources,
-	type_editor::TypeEditor,
+	assets::AssetsUi, components::ComponentsUi, diagnostics::DiagnosticsUi, hierarchy::HierarchyUi,
+	inspector::InspectorUi, logs::LogUi, menu_bar, prefabs::PrefabsUi, resources::ResourcesUi,
+	type_editor::TypeEditorUi,
 };
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
@@ -322,16 +322,14 @@ where
 }
 
 #[derive(Resource)]
-pub(crate) struct UiManager {
+pub struct UiManager {
 	state: DockState<TabState>,
-
 	vtables: HashMap<PersistentId, &'static VTable>,
-
 	id: egui::Id,
 }
 
 impl UiManager {
-	pub fn new(app: &mut App) -> Self {
+	pub(crate) fn new(app: &mut App) -> Self {
 		let mut this = Self {
 			state: DockState::new(Vec::new()),
 			vtables: default(),
@@ -340,18 +338,18 @@ impl UiManager {
 
 		this.register::<MissingUi>(app);
 
-		this.register::<Assets>(app);
-		this.register::<Components>(app);
-		this.register::<DebugMenu>(app);
+		this.register::<AssetsUi>(app);
+		this.register::<ComponentsUi>(app);
+		this.register::<DiagnosticsUi>(app);
 		this.register::<EditorSettingsUi>(app);
-		this.register::<EditorView>(app);
-		this.register::<Hierarchy>(app);
-		this.register::<Inspector>(app);
-		this.register::<Logs>(app);
+		this.register::<EditorViewUi>(app);
+		this.register::<HierarchyUi>(app);
+		this.register::<InspectorUi>(app);
+		this.register::<LogUi>(app);
 		this.register::<PrefabsUi>(app);
 		this.register::<ProjectSettingsUi>(app);
-		this.register::<Resources>(app);
-		this.register::<TypeEditor>(app);
+		this.register::<ResourcesUi>(app);
+		this.register::<TypeEditorUi>(app);
 
 		let state = SystemState::<menu_bar::Params<'_, '_>>::new(app.world_mut());
 		app.insert_resource(UiResourceState::new(state));
@@ -359,12 +357,54 @@ impl UiManager {
 		this
 	}
 
-	pub fn init(world: &mut World) -> Result {
+	pub fn register<T: EditorUiBundle>(&mut self, app: &mut App) {
+		T::init(app);
+		app.register_type::<T>();
+		self.vtables.insert(PersistentId(T::ID), &T::VTABLE);
+	}
+
+	pub fn save_state(
+		&self,
+		q_uuids: &Query<&PersistentId, Without<MissingUi>>,
+		q_missing: &Query<&MissingUi>,
+	) -> DockState<LayoutInfo> {
+		self.state.decouple(self, q_uuids, q_missing)
+	}
+
+	pub fn add_detached(&mut self, tabs: Vec<TabState>) -> SurfaceIndex {
+		self.state.add_window(tabs)
+	}
+
+	pub fn add_tab(&mut self, surface: SurfaceIndex, node: NodeIndex, tab: TabState) -> bool {
+		let Some(surface) = self.state.get_surface_mut(surface) else {
+			return false;
+		};
+
+		let Some(nodes) = surface.node_tree_mut() else {
+			return false;
+		};
+
+		let node = &mut nodes[node];
+
+		node.append_tab(tab);
+
+		true
+	}
+
+	pub fn add_tab_to_focused(&mut self, tab: TabState) -> bool {
+		let Some((surface, node)) = self.state.focused_leaf() else {
+			return false;
+		};
+
+		self.add_tab(surface, node, tab)
+	}
+
+	fn init(world: &mut World) -> Result {
 		world.spawn((Name::new("Editor Ui Panels"), UiPanels));
 		world.resource_scope(|world, mut this: Mut<Self>| this.restore_or_init(world))
 	}
 
-	pub fn restore_or_init(&mut self, world: &mut World) -> Result {
+	fn restore_or_init(&mut self, world: &mut World) -> Result {
 		let mut sys_state = SystemState::<ProjectSettings>::new(world);
 		let mut project_settings = sys_state.get_mut(world);
 
@@ -395,13 +435,7 @@ impl UiManager {
 		Ok(())
 	}
 
-	pub fn register<T: EditorUiBundle>(&mut self, app: &mut App) {
-		T::init(app);
-		app.register_type::<T>();
-		self.vtables.insert(PersistentId(T::ID), &T::VTABLE);
-	}
-
-	pub fn ui(&mut self, world: &mut World) {
+	fn ui(&mut self, world: &mut World) {
 		let Ok(ctx) = world
 			.query::<&mut bevy_egui::EguiContext>()
 			.single_mut(world)
@@ -442,42 +476,6 @@ impl UiManager {
 			});
 	}
 
-	pub fn save_current_layout(
-		&self,
-		q_uuids: &Query<&PersistentId, Without<MissingUi>>,
-		q_missing: &Query<&MissingUi>,
-	) -> DockState<LayoutInfo> {
-		self.state.decouple(self, q_uuids, q_missing)
-	}
-
-	fn add_detached(&mut self, tabs: Vec<TabState>) -> SurfaceIndex {
-		self.state.add_window(tabs)
-	}
-
-	fn add_tab(&mut self, surface: SurfaceIndex, node: NodeIndex, tab: TabState) -> bool {
-		let Some(surface) = self.state.get_surface_mut(surface) else {
-			return false;
-		};
-
-		let Some(nodes) = surface.node_tree_mut() else {
-			return false;
-		};
-
-		let node = &mut nodes[node];
-
-		node.append_tab(tab);
-
-		true
-	}
-
-	fn add_tab_to_focused(&mut self, tab: TabState) -> bool {
-		let Some((surface, node)) = self.state.focused_leaf() else {
-			return false;
-		};
-
-		self.add_tab(surface, node, tab)
-	}
-
 	fn vtables(&self) -> &HashMap<PersistentId, &'static VTable> {
 		&self.vtables
 	}
@@ -494,26 +492,26 @@ impl UiManager {
 	}
 
 	fn default_dock_state(&self, world: &mut World) -> DockState<TabState> {
-		let mut state = DockState::new(vec![TabState::spawn::<EditorView>(world)]);
+		let mut state = DockState::new(vec![TabState::new::<EditorViewUi>(world)]);
 
 		let tree = state.main_surface_mut();
 
 		let root = NodeIndex::root();
 
 		let tabs = vec![
-			TabState::spawn::<Hierarchy>(world),
-			TabState::spawn::<DebugMenu>(world),
+			TabState::new::<HierarchyUi>(world),
+			TabState::new::<DiagnosticsUi>(world),
 		];
 		let [central_panel, _left_panel] = tree.split_left(root, 1.0 / 6.0, tabs);
 
-		let tabs = vec![TabState::spawn::<Inspector>(world)];
+		let tabs = vec![TabState::new::<InspectorUi>(world)];
 		let [central_panel, _right_panel] = tree.split_right(central_panel, 4.0 / 5.0, tabs);
 
 		let tabs = vec![
-			TabState::spawn::<PrefabsUi>(world),
-			TabState::spawn::<Components>(world),
-			TabState::spawn::<Resources>(world),
-			TabState::spawn::<Assets>(world),
+			TabState::new::<PrefabsUi>(world),
+			TabState::new::<ComponentsUi>(world),
+			TabState::new::<ResourcesUi>(world),
+			TabState::new::<AssetsUi>(world),
 		];
 		tree.split_below(central_panel, 0.7, tabs);
 
@@ -525,15 +523,18 @@ impl UiManager {
 	}
 }
 
-#[derive(new, Clone)]
-struct TabState {
+#[derive(Clone)]
+pub struct TabState {
 	entity: Entity,
 	vtable: &'static VTable,
 }
 
 impl TabState {
-	fn spawn<T: EditorUiBundle>(world: &mut World) -> Self {
-		Self::new((T::VTABLE.spawn)(world), &T::VTABLE)
+	fn new<T: EditorUiBundle>(world: &mut World) -> Self {
+		Self {
+			entity: (T::VTABLE.spawn)(world),
+			vtable: &T::VTABLE,
+		}
 	}
 }
 
@@ -715,7 +716,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 						world.write_message(AppendUiMessage::new(
 							surface,
 							node,
-							TabState::new(entity, vtable),
+							TabState { entity, vtable },
 						));
 					}
 				});
@@ -725,7 +726,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 				world.write_message(AppendUiMessage::new(
 					surface,
 					node,
-					TabState::new(entity, vtable),
+					TabState { entity, vtable },
 				));
 			}
 		}
@@ -837,7 +838,7 @@ fn handle_selected(
 
 fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 	if let Ok(mut entity) = commands.get_entity(event.event_target()) {
-		entity.remove::<(GizmoTarget, MeshOutline)>();
+		entity.queue_silenced(entity_command::remove::<(GizmoTarget, MeshOutline)>());
 	}
 }
 

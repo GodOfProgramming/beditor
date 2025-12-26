@@ -9,11 +9,11 @@ use std::{marker::PhantomData, num::NonZeroUsize};
 use uuid::uuid;
 
 #[derive(Component, Reflect)]
-pub struct Components {
+pub struct ComponentsUi {
 	components_per_row: usize,
 }
 
-impl Default for Components {
+impl Default for ComponentsUi {
 	fn default() -> Self {
 		Self {
 			components_per_row: 20,
@@ -30,7 +30,7 @@ pub struct Params<'w, 's> {
 	_pd: PhantomData<&'s ()>,
 }
 
-impl EditorUi for Components {
+impl EditorUi for ComponentsUi {
 	const NAME: &str = "Components";
 
 	const ID: uuid::Uuid = uuid!("5b376389-2acf-4945-807b-94ee16c09088");

@@ -5,7 +5,7 @@ pub mod view3d;
 use crate::{
 	EditorState, input,
 	ui::{
-		builtin::{editor_view::EditorView, managed_view::EditorManagedView},
+		builtin::{editor_view::EditorViewUi, managed_view::EditorManagedViewUi},
 		misc::UiState,
 	},
 	view::cam::{ActiveEditorCamera, EditorCamPlugin},
@@ -93,7 +93,7 @@ enum CameraInputSystems {
 }
 
 pub fn mouse_hovered_in_editor_view(
-	q_editor_view_ui_info: Query<&UiState, With<EditorView>>,
+	q_editor_view_ui_info: Query<&UiState, With<EditorViewUi>>,
 ) -> bool {
 	q_editor_view_ui_info.iter().any(UiState::hovered)
 }
@@ -106,7 +106,7 @@ pub fn add_game_camera<C>(app: &mut App)
 where
 	C: Component + Reflectable,
 {
-	app.register_type::<EditorManagedView<C>>().add_systems(
+	app.register_type::<EditorManagedViewUi<C>>().add_systems(
 		Update,
 		(
 			cam::render_2d_cameras::<C>

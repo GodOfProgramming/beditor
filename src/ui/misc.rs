@@ -196,12 +196,15 @@ pub(super) trait DockExtensions:
 						))
 						.id();
 
-					return Some(TabState::new(entity, &MissingUi::VTABLE));
+					return Some(TabState {
+						entity,
+						vtable: &MissingUi::VTABLE,
+					});
 				};
 
 				if vtable.reopen_on_startup {
 					let entity = (vtable.spawn)(world);
-					Some(TabState::new(entity, vtable))
+					Some(TabState { entity, vtable })
 				} else {
 					None
 				}

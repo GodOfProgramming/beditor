@@ -16,7 +16,7 @@ use crate::{
 	settings::{
 		EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
 	},
-	ui::builtin::managed_view::EditorManagedView,
+	ui::builtin::managed_view::EditorManagedViewUi,
 	util::{
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 		log::LogPlugin,
@@ -44,13 +44,13 @@ use platform_dirs::AppDirs;
 pub use prelude::*;
 use serde::{Deserialize, Serialize};
 use transform_gizmo_bevy::TransformGizmoPlugin;
-use ui::{UiManager, UiPlugin};
+use ui::UiPlugin;
 use view::EditorViewPlugin;
 
 pub mod prelude {
 	pub use crate::{
 		EditorPlugin,
-		ui::{EditorUi, EditorUiBundle, NoParams, notifications::Notification, widgets},
+		ui::{EditorUi, EditorUiBundle, NoParams, UiManager, notifications::Notification, widgets},
 		util::{
 			AppExtensions, EntityManager, GameEntity, GameRenderLayer, RegisterableType, TypeGroups,
 			TypeList,
@@ -136,7 +136,7 @@ impl EditorPlugin {
 	{
 		self.ui_registrations.push(Box::new(|app, ui_manager| {
 			view::add_game_camera::<C>(app);
-			ui_manager.register::<EditorManagedView<C>>(app);
+			ui_manager.register::<EditorManagedViewUi<C>>(app);
 		}));
 		self
 	}

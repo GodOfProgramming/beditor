@@ -10,7 +10,7 @@ pub mod world;
 
 use bevy::{
 	camera::visibility::{Layer as CameraLayer, RenderLayers},
-	ecs::{bundle::NoBundleEffect, system::SystemParam},
+	ecs::{bundle::NoBundleEffect, system::SystemParam, world::CommandQueue},
 	prelude::*,
 	reflect::GetTypeRegistration,
 };
@@ -30,16 +30,6 @@ pub fn pretty_type_name_str(val: &str) -> String {
 pub fn or(a: bool, b: bool) -> bool {
 	a || b
 }
-
-#[allow(unused)]
-pub trait WindowExtensions: Borrow<Window> {
-	fn center(&self) -> [f32; 2] {
-		let window = self.borrow();
-		[window.width() / 2.0, window.height() / 2.0]
-	}
-}
-
-impl<T> WindowExtensions for T where T: Borrow<Window> {}
 
 #[derive(Resource, Reflect, Default)]
 #[reflect(Resource, Default)]
@@ -76,6 +66,16 @@ impl EntityManager<'_, '_> {
 	}
 }
 
+#[allow(unused)]
+pub trait WindowExtensions: Borrow<Window> {
+	fn center(&self) -> [f32; 2] {
+		let window = self.borrow();
+		[window.width() / 2.0, window.height() / 2.0]
+	}
+}
+
+impl<T> WindowExtensions for T where T: Borrow<Window> {}
+
 pub trait AppExtensions: BorrowMut<App> {
 	fn add_plugin_if_not_present<P: Plugin>(&mut self, plugin: P) -> &mut Self {
 		let app = self.borrow_mut();
@@ -92,6 +92,21 @@ pub trait AppExtensions: BorrowMut<App> {
 }
 
 impl<T> AppExtensions for T where T: BorrowMut<App> {}
+
+pub trait WorldExtensions: BorrowMut<World> {
+	fn queue(&mut self, f: impl FnOnce(&mut World, &mut CommandQueue)) {
+		let world = self.borrow_mut();
+		let mut queue = CommandQueue::default();
+		f(world, &mut queue);
+		queue.apply(world);
+	}
+
+	fn state<S: States>(&self) -> S {
+		self.borrow().resource::<State<S>>().get().clone()
+	}
+}
+
+impl<T> WorldExtensions for T where T: BorrowMut<World> {}
 
 /* Individual Types */
 

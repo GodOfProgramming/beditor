@@ -1,6 +1,8 @@
 use bevy::{
-	ecs::{archetype::Archetype, prelude::*},
+	ecs::archetype::Archetype,
+	picking::pointer::PointerId,
 	prelude::*,
+	window::{Monitor, PrimaryWindow},
 };
 use std::any::TypeId;
 
@@ -31,20 +33,19 @@ pub(crate) fn guess_entity_name_restricted(world: &World, entity: Entity) -> Str
 }
 
 fn guess_entity_name_inner(world: &World, entity: Entity, archetype: &Archetype) -> String {
-	#[rustfmt::skip]
 	let associations = [
-		(TypeId::of::<bevy::window::PrimaryWindow>(), "Primary Window"),
-		(TypeId::of::<bevy::camera::Camera3d>(), "Camera3d"),
-		(TypeId::of::<bevy::camera::Camera2d>(), "Camera2d"),
-		(TypeId::of::<bevy::light::PointLight>(), "PointLight"),
-		(TypeId::of::<bevy::light::DirectionalLight>(), "DirectionalLight"),
-		(TypeId::of::<bevy::ui::widget::Text>(), "Text"),
-		(TypeId::of::<bevy::ui::Node>(), "Node"),
-		(TypeId::of::<bevy::pbr::MeshMaterial3d<bevy::pbr::StandardMaterial>>(), "Pbr Mesh"),
-		(TypeId::of::<bevy::window::Window>(), "Window"),
-		(TypeId::of::<bevy::ecs::observer::Observer>(), "Observer"),
-		(TypeId::of::<bevy::window::Monitor>(), "Monitor"),
-		(TypeId::of::<bevy::picking::pointer::PointerId>(), "Pointer"),
+		(TypeId::of::<PrimaryWindow>(), "Primary Window"),
+		(TypeId::of::<Camera3d>(), "Camera3d"),
+		(TypeId::of::<Camera2d>(), "Camera2d"),
+		(TypeId::of::<PointLight>(), "PointLight"),
+		(TypeId::of::<DirectionalLight>(), "DirectionalLight"),
+		(TypeId::of::<Text>(), "Text"),
+		(TypeId::of::<Node>(), "Node"),
+		(TypeId::of::<MeshMaterial3d<StandardMaterial>>(), "Pbr Mesh"),
+		(TypeId::of::<Window>(), "Window"),
+		(TypeId::of::<Observer>(), "Observer"),
+		(TypeId::of::<Monitor>(), "Monitor"),
+		(TypeId::of::<PointerId>(), "Pointer"),
 	];
 
 	let component_types = archetype.components().iter().filter_map(|id| {

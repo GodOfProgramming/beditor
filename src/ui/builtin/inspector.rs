@@ -7,9 +7,9 @@ use bevy::prelude::*;
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
-pub struct Inspector;
+pub struct InspectorUi;
 
-impl Inspector {
+impl InspectorUi {
 	fn dnd_ui<F>(entities: impl AsRef<[Entity]>, world: &mut World, ui: &mut egui::Ui, render_fn: F)
 	where
 		F: FnOnce(&mut World, &mut egui::Ui),
@@ -24,7 +24,7 @@ impl Inspector {
 	}
 }
 
-impl EditorUiBundle for Inspector {
+impl EditorUiBundle for InspectorUi {
 	type PrimaryComponent = Self;
 
 	const NAME: &str = stringify!(Inspector);

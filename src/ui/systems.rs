@@ -94,7 +94,7 @@ pub fn on_app_exit(
 	};
 
 	if let Some(name) = current_layout {
-		let new_state = ui_manager.save_current_layout(&q_uuids, &q_missing);
+		let new_state = ui_manager.save_state(&q_uuids, &q_missing);
 		settings.set(SavedLayout(name), new_state)?;
 	}
 

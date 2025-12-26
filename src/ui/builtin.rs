@@ -10,7 +10,7 @@ use vfs::{Vfs, VfsEntry, VfsNode};
 
 pub mod assets;
 pub mod components;
-pub mod debug;
+pub mod diagnostics;
 pub mod editor_view;
 pub mod hierarchy;
 pub mod inspector;

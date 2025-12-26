@@ -12,7 +12,7 @@ use std::{cell::RefCell, io::Write, path::PathBuf, sync::Arc};
 use uuid::{Uuid, uuid};
 
 #[derive(Bundle, Reflect, Default)]
-pub struct TypeEditor {
+pub struct TypeEditorUi {
 	#[reflect(ignore)]
 	state: TypeEditorState,
 	_marker: TypeEditorMarker,
@@ -21,7 +21,7 @@ pub struct TypeEditor {
 #[derive(Component, Reflect, Default)]
 pub struct TypeEditorMarker;
 
-impl EditorUiBundle for TypeEditor {
+impl EditorUiBundle for TypeEditorUi {
 	type PrimaryComponent = TypeEditorMarker;
 
 	const NAME: &str = stringify!(TypeEditor);
@@ -193,7 +193,7 @@ pub struct OpenTypeEditor(Box<dyn Reflect>);
 impl Command for OpenTypeEditor {
 	fn apply(self, world: &mut World) {
 		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-			let tab = TabState::spawn::<TypeEditor>(world);
+			let tab = TabState::new::<TypeEditorUi>(world);
 			world
 				.entity_mut(tab.entity)
 				.insert(TypeEditorState::new(self.0));

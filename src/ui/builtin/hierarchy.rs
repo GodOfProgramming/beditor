@@ -1,21 +1,22 @@
 use std::sync::Arc;
 
 use crate::{
-	inspector::WorldExtensions,
+	inspector::WorldExtensions as _,
 	ui::{
 		EditorUiBundle, InspectorSelection, SelectedEntities, builtin::BundleDnd,
 		notifications::Notification,
 	},
-	util::reflection,
+	util::{WorldExtensions as _, reflection},
+	view::cam::{ActiveEditorCamera, LookAt, MoveTo},
 };
 use bevy::prelude::*;
 use egui_file_dialog::FileDialog;
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
-pub struct Hierarchy;
+pub struct HierarchyUi;
 
-impl EditorUiBundle for Hierarchy {
+impl EditorUiBundle for HierarchyUi {
 	type PrimaryComponent = Self;
 
 	const NAME: &str = stringify!(Hierarchy);
@@ -58,9 +59,21 @@ impl EditorUiBundle for Hierarchy {
 			}
 		});
 	}
+
+	fn context_menu(
+		_entity: Entity,
+		ui: &mut egui::Ui,
+		world: &mut World,
+		_surface: egui_dock::SurfaceIndex,
+		_node: egui_dock::NodeIndex,
+	) {
+		if ui.button("Spawn Empty Entity").clicked() {
+			world.spawn_empty();
+		}
+	}
 }
 
-impl Hierarchy {
+impl HierarchyUi {
 	fn show(ui: &mut egui::Ui, world: &mut World, selected: &mut SelectedEntities) -> bool {
 		let bg_fill = ui.style().visuals.window_fill();
 		ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
@@ -74,42 +87,60 @@ impl Hierarchy {
 		};
 
 		response.header_response.context_menu(|ui| {
-			if ui.button("Reparent Selected").clicked() {
-				world.write_message(ReparentMessage(entity));
-			}
+			world.queue(|world, queue| {
+				{
+					let camera_state = world.state::<ActiveEditorCamera>();
 
-			let mut entity_ref = world.entity_mut(entity);
-			if entity_ref.get::<ChildOf>().is_some() && ui.button("Remove Parent").clicked() {
-				entity_ref.remove::<ChildOf>();
-			}
+					let mut entity_ref = world.entity_mut(entity);
 
-			let state = world
-				.resource::<HierarchyState>()
-				.file_dialog
-				.state()
-				.clone();
-			ui.add_enabled_ui(state != egui_file_dialog::DialogState::Open, |ui| {
-				if ui.button("Save As Scene").clicked() {
-					match reflection::scenes::serialize_to_scene(entity, world) {
-						Ok(data) => {
-							let mut state = world.resource_mut::<HierarchyState>();
-							state.file_dialog.save_file();
-							state.data = data;
+					if camera_state.is_active() && entity_ref.contains::<Transform>() {
+						if camera_state.is_3d() && ui.button("Look At").clicked() {
+							queue.push(LookAt(entity_ref.id()));
 						}
-						Err(err) => {
-							world.trigger(Notification::error("Failed to save scene").with_context(err))
+
+						if ui.button("Move To").clicked() {
+							queue.push(MoveTo(entity_ref.id()));
 						}
 					}
+
+					if entity_ref.get::<ChildOf>().is_some() && ui.button("Make Orphan").clicked() {
+						entity_ref.remove::<ChildOf>();
+					}
+				}
+
+				if ui.button("Reparent").clicked() {
+					world.write_message(ReparentMessage(entity));
+				}
+
+				let state = world
+					.resource::<HierarchyState>()
+					.file_dialog
+					.state()
+					.clone();
+
+				ui.add_enabled_ui(state != egui_file_dialog::DialogState::Open, |ui| {
+					if ui.button("Save As Scene").clicked() {
+						match reflection::scenes::serialize_to_scene(entity, world) {
+							Ok(data) => {
+								let mut state = world.resource_mut::<HierarchyState>();
+								state.file_dialog.save_file();
+								state.data = data;
+							}
+							Err(err) => {
+								world.trigger(Notification::error("Failed to save scene").with_context(err))
+							}
+						}
+					}
+				});
+
+				if ui.button("Despawn").clicked() {
+					world.write_message(DespawnEntityMessage(entity));
+				}
+
+				if ui.button("Clear Selected").clicked() {
+					world.write_message(ClearSelectedMessage);
 				}
 			});
-
-			if ui.button("Despawn").clicked() {
-				world.write_message(DespawnEntityMessage(entity));
-			}
-
-			if ui.button("Clear Selected").clicked() {
-				world.write_message(ClearSelectedMessage);
-			}
 		});
 
 		true

@@ -10,12 +10,11 @@ use bevy_egui::{EguiContext, egui};
 use uuid::uuid;
 
 #[derive(Default, Component, Reflect)]
-pub struct DebugMenu {
-	ui_debug_on_hover: bool,
+pub struct DiagnosticsUi {
 	log_level: LogLevel,
 }
 
-impl DebugMenu {
+impl DiagnosticsUi {
 	fn diagnostics(&self, ui: &mut egui::Ui, params: &Params) {
 		egui::Grid::new("sys-diagnostics").show(ui, |ui| {
 			for diagnostic in params.diagnostics.iter() {
@@ -26,6 +25,8 @@ impl DebugMenu {
 				ui.end_row();
 			}
 		});
+
+		ui.separator();
 
 		let ctx = ui.ctx().clone();
 		ctx.inspection_ui(ui);
@@ -49,8 +50,8 @@ pub struct Params<'w, 's> {
 	inspector_settings: ResMut<'w, InspectorSettings>,
 }
 
-impl EditorUi for DebugMenu {
-	const NAME: &str = "Debug Menu";
+impl EditorUi for DiagnosticsUi {
+	const NAME: &str = "Diagnostics";
 	const ID: uuid::Uuid = uuid!("9473f6e1-a595-41e2-8e29-a4f041580fa6");
 
 	const UNIQUE: bool = true;
@@ -69,15 +70,6 @@ impl EditorUi for DebugMenu {
 		self.diagnostics(ui, &params);
 
 		ui.separator();
-
-		if ui
-			.checkbox(&mut self.ui_debug_on_hover, "Debug Editor UI")
-			.clicked()
-		{
-			params
-				.commands
-				.trigger(DebugUiEvent(self.ui_debug_on_hover));
-		}
 
 		if ui
 			.checkbox(&mut params.render_cameras, "Render Cameras")

@@ -556,6 +556,8 @@ fn register_bevy_impls(type_registry: &mut TypeRegistry) {
 	add::<GizmoConfigStore>(type_registry);
 
 	add::<uuid::Uuid>(type_registry);
+
+	add::<Name>(type_registry);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

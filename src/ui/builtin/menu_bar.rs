@@ -1,11 +1,9 @@
 use crate::{
 	EditorState,
 	ui::{
-		InspectorSelection,
 		builtin::settings::{EditorSettingsUi, ProjectSettingsUi},
 		events::OpenSingleUiMessage,
 	},
-	view::cam::{ActiveEditorCamera, MoveCameraEvent, PointCameraEvent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use uuid::Uuid;
@@ -16,10 +14,6 @@ pub struct Params<'w, 's> {
 
 	editor_state: Res<'w, State<EditorState>>,
 	next_editor_state: ResMut<'w, NextState<EditorState>>,
-	active_camera_state: Res<'w, State<ActiveEditorCamera>>,
-	selection: Res<'w, InspectorSelection>,
-
-	q_transforms: Query<'w, 's, &'static Transform>,
 
 	q_editor_settings_ui: Query<'w, 's, (), With<EditorSettingsUi>>,
 	q_project_settings_ui: Query<'w, 's, (), With<ProjectSettingsUi>>,
@@ -35,8 +29,8 @@ pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 	egui::MenuBar::new().ui(ui, |ui| {
 		file_menu(ui);
 		edit_menu(ui, &mut params);
-		tools_menu(ui, &mut params);
-		view_menu(ui, &mut params);
+		tools_menu(ui);
+		view_menu(ui);
 		game_control(ui, &mut params);
 	});
 }
@@ -65,12 +59,8 @@ fn edit_menu(ui: &mut egui::Ui, params: &mut Params<'_, '_>) {
 	});
 }
 
-fn tools_menu(ui: &mut egui::Ui, params: &mut Params) {
+fn tools_menu(ui: &mut egui::Ui) {
 	ui.menu_button("Tools", |ui| {
-		if ui.button("Spawn Empty Entity").clicked() {
-			params.commands.spawn_empty();
-		}
-
 		if ui.button("Copy New UUID").clicked() {
 			ui.output_mut(|output| {
 				output
@@ -81,9 +71,15 @@ fn tools_menu(ui: &mut egui::Ui, params: &mut Params) {
 	});
 }
 
-fn view_menu(ui: &mut egui::Ui, params: &mut Params) {
+fn view_menu(ui: &mut egui::Ui) {
 	ui.menu_button("View", |ui| {
-		camera_menu(ui, params);
+		let mut debug_on_hover = ui.ctx().debug_on_hover();
+		if ui
+			.checkbox(&mut debug_on_hover, "Debug Editor UI")
+			.clicked()
+		{
+			ui.ctx().set_debug_on_hover(debug_on_hover);
+		}
 	});
 }
 
@@ -96,68 +92,6 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 			pause_button(ui, params);
 		}
 		_ => (),
-	}
-}
-
-fn camera_menu(ui: &mut egui::Ui, params: &mut Params) {
-	ui.menu_button("Camera", |ui| {
-		if *params.editor_state == EditorState::Editing {
-			if *params.active_camera_state == ActiveEditorCamera::Cam3D {
-				look_at_origin_button(ui, params);
-			}
-
-			entity_commands(ui, params);
-		}
-	});
-}
-
-fn look_at_origin_button(ui: &mut egui::Ui, params: &mut Params) {
-	if ui.button("Look At Origin").clicked() {
-		params.commands.trigger(PointCameraEvent::new(Vec3::ZERO));
-	}
-}
-
-fn entity_commands(ui: &mut egui::Ui, params: &mut Params) {
-	let InspectorSelection::Entities(selected_entities) = &*params.selection else {
-		return;
-	};
-
-	let Some(entity) = (selected_entities.len() == 1)
-		.then(|| selected_entities.iter().next())
-		.flatten()
-	else {
-		return;
-	};
-
-	if matches!(
-		**params.active_camera_state,
-		ActiveEditorCamera::Cam2D | ActiveEditorCamera::Cam3D
-	) {
-		move_to_target_button(ui, params, entity);
-
-		if *params.active_camera_state == ActiveEditorCamera::Cam3D {
-			look_at_target_button(ui, params, entity);
-		}
-	}
-}
-
-fn move_to_target_button(ui: &mut egui::Ui, params: &mut Params, entity: Entity) {
-	if ui.button("Move To Selected").clicked() {
-		let Ok(entity_pos) = params.q_transforms.get(entity).map(|t| t.translation) else {
-			return;
-		};
-
-		params.commands.trigger(MoveCameraEvent::new(entity_pos));
-	}
-}
-
-fn look_at_target_button(ui: &mut egui::Ui, params: &mut Params, entity: Entity) {
-	if ui.button("Look At Selected").clicked() {
-		let Ok(entity_pos) = params.q_transforms.get(entity).map(|t| t.translation) else {
-			return;
-		};
-
-		params.commands.trigger(PointCameraEvent::new(entity_pos));
 	}
 }
 

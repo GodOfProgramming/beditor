@@ -8,7 +8,7 @@ use persistent_id::Identifiable;
 use std::marker::PhantomData;
 
 #[derive(Component, Reflect)]
-pub struct EditorManagedView<C>
+pub struct EditorManagedViewUi<C>
 where
 	C: Component + Reflectable,
 {
@@ -16,7 +16,7 @@ where
 	_pd: PhantomData<C>,
 }
 
-impl<C> Default for EditorManagedView<C>
+impl<C> Default for EditorManagedViewUi<C>
 where
 	C: Component + Reflectable,
 {
@@ -51,7 +51,7 @@ where
 	}
 }
 
-impl<C> EditorUi for EditorManagedView<C>
+impl<C> EditorUi for EditorManagedViewUi<C>
 where
 	C: Component + Reflectable + Identifiable,
 {

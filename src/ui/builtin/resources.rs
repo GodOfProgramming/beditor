@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use uuid::uuid;
 
 #[derive(Default, Component, Reflect)]
-pub struct Resources;
+pub struct ResourcesUi;
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
@@ -16,7 +16,7 @@ pub struct Params<'w, 's> {
 	_pd: PhantomData<&'s ()>,
 }
 
-impl EditorUi for Resources {
+impl EditorUi for ResourcesUi {
 	const NAME: &str = stringify!(Resources);
 	const ID: uuid::Uuid = uuid!("54248a54-9544-4e93-9382-3677b8722952");
 

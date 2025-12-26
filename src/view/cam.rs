@@ -1,5 +1,6 @@
 use super::UP;
 use crate::{
+	Notification,
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
 	ui::EditorUiHitCaptureNode,
 	util::storage::ProjectSettings,
@@ -32,8 +33,8 @@ impl Plugin for EditorCamPlugin {
 		app
 			.init_resource::<RenderCameras>()
 			.init_resource::<GameCameraColor>()
-			.add_observer(PointCameraEvent::handle)
-			.add_observer(MoveCameraEvent::handle)
+			.add_observer(LookAt::handle)
+			.add_observer(MoveTo::handle)
 			.add_observer(SyncRenderCamerasEvent::handle)
 			.add_observer(on_manage_camera)
 			.add_observer(on_unmanage_camera)
@@ -285,6 +286,20 @@ pub enum ActiveEditorCamera {
 	Cam3D,
 }
 
+impl ActiveEditorCamera {
+	pub fn is_active(&self) -> bool {
+		matches!(self, Self::Cam2D | Self::Cam3D)
+	}
+
+	pub fn is_2d(&self) -> bool {
+		*self == Self::Cam2D
+	}
+
+	pub fn is_3d(&self) -> bool {
+		*self == Self::Cam3D
+	}
+}
+
 #[derive(Resource, Reflect, Deref)]
 #[reflect(Resource, Default)]
 pub struct GameCameraColor(Color);
@@ -306,25 +321,75 @@ fn track_editor_camera_changes(
 	settings.set(ActiveEditorCameraSetting, **cam_state)
 }
 
-#[derive(new, Event)]
-pub struct MoveCameraEvent(Vec3);
+#[derive(new, EntityEvent)]
+pub struct MoveTo(pub Entity);
 
-impl MoveCameraEvent {
-	fn handle(event: On<Self>, mut q_cam_transforms: Query<&mut Transform, With<EditorCamera>>) {
-		for mut cam in &mut q_cam_transforms {
-			cam.translation = event.0;
+impl MoveTo {
+	fn handle(
+		event: On<Self>,
+		mut commands: Commands,
+		mut q_transforms: Query<&mut Transform>,
+		q_cams: Query<Entity, With<EditorCamera>>,
+	) {
+		let entity = event.event_target();
+		let Ok(target) = q_transforms.get(entity).cloned() else {
+			commands.trigger(
+				Notification::warn("Tried to look at entity with no transform").with_context(
+					serde_json::json!({
+						"entity": entity
+					}),
+				),
+			);
+			return;
+		};
+
+		for cam in &q_cams {
+			if let Ok(mut transform) = q_transforms.get_mut(cam) {
+				transform.translation = target.translation;
+			}
 		}
 	}
 }
 
-#[derive(new, Event)]
-pub struct PointCameraEvent(Vec3);
+impl Command for MoveTo {
+	fn apply(self, world: &mut World) {
+		world.trigger(self);
+	}
+}
 
-impl PointCameraEvent {
-	fn handle(event: On<Self>, mut q_cam_transforms: Query<&mut Transform, With<EditorCamera>>) {
-		for mut cam in &mut q_cam_transforms {
-			cam.look_at(event.0, UP);
+#[derive(new, EntityEvent)]
+pub struct LookAt(pub Entity);
+
+impl LookAt {
+	fn handle(
+		event: On<Self>,
+		mut commands: Commands,
+		mut q_transforms: Query<&mut Transform>,
+		q_cams: Query<Entity, With<EditorCamera>>,
+	) {
+		let entity = event.event_target();
+		let Ok(target) = q_transforms.get(entity).cloned() else {
+			commands.trigger(
+				Notification::warn("Tried to look at entity with no transform").with_context(
+					serde_json::json!({
+						"entity": entity
+					}),
+				),
+			);
+			return;
+		};
+
+		for cam in &q_cams {
+			if let Ok(mut transform) = q_transforms.get_mut(cam) {
+				transform.look_at(target.translation, UP);
+			}
 		}
+	}
+}
+
+impl Command for LookAt {
+	fn apply(self, world: &mut World) {
+		world.trigger(self);
 	}
 }
 

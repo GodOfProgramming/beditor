@@ -1,6 +1,6 @@
 use crate::{
 	EditorUi,
-	ui::builtin::managed_view::{self, EditorManagedView},
+	ui::builtin::managed_view::{self, EditorManagedViewUi},
 	view::cam::EditorCamera,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -8,36 +8,36 @@ use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
 use uuid::uuid;
 
 #[derive(Component, Reflect, Default)]
-pub struct EditorView {}
+pub struct EditorViewUi;
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
 	managed_view_params: managed_view::Params<'w, 's, EditorCamera>,
-	managed_view: Local<'s, EditorManagedView<EditorCamera>>,
+	managed_view: Local<'s, EditorManagedViewUi<EditorCamera>>,
 	gizmo_options: ResMut<'w, GizmoOptions>,
 }
 
-impl EditorUi for EditorView {
+impl EditorUi for EditorViewUi {
 	const NAME: &str = "Edior View";
 
 	const ID: uuid::Uuid = uuid!("c910a397-a017-4a29-99bc-6282b4b1a214");
 
-	const CAN_CLEAR: bool = EditorManagedView::<EditorCamera>::CAN_CLEAR;
+	const CAN_CLEAR: bool = EditorManagedViewUi::<EditorCamera>::CAN_CLEAR;
 
-	const UNIQUE: bool = EditorManagedView::<EditorCamera>::UNIQUE;
+	const UNIQUE: bool = EditorManagedViewUi::<EditorCamera>::UNIQUE;
 
-	const POPOUT: bool = EditorManagedView::<EditorCamera>::POPOUT;
+	const POPOUT: bool = EditorManagedViewUi::<EditorCamera>::POPOUT;
 
-	const SCROLL_BARS: [bool; 2] = EditorManagedView::<EditorCamera>::SCROLL_BARS;
+	const SCROLL_BARS: [bool; 2] = EditorManagedViewUi::<EditorCamera>::SCROLL_BARS;
 
 	type Params<'w, 's> = Params<'w, 's>;
 
 	fn init(app: &mut App) {
-		EditorManagedView::<EditorCamera>::init(app);
+		EditorManagedViewUi::<EditorCamera>::init(app);
 	}
 
 	fn spawn(params: Self::Params<'_, '_>) -> Self {
-		EditorManagedView::<EditorCamera>::spawn(params.managed_view_params);
+		EditorManagedViewUi::<EditorCamera>::spawn(params.managed_view_params);
 		default()
 	}
 

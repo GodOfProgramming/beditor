@@ -3,7 +3,7 @@ use bevy::{asset::ReflectAsset, ecs::system::SystemParam, prelude::*};
 use uuid::uuid;
 
 #[derive(Default, Component, Reflect)]
-pub struct Assets;
+pub struct AssetsUi;
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
@@ -17,7 +17,7 @@ struct Resources<'w> {
 	inspector_selection: ResMut<'w, InspectorSelection>,
 }
 
-impl EditorUi for Assets {
+impl EditorUi for AssetsUi {
 	const NAME: &str = stringify!(Assets);
 	const ID: uuid::Uuid = uuid!("4bfee754-f9bc-4695-b215-2a88d9377dfb");
 

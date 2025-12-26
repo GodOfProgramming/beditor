@@ -387,6 +387,32 @@ impl InspectorPrimitive for RenderLayers {
 	}
 }
 
+impl InspectorPrimitive for Name {
+	fn ui(
+		&mut self,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: InspectorUi<'_, '_>,
+	) -> bool {
+		let mut value = self.to_string();
+		if value.ui(ui, options, id, env) {
+			self.set(value);
+			true
+		} else {
+			false
+		}
+	}
+
+	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: InspectorUi<'_, '_>) {
+		if self.contains('\n') {
+			ui.text_edit_multiline(&mut self.as_str());
+		} else {
+			ui.text_edit_singleline(&mut self.as_str());
+		}
+	}
+}
+
 impl InspectorPrimitive for GizmoConfigStore {
 	fn ui(
 		&mut self,

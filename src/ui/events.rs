@@ -60,7 +60,7 @@ where
 {
 	fn apply(self, world: &mut World) {
 		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-			let tab = TabState::spawn::<T>(world);
+			let tab = TabState::new::<T>(world);
 			ui_manager.add_detached(vec![tab]);
 		});
 	}

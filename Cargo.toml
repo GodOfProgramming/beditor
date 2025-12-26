@@ -28,6 +28,7 @@ bevy = { workspace = true, features = [
   "serialize",
   "bevy_remote",
   "reflect_documentation",
+  "bevy_dev_tools",
 ] }
 bevy-axes-gizmo = "0.2.0"
 bevy_egui = "0.38.0"
@@ -97,6 +98,8 @@ walkdir = "2.5.0"
 xml-rs = "1.0.0"
 
 [features]
+default = ["dev", "watch"]
+dev = ["bevy/track_location", "bevy/asset_processor"]
 profiling = ["bevy/trace_tracy", "dep:tracing-tracy"]
 watch = ["bevy/file_watcher"]
 

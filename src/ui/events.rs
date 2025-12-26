@@ -67,12 +67,24 @@ where
 }
 
 #[derive(new, Message, Clone)]
+pub struct ShowUiMessage(pub TabState);
+
+impl ShowUiMessage {
+	pub fn handle(mut messages: MessageReader<Self>, mut ui_manager: ResMut<UiManager>) {
+		for msg in messages.read() {
+			let Self(tab) = msg;
+			ui_manager.add_detached(vec![tab.clone()]);
+		}
+	}
+}
+
+#[derive(new, Message, Clone)]
 pub struct AppendUiMessage(SurfaceIndex, NodeIndex, TabState);
 
 impl AppendUiMessage {
 	pub fn handle(mut messages: MessageReader<Self>, mut ui_manager: ResMut<UiManager>) {
 		for msg in messages.read() {
-			let AppendUiMessage(surface, node, tab) = msg;
+			let Self(surface, node, tab) = msg;
 			ui_manager.add_tab(*surface, *node, tab.clone());
 		}
 	}

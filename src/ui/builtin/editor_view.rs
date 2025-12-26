@@ -60,12 +60,20 @@ impl EditorUi for EditorViewUi {
 		params.managed_view.on_despawn(params.managed_view_params);
 	}
 
-	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
+		let Params {
+			mut commands,
+			mut managed_view_params,
+			mut managed_view,
+			mut gizmo_options,
+			temporary,
+		} = params;
+
 		let window_rect = ui.clip_rect();
 
 		let (_, Some(payload)) = super::panel_dnd_drop_ui::<BundleDnd, ()>(ui, |ui| {
-			let has_camera = params.managed_view_params.has_camera();
-			params.managed_view.ui(ui, params.managed_view_params);
+			let has_camera = managed_view_params.has_camera();
+			managed_view.ui(ui, managed_view_params);
 			if !has_camera {
 				return;
 			}
@@ -81,12 +89,12 @@ impl EditorUi for EditorViewUi {
 				style.spacing.window_margin = egui::Margin::same(6);
 
 				ui.horizontal(|ui| {
-					let only_selecting = params.gizmo_options.gizmo_modes.is_empty();
+					let only_selecting = gizmo_options.gizmo_modes.is_empty();
 					if ui
 						.selectable_label(only_selecting, egui_phosphor_icons::icons::CURSOR)
 						.clicked()
 					{
-						params.gizmo_options.gizmo_modes.clear();
+						gizmo_options.gizmo_modes.clear();
 					}
 
 					for (set, icon) in [
@@ -103,12 +111,12 @@ impl EditorUi for EditorViewUi {
 							egui_phosphor_icons::icons::ARROW_SQUARE_OUT,
 						),
 					] {
-						let enabled = set.is_subset(params.gizmo_options.gizmo_modes);
+						let enabled = set.is_subset(gizmo_options.gizmo_modes);
 						if ui.selectable_label(enabled, icon).clicked() {
 							if enabled {
-								params.gizmo_options.gizmo_modes.remove_all(set);
+								gizmo_options.gizmo_modes.remove_all(set);
 							} else {
-								params.gizmo_options.gizmo_modes.insert_all(set);
+								gizmo_options.gizmo_modes.insert_all(set);
 							}
 						}
 					}
@@ -118,17 +126,17 @@ impl EditorUi for EditorViewUi {
 			return;
 		};
 
-		let Some(temp) = params.temporary else {
+		let Some(temp) = temporary else {
 			return;
 		};
 		let (temp_entity, transform) = *temp;
 
 		// spawn a new entity in case it has its own picking rules
 
-		params.commands.entity(temp_entity).despawn();
+		commands.entity(temp_entity).despawn();
 
 		let translation = transform.map(|t| t.translation);
-		params.commands.queue(move |world: &mut World| {
+		commands.queue(move |world: &mut World| {
 			let new_entity = world.spawn_empty().id();
 			payload.insert(std::iter::once(new_entity), world);
 			let mut entity = world.entity_mut(new_entity);

@@ -25,6 +25,10 @@ use crate::{
 };
 use bevy::{
 	app::PluginGroupBuilder,
+	dev_tools::{
+		frame_time_graph::FrameTimeGraphPlugin, picking_debug::DebugPickingPlugin,
+		states::log_transitions,
+	},
 	diagnostic::{
 		EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
 	},
@@ -223,16 +227,21 @@ impl Plugin for EditorPlugin {
 						.run_if(in_state(EditorState::Editing)),
 				),
 			)
-			.add_plugin_if_not_present(MeshPickingPlugin)
-			.add_plugin_if_not_present(FrameTimeDiagnosticsPlugin::default())
-			.add_plugin_if_not_present(EntityCountDiagnosticsPlugin::default())
-			.add_plugin_if_not_present(SystemInformationDiagnosticsPlugin)
-			.add_plugin_if_not_present(RemotePlugin::default())
-			.add_plugin_if_not_present(RemoteHttpPlugin::default())
-			.add_plugin_if_not_present(MeshOutlinePlugin)
-			.add_plugin_if_not_present(TransformGizmoPlugin)
-			.add_plugin_if_not_present(AxesGizmoPlugin::default())
-			.add_plugin_if_not_present(InfiniteGridPlugin)
+			// bevy
+			.try_add_plugin(MeshPickingPlugin)
+			.try_add_plugin(DebugPickingPlugin)
+			.try_add_plugin(SystemInformationDiagnosticsPlugin)
+			.try_add_plugin(EntityCountDiagnosticsPlugin::default())
+			.try_add_plugin(FrameTimeDiagnosticsPlugin::default())
+			.try_add_plugin(FrameTimeGraphPlugin)
+			.try_add_plugin(RemotePlugin::default())
+			.try_add_plugin(RemoteHttpPlugin::default())
+			// crates
+			.try_add_plugin(AxesGizmoPlugin::default())
+			.try_add_plugin(InfiniteGridPlugin)
+			.try_add_plugin(MeshOutlinePlugin)
+			.try_add_plugin(TransformGizmoPlugin)
+			// internal
 			.add_plugins((
 				EditorViewPlugin,
 				InputPlugin,
@@ -258,7 +267,14 @@ impl Plugin for EditorPlugin {
 				(show_window_cursor, show_infinite_grid),
 			)
 			.add_systems(OnExit(EditorState::Editing), remove_infinite_grid)
-			.add_systems(FixedUpdate, (on_close_requested, handle_window_events))
+			.add_systems(
+				FixedUpdate,
+				(
+					on_close_requested,
+					handle_window_events,
+					log_transitions::<EditorState>,
+				),
+			)
 			.add_systems(
 				OnEnter(EditorState::Exiting),
 				(save_editor_settings, finish_exit).in_set(EditorGlobalSystems),
@@ -266,7 +282,7 @@ impl Plugin for EditorPlugin {
 	}
 
 	fn finish(&self, app: &mut App) {
-		app.add_plugin_if_not_present(PrefabPlugin::default());
+		app.try_add_plugin(PrefabPlugin::default());
 	}
 }
 

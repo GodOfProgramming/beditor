@@ -13,6 +13,7 @@ pub mod components;
 pub mod diagnostics;
 pub mod editor_view;
 pub mod hierarchy;
+pub mod image_viewer;
 pub mod inspector;
 pub mod logs;
 pub mod managed_view;

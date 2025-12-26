@@ -2,11 +2,21 @@ use crate::{
 	RuntimeSettings,
 	inspector::TypeRegistryExtensions,
 	ui::{EditorUi, builtin::inspector::InspectorSettings},
-	util::log::LogLevel,
+	util::{egui::ContextExtensions, log::LogLevel},
 	view::cam::{RenderCameras, SyncRenderCamerasEvent},
 };
-use bevy::{diagnostic::DiagnosticsStore, ecs::system::SystemParam, prelude::*};
-use bevy_egui::{EguiContext, egui};
+use bevy::{
+	camera::{ImageRenderTarget, RenderTarget},
+	dev_tools::frame_time_graph::{FrameTimeGraphConfigUniform, FrametimeGraphMaterial},
+	diagnostic::DiagnosticsStore,
+	ecs::system::SystemParam,
+	prelude::*,
+	render::{
+		render_resource::{Extent3d, TextureFormat},
+		storage::ShaderStorageBuffer,
+	},
+};
+use bevy_egui::{EguiContext, EguiContexts, EguiTextureHandle, egui};
 use uuid::uuid;
 
 #[derive(Default, Component, Reflect)]
@@ -15,23 +25,6 @@ pub struct DiagnosticsUi {
 }
 
 impl DiagnosticsUi {
-	fn diagnostics(&self, ui: &mut egui::Ui, params: &Params) {
-		egui::Grid::new("sys-diagnostics").show(ui, |ui| {
-			for diagnostic in params.diagnostics.iter() {
-				ui.label(diagnostic.path().as_str());
-				if let Some(average) = diagnostic.average() {
-					ui.label(format!("{:.2}", average));
-				}
-				ui.end_row();
-			}
-		});
-
-		ui.separator();
-
-		let ctx = ui.ctx().clone();
-		ctx.inspection_ui(ui);
-	}
-
 	fn handle_ui_debug(event: On<DebugUiEvent>, mut q_egui_ctx: Query<&mut EguiContext>) {
 		for mut ctx in &mut q_egui_ctx {
 			let ctx = ctx.get_mut();
@@ -48,6 +41,8 @@ pub struct Params<'w, 's> {
 	render_cameras: ResMut<'w, RenderCameras>,
 	editor_settings: ResMut<'w, RuntimeSettings>,
 	inspector_settings: ResMut<'w, InspectorSettings>,
+	graph: Res<'w, FrameTimeGraph>,
+	images: ResMut<'w, Assets<Image>>,
 }
 
 impl EditorUi for DiagnosticsUi {
@@ -59,34 +54,156 @@ impl EditorUi for DiagnosticsUi {
 	type Params<'w, 's> = Params<'w, 's>;
 
 	fn init(app: &mut App) {
-		app.add_observer(Self::handle_ui_debug);
+		app
+			.init_resource::<FrameTimeGraph>()
+			.add_observer(Self::handle_ui_debug)
+			.add_systems(PostStartup, startup);
 	}
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		Self::default()
 	}
 
-	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
-		self.diagnostics(ui, &params);
+	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
+		let Params {
+			mut commands,
+			type_registry,
+			diagnostics,
+			mut render_cameras,
+			mut editor_settings,
+			mut inspector_settings,
+			graph,
+			mut images,
+		} = params;
+
+		egui::Grid::new("sys-diagnostics").show(ui, |ui| {
+			for diagnostic in diagnostics.iter() {
+				ui.label(diagnostic.path().as_str());
+				if let Some(average) = diagnostic.average() {
+					ui.label(format!("{:.2}", average));
+				}
+				ui.end_row();
+			}
+		});
 
 		ui.separator();
 
-		if ui
-			.checkbox(&mut params.render_cameras, "Render Cameras")
-			.clicked()
-		{
-			params.commands.trigger(SyncRenderCamerasEvent);
+		let ctx = ui.ctx().clone();
+		ctx.inspection_ui(ui);
+
+		ui.separator();
+
+		if ui.checkbox(&mut render_cameras, "Render Cameras").clicked() {
+			commands.trigger(SyncRenderCamerasEvent);
 		}
 
 		let _ = ui.checkbox(
-			&mut params.inspector_settings.highlight_changes,
+			&mut inspector_settings.highlight_changes,
 			"Highlight Component Changes",
 		);
 
-		let type_registry = params.type_registry.read();
-		type_registry.ui_for_value(ui, &mut *params.editor_settings);
+		let type_registry = type_registry.read();
+		type_registry.ui_for_value(ui, &mut *editor_settings);
+
+		ui.separator();
+
+		let Some(image) = images.get(graph.image.id()) else {
+			ui.label("No Graph Image");
+			return;
+		};
+
+		let mut ui_size = ui.available_size();
+		if ui_size.x <= ui_size.y {
+			ui_size.y = ui_size.x;
+		} else {
+			ui_size.x = ui_size.y;
+		}
+
+		ui.image(egui::load::SizedTexture::new(graph.tex, ui_size));
+
+		let image_size = image.size();
+
+		let ui_viewport_size = ui.ctx().to_pixels(ui_size);
+		let ui_viewport_size = Vec2::new(ui_viewport_size.x, ui_viewport_size.y).as_uvec2();
+
+		if ui_viewport_size == UVec2::ZERO || image_size == ui_viewport_size {
+			return;
+		}
+
+		let Some(image) = images.get_mut(graph.image.id()) else {
+			ui.label("No Graph Image (mut)");
+			return;
+		};
+
+		image.resize(Extent3d {
+			width: ui_viewport_size.x,
+			height: ui_viewport_size.y,
+			depth_or_array_layers: 1,
+		});
 	}
 }
 
 #[derive(Event)]
 struct DebugUiEvent(bool);
+
+#[derive(Resource, Default)]
+struct FrameTimeGraph {
+	image: Handle<Image>,
+	mat: Handle<FrametimeGraphMaterial>,
+	tex: egui::TextureId,
+}
+
+#[derive(Component)]
+struct FrameTimeGraphCamera;
+
+fn startup(
+	mut commands: Commands,
+	mut frame_time_graph_materials: ResMut<Assets<FrametimeGraphMaterial>>,
+	mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+	mut images: ResMut<Assets<Image>>,
+	mut graph: ResMut<FrameTimeGraph>,
+	mut contexts: EguiContexts,
+) {
+	graph.image = images.add(Image::new_target_texture(
+		1,
+		1,
+		TextureFormat::bevy_default(),
+	));
+
+	graph.tex = contexts.add_image(EguiTextureHandle::Weak(graph.image.id()));
+
+	graph.mat = frame_time_graph_materials.add(FrametimeGraphMaterial {
+		values: buffers.add(ShaderStorageBuffer {
+			// Initialize with dummy data because the default (`data: None`) will
+			// cause a panic in the shader if the frame time graph is constructed
+			// with `enabled: false`.
+			data: Some(vec![0, 0, 0, 0]),
+			..Default::default()
+		}),
+		config: FrameTimeGraphConfigUniform::new(60.0, 30.0, false),
+	});
+
+	let graph_camera = commands
+		.spawn((
+			Name::new("Frame Graph Camera"),
+			FrameTimeGraphCamera,
+			Camera2d,
+			Camera {
+				target: RenderTarget::Image(ImageRenderTarget::from(graph.image.clone())),
+				..default()
+			},
+		))
+		.id();
+
+	commands.spawn((
+		Name::new("Frame Graph Node"),
+		UiTargetCamera(graph_camera),
+		Node {
+			width: vw(100),
+			height: vh(100),
+			..Default::default()
+		},
+		Pickable::IGNORE,
+		MaterialNode::from(graph.mat.clone()),
+	));
+}

@@ -3,11 +3,12 @@ use std::sync::Arc;
 use crate::{
 	inspector::WorldExtensions as _,
 	ui::{
-		EditorUiBundle, InspectorSelection, SelectedEntities, builtin::BundleDnd,
+		EditorUiBundle, InspectorSelection, SelectedEntities,
+		builtin::{BundleDnd, image_viewer::OpenImageViewer},
 		notifications::Notification,
 	},
 	util::{WorldExtensions as _, reflection},
-	view::cam::{ActiveEditorCamera, LookAt, MoveTo},
+	view::cam::{ActiveEditorCamera, EditorManagedCamera, LookAt, MoveTo},
 };
 use bevy::prelude::*;
 use egui_file_dialog::FileDialog;
@@ -105,6 +106,14 @@ impl HierarchyUi {
 
 					if entity_ref.get::<ChildOf>().is_some() && ui.button("Make Orphan").clicked() {
 						entity_ref.remove::<ChildOf>();
+					}
+
+					if let Some(camera) = entity_ref.get::<Camera>()
+						&& entity_ref.get::<EditorManagedCamera>().is_none()
+						&& let Some(image) = camera.target.as_image()
+						&& ui.button("View").clicked()
+					{
+						queue.push(OpenImageViewer(image.clone()));
 					}
 				}
 

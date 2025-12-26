@@ -554,7 +554,7 @@ fn rescaled_image(
 			let handle: Handle<Image> = handle.get().clone();
 			(
 				handle.clone(),
-				egui_usere_textures.add_image(EguiTextureHandle::Strong(handle)),
+				egui_usere_textures.add_image(EguiTextureHandle::Weak(handle.id())),
 			)
 		}
 		hash_map::Entry::Vacant(entry) => {
@@ -574,8 +574,7 @@ fn rescaled_image(
 
 			let resized_handle = textures.add(resized);
 			let weak = resized_handle.clone();
-			let texture_id =
-				egui_usere_textures.add_image(EguiTextureHandle::Strong(resized_handle.clone()));
+			let texture_id = egui_usere_textures.add_image(EguiTextureHandle::Weak(resized_handle.id()));
 			entry.insert(resized_handle);
 			scaled_down_textures.rescaled_textures.insert(weak.clone());
 

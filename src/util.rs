@@ -87,7 +87,7 @@ pub trait WindowExtensions: Borrow<Window> {
 impl<T> WindowExtensions for T where T: Borrow<Window> {}
 
 pub trait AppExtensions: BorrowMut<App> {
-	fn add_plugin_if_not_present<P: Plugin>(&mut self, plugin: P) -> &mut Self {
+	fn try_add_plugin<P: Plugin>(&mut self, plugin: P) -> &mut Self {
 		let app = self.borrow_mut();
 		if !app.is_plugin_added::<P>() {
 			app.add_plugins(plugin);

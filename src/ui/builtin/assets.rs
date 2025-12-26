@@ -29,18 +29,23 @@ impl EditorUi for AssetsUi {
 		default()
 	}
 
-	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
-		let app_type_registry = params.set.p1().app_type_registry.clone();
+	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
+		let Params {
+			mut set,
+			mut filter,
+		} = params;
+
+		let app_type_registry = set.p1().app_type_registry.clone();
 		let type_registry = app_type_registry.read();
 
-		let world = params.set.p0();
+		let world = set.p0();
 
 		let mut assets = type_registry
 			.iter()
 			.filter_map(|registration| {
 				let reflect_asset = registration.data::<ReflectAsset>()?;
 				let name = registration.type_info().type_path_table().short_path();
-				(params.filter.is_empty() || name.to_lowercase().contains(params.filter.as_str()))
+				(filter.is_empty() || name.to_lowercase().contains(filter.as_str()))
 					.then(|| (name, registration.type_id(), reflect_asset))
 			})
 			.collect::<Vec<_>>();
@@ -50,7 +55,7 @@ impl EditorUi for AssetsUi {
 		let mut selection = None;
 		let current_selection = world.resource::<InspectorSelection>();
 
-		ui.text_edit_singleline(&mut *params.filter).changed();
+		ui.text_edit_singleline(&mut *filter).changed();
 
 		for (asset_name, asset_type_id, reflect_asset) in assets {
 			let handles = reflect_asset.ids(world).collect::<Vec<_>>();
@@ -77,7 +82,7 @@ impl EditorUi for AssetsUi {
 		}
 
 		if let Some(selection) = selection {
-			*params.set.p1().inspector_selection = selection;
+			*set.p1().inspector_selection = selection;
 		}
 	}
 }

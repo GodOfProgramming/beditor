@@ -12,9 +12,10 @@ use crate::{
 	ui::{
 		builtin::{
 			editor_view::EditorViewUi,
+			image_viewer::ImageViewerUi,
 			settings::{EditorSettingsUi, ProjectSettingsUi},
 		},
-		events::{OpenSingleUiMessage, OpenUiMessage},
+		events::{OpenSingleUiMessage, OpenUiMessage, ShowUiMessage},
 	},
 	util::make_singleton,
 	view::cam::EditorCamera,
@@ -47,7 +48,7 @@ use misc::{MissingUi, UiExtensions, UiState};
 use notifications::NotificationPlugin;
 use persistent_id::PersistentId;
 use serde::{Deserialize, Serialize};
-use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
+use std::{any::TypeId, cell::RefCell, collections::BTreeSet, marker::PhantomData};
 use transform_gizmo_bevy::GizmoTarget;
 use uuid::Uuid;
 
@@ -89,6 +90,7 @@ impl Plugin for UiPlugin {
 			.add_message::<AppendUiMessage>()
 			.add_message::<OpenUiMessage>()
 			.add_message::<OpenSingleUiMessage>()
+			.add_message::<ShowUiMessage>()
 			.configure_sets(EguiPrimaryContextPass, EditorUiSystems)
 			.add_plugins((EguiPlugin::default(), NotificationPlugin))
 			.add_observer(systems::on_new_ctx)
@@ -104,6 +106,7 @@ impl Plugin for UiPlugin {
 					AppendUiMessage::handle,
 					OpenUiMessage::handle,
 					OpenSingleUiMessage::handle,
+					ShowUiMessage::handle,
 				),
 			)
 			.add_systems(
@@ -324,6 +327,28 @@ where
 	}
 }
 
+struct RegisteredUiPlugin<T>(PhantomData<T>)
+where
+	T: EditorUiBundle;
+
+impl<T> Default for RegisteredUiPlugin<T>
+where
+	T: EditorUiBundle,
+{
+	fn default() -> Self {
+		Self(default())
+	}
+}
+
+impl<T> Plugin for RegisteredUiPlugin<T>
+where
+	T: EditorUiBundle,
+{
+	fn build(&self, app: &mut App) {
+		T::init(app);
+	}
+}
+
 #[derive(Resource)]
 pub struct UiManager {
 	state: DockState<TabState>,
@@ -347,6 +372,7 @@ impl UiManager {
 		this.register::<EditorSettingsUi>(app);
 		this.register::<EditorViewUi>(app);
 		this.register::<HierarchyUi>(app);
+		this.register::<ImageViewerUi>(app);
 		this.register::<InspectorUi>(app);
 		this.register::<LogUi>(app);
 		this.register::<PrefabsUi>(app);
@@ -361,16 +387,8 @@ impl UiManager {
 	}
 
 	pub fn register<T: EditorUiBundle>(&mut self, app: &mut App) {
-		T::init(app);
+		app.add_plugins(RegisteredUiPlugin::<T>::default());
 		self.vtables.insert(PersistentId(T::ID), &T::VTABLE);
-	}
-
-	pub fn save_state(
-		&self,
-		q_uuids: &Query<&PersistentId, Without<MissingUi>>,
-		q_missing: &Query<&MissingUi>,
-	) -> DockState<LayoutInfo> {
-		self.state.decouple(self, q_uuids, q_missing)
 	}
 
 	pub fn add_detached(&mut self, tabs: Vec<TabState>) -> SurfaceIndex {
@@ -416,8 +434,11 @@ impl UiManager {
 
 		let mut dock = match current_layout_name {
 			Some(name) => {
-				let layout = project_settings.get(SavedLayout(name))?;
-				DockState::restore(&layout, &self.vtables, world)
+				if let Ok(layout) = project_settings.get(SavedLayout(name)) {
+					DockState::restore(layout, &self.vtables, world)
+				} else {
+					self.default_dock_state(world)
+				}
 			}
 			None => self.default_dock_state(world),
 		};
@@ -478,12 +499,12 @@ impl UiManager {
 			});
 	}
 
-	fn vtables(&self) -> &HashMap<PersistentId, &'static VTable> {
-		&self.vtables
-	}
-
-	fn get_vtable_by_id(&self, id: &PersistentId) -> Option<&'static VTable> {
-		self.vtables.get(id).cloned()
+	fn save_state(
+		&self,
+		q_uuids: &Query<&PersistentId, Without<MissingUi>>,
+		q_missing: &Query<&MissingUi>,
+	) -> DockState<LayoutInfo> {
+		self.state.decouple(self, q_uuids, q_missing)
 	}
 
 	fn switch_state(&mut self, new_state: DockState<TabState>, world: &mut World) {
@@ -586,6 +607,17 @@ impl LayoutInfo {
 
 	pub fn name(&self) -> &str {
 		&self.name
+	}
+}
+
+pub struct LoadLayout(pub DockState<LayoutInfo>);
+
+impl Command for LoadLayout {
+	fn apply(self, world: &mut World) {
+		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
+			let new_state = DockState::restore(self.0, &ui_manager.vtables, world);
+			ui_manager.switch_state(new_state, world);
+		})
 	}
 }
 

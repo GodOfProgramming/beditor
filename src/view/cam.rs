@@ -75,7 +75,7 @@ fn on_manage_camera(
 	mut contexts: bevy_egui::EguiContexts,
 	mut images: ResMut<Assets<Image>>,
 ) {
-	let image = Image::new_target_texture(1, 1, TextureFormat::Rgba32Float);
+	let image = Image::new_target_texture(1, 1, TextureFormat::bevy_default());
 	let image_handle = images.add(image);
 
 	contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));

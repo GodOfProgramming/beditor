@@ -2143,6 +2143,19 @@ pub mod short_circuit {
 			context: Some(&mut Context::new(world, queue)),
 		};
 
+		match handle {
+			UntypedHandle::Strong(strong_handle) => {
+				if ui.button("Make Persistent").clicked() {
+					warn!("TODO");
+				}
+			}
+			UntypedHandle::Uuid { type_id, uuid } => {
+				if ui.button("Save Asset").clicked() {
+					warn!("TODO");
+				}
+			}
+		}
+
 		Some(restricted_env.ui_for_reflect_with_options(
 			asset_value.as_partial_reflect_mut(),
 			ui,
@@ -2291,6 +2304,19 @@ pub mod short_circuit {
 			type_registry: env.type_registry,
 			context: Some(&mut Context::new(world, queue)),
 		};
+
+		match handle {
+			UntypedHandle::Strong(strong_handle) => {
+				if ui.button("Make Persistent").clicked() {
+					warn!("TODO");
+				}
+			}
+			UntypedHandle::Uuid { type_id, uuid } => {
+				if ui.button("Save Asset").clicked() {
+					warn!("TODO");
+				}
+			}
+		}
 
 		restricted_env.ui_for_reflect_readonly_with_options(asset_value, ui, id.with("asset"), options);
 

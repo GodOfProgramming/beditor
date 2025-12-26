@@ -1,6 +1,45 @@
 use egui::FontId;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
-use std::borrow::BorrowMut;
+use std::{
+	borrow::{self, BorrowMut},
+	ops::{Div, Mul},
+};
+
+pub trait ContextExtensions: borrow::Borrow<egui::Context> {
+	fn to_points<T>(&self, pixels: T) -> T
+	where
+		T: Div<f32, Output = T>,
+	{
+		let ppp = self.borrow().pixels_per_point();
+		pixels / ppp
+	}
+
+	fn to_points_many<T, const N: usize>(&self, pixels: [T; N]) -> [T; N]
+	where
+		T: Div<f32, Output = T>,
+	{
+		let ppp = self.borrow().pixels_per_point();
+		pixels.map(|p| p / ppp)
+	}
+
+	fn to_pixels<T>(&self, points: T) -> T
+	where
+		T: Mul<f32, Output = T>,
+	{
+		let ppp = self.borrow().pixels_per_point();
+		points * ppp
+	}
+
+	fn to_pixels_many<T, const N: usize>(&self, points: [T; N]) -> [T; N]
+	where
+		T: Mul<f32, Output = T>,
+	{
+		let ppp = self.borrow().pixels_per_point();
+		points.map(|p| p * ppp)
+	}
+}
+
+impl<T> ContextExtensions for T where T: borrow::Borrow<egui::Context> {}
 
 pub fn layout_job(text: &[(FontId, &str)]) -> egui::epaint::text::LayoutJob {
 	let mut job = egui::epaint::text::LayoutJob::default();

@@ -1,4 +1,4 @@
-use crate::{ui::EditorUi, view::cam::EditorManagedCamera};
+use crate::{ui::EditorUi, util::egui::ContextExtensions, view::cam::EditorManagedCamera};
 use bevy::{
 	camera::RenderTarget, ecs::system::SystemParam, prelude::*, reflect::Reflectable,
 	render::render_resource::Extent3d,
@@ -118,10 +118,9 @@ where
 			return;
 		};
 
-		let ppp = ui.ctx().pixels_per_point();
 		let image_size = image.size();
 		let image_size_vec2 = image_size.as_vec2();
-		let size_in_points = image_size_vec2 / ppp;
+		let size_in_points = ui.ctx().to_points(image_size_vec2);
 		let size_in_points = if size_in_points.is_finite() {
 			size_in_points
 		} else {
@@ -150,18 +149,20 @@ where
 
 		managed_camera.set_hovered(response.contains_pointer());
 
-		let image_viewport_rect = Rect::from_corners(
-			Vec2::new(texture_rect.min.x, texture_rect.min.y) * ppp,
-			Vec2::new(texture_rect.max.x, texture_rect.max.y) * ppp,
-		);
+		let [min, max] = ui
+			.ctx()
+			.to_pixels_many([texture_rect.min, texture_rect.max])
+			.map(|v| Vec2::new(v.x, v.y));
+
+		let image_viewport_rect = Rect::from_corners(min, max);
 
 		managed_camera.set_viewport(image_viewport_rect);
 
 		if managed_camera.should_sync_to_viewport() {
-			let ui_viewport_size = ui_area.size() * ppp;
+			let ui_viewport_size = ui.ctx().to_pixels(ui_area.size());
 			let ui_viewport_size = Vec2::new(ui_viewport_size.x, ui_viewport_size.y).as_uvec2();
 
-			if image_size == ui_viewport_size {
+			if ui_viewport_size == UVec2::ZERO || image_size == ui_viewport_size {
 				return;
 			}
 
@@ -227,7 +228,7 @@ fn take_ownership_of_camera<C: Component>(event: On<Add, C>, mut commands: Comma
 }
 
 fn transfer_ownership_of_camera<C: Component>(
-	event: On<Add, EditorManagedViewUi<C>>,
+	_: On<Add, EditorManagedViewUi<C>>,
 	mut commands: Commands,
 	q_cameras: Query<Entity, With<C>>,
 ) {

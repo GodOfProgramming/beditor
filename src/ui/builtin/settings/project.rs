@@ -1,7 +1,9 @@
 use crate::{
 	EditorUi, Notification,
 	settings::{SaveLayoutOnExitSetting, StartEditorInTestingSetting},
-	ui::{DockExtensions, LayoutManager, SavedLayout, UiManager, misc::MissingUi, widgets},
+	ui::{
+		DockExtensions, LayoutManager, LoadLayout, SavedLayout, UiManager, misc::MissingUi, widgets,
+	},
 	util::storage::ProjectSettings,
 	view::cam::ActiveEditorCamera,
 };
@@ -254,12 +256,7 @@ impl LoadLayoutMessage {
 		for msg in reader.read() {
 			let layout_name = msg.0.clone();
 			let dock = settings.get(SavedLayout(layout_name))?;
-			commands.queue(move |world: &mut World| {
-				world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-					let new_state = DockState::restore(&dock, ui_manager.vtables(), world);
-					ui_manager.switch_state(new_state, world);
-				})
-			});
+			commands.queue(LoadLayout(dock));
 		}
 
 		Ok(())

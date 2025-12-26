@@ -58,7 +58,24 @@ pub unsafe trait UiExtensions: EditorUi {
 		let mut q = world.query::<(&mut Self, &mut UiParams<Self>)>();
 		let world_cell = world.as_unsafe_world_cell();
 		let Ok((mut this, mut params)) = q.get_mut(unsafe { world_cell.world_mut() }, entity) else {
-			panic!("Failed to query {}", <Self as EditorUi>::NAME);
+			// # Safety
+			// This is an error path and we'll be crashing after regardless
+			let mut q = unsafe {
+				world_cell
+					.world_mut()
+					.query::<(Has<Self>, Has<UiParams<Self>>)>()
+			};
+			match q.get(unsafe { world_cell.world() }, entity) {
+				Ok((has_self, has_params)) => {
+					panic!(
+						"Failed to query {}, has self: {has_self}, has params: {has_params}",
+						<Self as EditorUi>::NAME,
+					);
+				}
+				Err(err) => {
+					panic!("Failed to query {}, {err}", <Self as EditorUi>::NAME);
+				}
+			}
 		};
 
 		let items = params.get_mut(unsafe { world_cell.world_mut() });
@@ -161,7 +178,9 @@ pub(super) trait DockExtensions:
 			} else {
 				id = *q_persistent_ids.get(tab.entity).unwrap();
 				name = ui_manager
-					.get_vtable_by_id(&id)
+					.vtables
+					.get(&id)
+					.cloned()
 					.map(|vt| vt.name.to_string())
 					.unwrap_or_default();
 			}
@@ -171,7 +190,7 @@ pub(super) trait DockExtensions:
 	}
 
 	fn restore(
-		dock: &DockState<LayoutInfo>,
+		dock: DockState<LayoutInfo>,
 		vtables: &HashMap<PersistentId, &'static VTable>,
 		world: &mut World,
 	) -> Self {

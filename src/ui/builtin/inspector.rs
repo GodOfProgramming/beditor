@@ -1,9 +1,10 @@
 use super::BundleDnd;
 use crate::{
-	inspector::{TypeRegistryExtensions, WorldExtensions},
+	inspector::{TypeRegistryExtensions, WorldExtensions as _, ui::components::ComponentInfo},
 	ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui},
+	util::WorldExtensions as _,
 };
-use bevy::prelude::*;
+use bevy::{ecs::world::CommandQueue, prelude::*};
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
@@ -56,15 +57,13 @@ impl EditorUiBundle for InspectorUi {
 								return;
 							};
 
-							let Some(info) = response.body_returned else {
+							world.queue(|_world, queue| {
+								entity_context_menu(&response, queue, std::iter::once(entity));
+							});
+
+							let Some(info) = &response.body_returned else {
 								return;
 							};
-
-							response.header_response.context_menu(|ui| {
-								if ui.button("Remove").clicked() {
-									world.entity_mut(entity).remove_by_id(info.component_id);
-								}
-							});
 
 							type_registry.show_docs(response.header_response, info.type_id);
 						});
@@ -75,19 +74,14 @@ impl EditorUiBundle for InspectorUi {
 								return;
 							};
 
-							let Some(component_info) = response.body_returned else {
+							let entities = entities.to_owned();
+							world.queue(|_world, queue| {
+								entity_context_menu(&response, queue, entities.into_iter());
+							});
+
+							let Some(component_info) = &response.body_returned else {
 								return;
 							};
-
-							response.header_response.context_menu(|ui| {
-								if ui.button("Remove").clicked() {
-									for entity in entities {
-										world
-											.entity_mut(*entity)
-											.remove_by_id(component_info.component_id);
-									}
-								}
-							});
 
 							type_registry.show_docs(response.header_response, component_info.type_id);
 						});
@@ -109,4 +103,25 @@ impl EditorUiBundle for InspectorUi {
 #[derive(Resource, Default)]
 pub struct InspectorSettings {
 	pub highlight_changes: bool,
+}
+
+pub fn entity_context_menu(
+	response: &egui::CollapsingResponse<ComponentInfo>,
+	queue: &mut CommandQueue,
+	entities: impl 'static + Send + Sync + Iterator<Item = Entity>,
+) {
+	let Some(info) = &response.body_returned else {
+		return;
+	};
+
+	response.header_response.context_menu(|ui| {
+		if ui.button("Remove").clicked() {
+			let component_id = info.component_id;
+			queue.push(move |world: &mut World| {
+				for entity in entities {
+					world.entity_mut(entity).remove_by_id(component_id);
+				}
+			});
+		}
+	});
 }

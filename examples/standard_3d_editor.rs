@@ -1,6 +1,10 @@
 use beditor::{brefabs::StaticPrefab, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use brefabs::PrefabPlugin;
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
 	App::new()

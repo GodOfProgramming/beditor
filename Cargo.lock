@@ -536,6 +536,7 @@ dependencies = [
  "egui-probe",
  "egui-snarl",
  "egui-toast",
+ "egui_autocomplete",
  "egui_commonmark",
  "egui_demo_lib",
  "egui_dock",
@@ -553,6 +554,7 @@ dependencies = [
  "log",
  "macros",
  "maplit",
+ "mimalloc",
  "nameof",
  "parking_lot",
  "persistent-id",
@@ -2916,6 +2918,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_autocomplete"
+version = "12.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb8463958945f83215a8039f694f3bb25abffbceee382974a256a97826fe321c"
+dependencies = [
+ "egui",
+ "fuzzy-matcher",
+]
+
+[[package]]
 name = "egui_commonmark"
 version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4459,6 +4471,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
+name = "libmimalloc-sys"
+version = "0.1.44"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "667f4fec20f29dfc6bc7357c582d91796c169ad7e2fce709468aefeb2c099870"
+dependencies = [
+ "cc",
+ "libc",
+]
+
+[[package]]
 name = "libredox"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4636,6 +4658,15 @@ dependencies = [
  "log",
  "objc",
  "paste",
+]
+
+[[package]]
+name = "mimalloc"
+version = "0.1.48"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8"
+dependencies = [
+ "libmimalloc-sys",
 ]
 
 [[package]]

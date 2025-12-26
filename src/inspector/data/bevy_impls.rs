@@ -7,7 +7,7 @@ use crate::{
 		options::{EntityDisplay, EntityOptions},
 		ui::{Context, InspectorUi},
 	},
-	ui::widgets,
+	ui::builtin::inspector::entity_context_menu,
 	util::{self, pretty_type_name, world::RestrictedWorldView},
 };
 use bevy::{
@@ -19,7 +19,7 @@ use bevy::{
 	reflect::DynamicTypePath,
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
-use egui::load::SizedTexture;
+use egui::{Widget, load::SizedTexture};
 use parking_lot::Mutex;
 use std::{any::Any, sync::LazyLock};
 
@@ -66,7 +66,7 @@ impl InspectorPrimitive for Entity {
 				egui::CollapsingHeader::new(entity_name)
 					.id_salt(id)
 					.show(ui, |ui| {
-						crate::inspector::ui::components::ui_for_entity_components(
+						let maybe_response = crate::inspector::ui::components::ui_for_entity_components(
 							ctx,
 							entity,
 							ui,
@@ -74,6 +74,11 @@ impl InspectorPrimitive for Entity {
 							env.type_registry,
 							options.highlight_changes,
 						);
+
+						if let Some(response) = maybe_response {
+							entity_context_menu(&response, ctx.queue, std::iter::once(entity));
+						}
+
 						if options.despawnable
 							&& ctx.world.contains_entity(entity)
 							&& util::egui::label_button(ui, "✖ Despawn", egui::Color32::RED)
@@ -94,41 +99,49 @@ impl InspectorPrimitive for Entity {
 }
 
 impl InspectorPrimitive for Handle<Mesh> {
-	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, env: InspectorUi<'_, '_>) -> bool {
-		let handle = &*self;
-		let Some(Context { world, .. }) = env.context else {
-			no_world_in_context(ui, "Handle<Mesh>");
-			return false;
-		};
-		let mut meshes = match world.get_resource_mut::<Assets<Mesh>>() {
-			Ok(meshes) => meshes,
-			Err(e) => {
-				e.ui(ui, "Assets<Mesh>");
-				return false;
-			}
-		};
-		let Some(mesh) = meshes.get_mut(handle) else {
-			dead_asset_handle(ui, handle.id().untyped());
-			return false;
-		};
+	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, id: egui::Id, env: InspectorUi<'_, '_>) -> bool {
+		asset_picker(
+			self,
+			ui,
+			env,
+			id,
+			|_, _, _| {},
+			|_, _, _| {},
+			|ui, handle, meshes| {
+				ui.horizontal(|ui| {
+					let Some(mesh) = meshes.get_mut(handle.id()) else {
+						dead_asset_handle(ui, handle.id().untyped());
+						return false;
+					};
 
-		mesh_ui_inner(mesh, ui);
+					mesh_ui_inner(mesh, ui);
 
-		ui.add_enabled_ui(mesh.indices().is_some(), |ui| {
-			if ui.button("Duplicate vertices").clicked() {
-				mesh.duplicate_vertices();
-			}
-		});
-		ui.add_enabled_ui(mesh.indices().is_none(), |ui| {
-			if ui.button("Compute flat normals").clicked() {
-				mesh.compute_flat_normals();
-			}
-		});
-		if ui.button("Generate tangents").clicked() {
-			let _ = mesh.generate_tangents();
-		}
+					let mut changed = false;
 
-		false
+					ui.add_enabled_ui(mesh.indices().is_some(), |ui| {
+						if ui.button("Duplicate vertices").clicked() {
+							mesh.duplicate_vertices();
+							changed |= true;
+						}
+					});
+
+					ui.add_enabled_ui(mesh.indices().is_none(), |ui| {
+						if ui.button("Compute flat normals").clicked() {
+							mesh.compute_flat_normals();
+							changed |= true;
+						}
+					});
+
+					if ui.button("Generate tangents").clicked() {
+						let _ = mesh.generate_tangents();
+						changed |= true;
+					}
+
+					changed
+				})
+				.inner
+			},
+		)
 	}
 
 	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, env: InspectorUi<'_, '_>) {
@@ -154,87 +167,24 @@ impl InspectorPrimitive for Handle<Mesh> {
 
 impl InspectorPrimitive for Handle<Image> {
 	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, id: egui::Id, env: InspectorUi<'_, '_>) -> bool {
-		let Some(Context { world, .. }) = env.context else {
-			let immutable_self: &Handle<Image> = self;
-			no_world_in_context(ui, immutable_self.reflect_short_type_path());
-			return false;
-		};
-
-		update_and_show_image(self, world, ui);
-		let (asset_server, images) = match world.get_two_resources_mut::<AssetServer, Assets<Image>>() {
-			(Ok(a), Ok(b)) => (a, b),
-			(a, b) => {
-				if let Err(e) = a {
-					e.ui(ui, &pretty_type_name::<AssetServer>());
-				}
-				if let Err(e) = b {
-					e.ui(ui, &pretty_type_name::<Assets<Image>>());
-				}
-				return false;
-			}
-		};
-
-		// get all loaded image paths
-		let mut image_paths = Vec::with_capacity(images.len());
-		let mut handles = HashMap::new();
-		for image in images.iter() {
-			if let Some(image_path) = asset_server.get_path(image.0) {
-				image_paths.push(image_path.to_string());
-				handles.insert(image_path.to_string(), image.0);
-			}
-		}
-
-		// first, get the typed search text from a stored egui data value
-		let mut selected_path = None;
-		let mut image_picker_search_text = String::from("");
-		ui.data_mut(|data| {
-			image_picker_search_text
-				.clone_from(data.get_temp_mut_or_default::<String>(id.with("image_picker_search_text")));
-		});
-
-		// build and show the dropdown
-		let dropdown = widgets::DropDownBox::from_iter(
-			image_paths.iter(),
-			id.with("image_picker"),
-			&mut image_picker_search_text,
-			|ui, path| {
-				let response = ui
-					.selectable_label(
-						self
-							.path()
-							.is_some_and(|p| p.path().as_os_str().to_string_lossy().eq(path)),
-						path,
-					)
-					.on_hover_ui_at_pointer(|ui| {
-						if let Some(id) = handles.get(path) {
-							let s: Option<SizedTexture> = ui.data(|d| d.get_temp(format!("image:{}", id).into()));
-							if let Some(id) = s {
-								ui.image(id);
-							}
-						}
-					});
-				if response.clicked() {
-					selected_path = Some(path.to_string());
-				}
-				response
+		asset_picker(
+			self,
+			ui,
+			env,
+			id,
+			|ui, handle, world| {
+				update_and_show_image(handle, world, ui);
 			},
+			|ui, search_text, handles| {
+				if let Some(id) = handles.get(search_text) {
+					let tex: Option<SizedTexture> = ui.data(|d| d.get_temp(format!("image:{}", id).into()));
+					if let Some(tex) = tex {
+						ui.image(tex);
+					}
+				}
+			},
+			|_, _, _| false,
 		)
-		.hint_text("Select image asset");
-		ui.add_enabled(!image_paths.is_empty(), dropdown)
-			.on_disabled_hover_text("No image assets are available");
-
-		// update the typed search text
-		ui.data_mut(|data| {
-			*data.get_temp_mut_or_default::<String>(id.with("image_picker_search_text")) =
-				image_picker_search_text;
-		});
-
-		// if the user selected an option, update the image handle
-		if let Some(selected_path) = selected_path {
-			*self = asset_server.load(selected_path);
-		}
-
-		false
 	}
 
 	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, env: InspectorUi<'_, '_>) {
@@ -634,4 +584,78 @@ fn rescaled_image(
 	};
 
 	Some((texture, texture_id))
+}
+
+fn asset_picker<A: Asset>(
+	handle: &mut Handle<A>,
+	ui: &mut egui::Ui,
+	env: InspectorUi<'_, '_>,
+	id: egui::Id,
+	prefix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut RestrictedWorldView),
+	hover_ui: impl FnOnce(&mut egui::Ui, &str, &HashMap<String, AssetId<A>>),
+	postfix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut Assets<A>) -> bool,
+) -> bool {
+	let Some(Context { world, .. }) = env.context else {
+		no_world_in_context(ui, "Handle<Mesh>");
+		return false;
+	};
+
+	(prefix_ui)(ui, handle, world);
+
+	let (asset_server, mut assets) = match world.get_two_resources_mut::<AssetServer, Assets<A>>() {
+		(Ok(a), Ok(b)) => (a, b),
+		(a, b) => {
+			if let Err(e) = a {
+				e.ui(ui, &pretty_type_name::<AssetServer>());
+			}
+
+			if let Err(e) = b {
+				e.ui(ui, &pretty_type_name::<Assets<A>>());
+			}
+			return false;
+		}
+	};
+
+	let mut paths = Vec::with_capacity(assets.len());
+	let mut handles = HashMap::with_capacity(assets.len());
+	for asset_id in assets.iter().map(|a| a.0) {
+		if let Some(mesh_path) = asset_server.get_path(asset_id) {
+			paths.push(mesh_path.to_string());
+			handles.insert(mesh_path.to_string(), asset_id);
+		}
+	}
+
+	let search_id = id.with("search_text");
+	let mut search_text = String::new();
+
+	ui.data_mut(|data| {
+		search_text.clone_from(data.get_temp_mut_or_default::<String>(search_id));
+	});
+
+	ui.vertical(|ui| {
+		ui.add_enabled_ui(!paths.is_empty(), |ui| {
+			let response = egui_autocomplete::AutoCompleteTextEdit::new(&mut search_text, paths)
+				.popup_on_focus(true)
+				.ui(ui)
+				.on_hover_ui_at_pointer(|ui| (hover_ui)(ui, &search_text, &handles));
+
+			if response.lost_focus()
+				&& let Some(new_handle) = handles
+					.get(&search_text)
+					.and_then(|&id| assets.get_strong_handle(id))
+			{
+				*handle = new_handle;
+			}
+		})
+		.response
+		.on_disabled_hover_text("No assets are available");
+
+		// update the typed search text
+		ui.data_mut(|data| {
+			*data.get_temp_mut_or_default::<String>(search_id) = search_text;
+		});
+
+		(postfix_ui)(ui, handle, &mut assets)
+	})
+	.inner
 }

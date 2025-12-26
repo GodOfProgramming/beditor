@@ -16,6 +16,7 @@ use crate::{
 		},
 		events::{OpenSingleUiMessage, OpenUiMessage},
 	},
+	util::make_singleton,
 	view::cam::EditorCamera,
 };
 use bevy::{
@@ -275,7 +276,10 @@ where
 	const REOPEN_ON_STARTUP: bool = <Self as EditorUi>::REOPEN_ON_STARTUP;
 
 	fn init(app: &mut App) {
-		<Self as EditorUi>::init(app)
+		<Self as EditorUi>::init(app);
+		if <Self as EditorUi>::UNIQUE {
+			app.add_observer(make_singleton::<Self>);
+		}
 	}
 
 	fn spawn(entity: Entity, world: &mut World) -> Self {

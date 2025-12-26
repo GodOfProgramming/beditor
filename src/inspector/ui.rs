@@ -2106,7 +2106,9 @@ pub mod short_circuit {
 		let handle = reflect_handle
 			.downcast_handle_untyped(value.as_any())
 			.unwrap();
+
 		let handle_id = handle.id();
+
 		let Some(reflect_asset) = env
 			.type_registry
 			.get_type_data::<ReflectAsset>(reflect_handle.asset_type_id())
@@ -2123,9 +2125,10 @@ pub mod short_circuit {
 
 		let asset_value = {
 			assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
-			let asset_value =
-                // SAFETY: the world allows mutable access to `Assets<T>`
-                unsafe { reflect_asset.get_unchecked_mut(world.world(), &handle) };
+
+			// SAFETY: the world allows mutable access to `Assets<T>`
+			let asset_value = unsafe { reflect_asset.get_unchecked_mut(world.world(), &handle) };
+
 			match asset_value {
 				Some(value) => value,
 				None => {
@@ -2199,9 +2202,10 @@ pub mod short_circuit {
 
 			let asset_value = {
 				assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
-				let asset_value =
-                        // SAFETY: the world allows mutable access to `Assets<T>`
-                        unsafe { reflect_asset.get_unchecked_mut(world.world(), &handle) };
+
+				// SAFETY: the world allows mutable access to `Assets<T>`
+				let asset_value = unsafe { reflect_asset.get_unchecked_mut(world.world(), &handle) };
+
 				match asset_value {
 					Some(value) => value,
 					None => {
@@ -2268,10 +2272,11 @@ pub mod short_circuit {
 		let (assets_view, world) = world.split_off_resource(reflect_asset.assets_resource_type_id());
 
 		let asset_value = {
-			// SAFETY: the following code only accesses a resources it has access to, `Assets<T>`
-			let interior_mutable_world = unsafe { assets_view.world().world() };
 			assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
-			let asset_value = reflect_asset.get(interior_mutable_world, &handle);
+
+			// SAFETY: the following code only accesses a resources it has access to, `Assets<T>`
+			let asset_value = unsafe { reflect_asset.get(assets_view.world().world(), &handle) };
+
 			match asset_value {
 				Some(value) => value,
 				None => {

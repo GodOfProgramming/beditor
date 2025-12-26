@@ -31,6 +31,16 @@ pub fn or(a: bool, b: bool) -> bool {
 	a || b
 }
 
+pub fn make_singleton<C: Component>(
+	event: On<Add, C>,
+	mut commands: Commands,
+	q_others: Query<Entity, With<C>>,
+) {
+	for entity in q_others.iter().filter(|&e| e != event.event_target()) {
+		commands.entity(entity).despawn();
+	}
+}
+
 #[derive(Resource, Reflect, Default)]
 #[reflect(Resource, Default)]
 pub struct GameRenderLayer(CameraLayer);

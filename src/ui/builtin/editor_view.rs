@@ -7,6 +7,7 @@ use crate::{
 		},
 		misc::UiState,
 	},
+	util::make_singleton,
 	view::cam::EditorCamera,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -45,6 +46,7 @@ impl EditorUi for EditorViewUi {
 		EditorManagedViewUi::<EditorCamera>::init(app);
 
 		app
+			.add_observer(make_singleton::<TemporaryEntity>)
 			.add_systems(FixedUpdate, detect_enter)
 			.add_systems(Update, move_temporaries);
 	}

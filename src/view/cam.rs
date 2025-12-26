@@ -3,7 +3,7 @@ use crate::{
 	Notification,
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
 	ui::EditorUiHitCaptureNode,
-	util::storage::ProjectSettings,
+	util::{make_singleton, storage::ProjectSettings},
 };
 use bevy::{
 	camera::{ImageRenderTarget, NormalizedRenderTarget, RenderTarget},
@@ -33,6 +33,7 @@ impl Plugin for EditorCamPlugin {
 		app
 			.init_resource::<RenderCameras>()
 			.init_resource::<GameCameraColor>()
+			.add_observer(make_singleton::<EditorCamera>)
 			.add_observer(LookAt::handle)
 			.add_observer(MoveTo::handle)
 			.add_observer(SyncRenderCamerasEvent::handle)
@@ -261,10 +262,10 @@ impl EditorManagedCamera {
 	}
 
 	fn sync_gizmos(
-		editor_camera: Single<&Self, With<GizmoCamera>>,
+		gizmo_camera: Single<&Self, With<GizmoCamera>>,
 		mut gizmos_options: ResMut<GizmoOptions>,
 	) {
-		gizmos_options.viewport_rect = editor_camera.viewport_rect;
+		gizmos_options.viewport_rect = gizmo_camera.viewport_rect;
 	}
 
 	fn on_frame_end(mut q_managed_cameras: Query<&mut Self>) {

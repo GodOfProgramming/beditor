@@ -34,11 +34,13 @@ pub fn add_primitives(world: &mut World) {
 #[derive(SystemParam)]
 struct SharedParams<'w> {
 	meshes: ResMut<'w, Assets<Mesh>>,
+	materials: ResMut<'w, Assets<StandardMaterial>>,
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Reflect)]
 struct Cube {
 	mesh: Mesh3d,
+	material: MeshMaterial3d<StandardMaterial>,
 }
 
 impl StaticPrefab for Cube {
@@ -51,6 +53,11 @@ impl StaticPrefab for Cube {
 					.meshes
 					.get_strong_handle(AssetId::from(MESH_CUBE_UUID))
 					.unwrap(),
+			),
+			material: MeshMaterial3d(
+				params
+					.materials
+					.add(StandardMaterial::from_color(Color::srgb_u8(124, 144, 255))),
 			),
 		}
 	}

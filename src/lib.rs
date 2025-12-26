@@ -3,13 +3,12 @@
 //! For systems that may actually be more readable without abstraction
 #![allow(clippy::too_many_arguments)]
 
+mod assets;
 mod input;
 pub mod inspector;
 mod ui;
 mod util;
 mod view;
-
-use std::{path::PathBuf, sync::LazyLock};
 
 use crate::{
 	inspector::InspectorPlugin,
@@ -43,6 +42,7 @@ use input::InputPlugin;
 use platform_dirs::AppDirs;
 pub use prelude::*;
 use serde::{Deserialize, Serialize};
+use std::{path::PathBuf, sync::LazyLock};
 use transform_gizmo_bevy::TransformGizmoPlugin;
 use ui::UiPlugin;
 use view::EditorViewPlugin;
@@ -243,7 +243,12 @@ impl Plugin for EditorPlugin {
 			.add_observer(DisableGameUiEvent::handle)
 			.add_systems(
 				Startup,
-				(configure_windows, auto_register_components, load_settings),
+				(
+					configure_windows,
+					auto_register_components,
+					load_settings,
+					assets::add_primitives,
+				),
 			)
 			.add_systems(PostStartup, show_window)
 			.add_systems(OnEnter(EditorState::Editing), show_window_cursor)

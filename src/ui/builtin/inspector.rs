@@ -20,7 +20,7 @@ impl InspectorUi {
 		});
 
 		if let Some(payload) = payload {
-			payload.spawn_on(entities.as_ref().iter().cloned(), world);
+			payload.insert(entities.as_ref().iter().cloned(), world);
 		}
 	}
 }

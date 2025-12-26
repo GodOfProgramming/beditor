@@ -243,7 +243,7 @@ fn show_dialogs(
 fn dnd_handler(_: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc<BundleDnd>) {
 	let new_entity = world.spawn_empty().id();
 	world.entity_mut(entity).add_child(new_entity);
-	if !payload.spawn_on(std::iter::once(new_entity), world) {
+	if !payload.insert(std::iter::once(new_entity), world) {
 		world.trigger(Notification::error("Failed to spawn"));
 	}
 }

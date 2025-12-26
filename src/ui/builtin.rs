@@ -28,14 +28,14 @@ pub enum BundleDnd {
 }
 
 impl BundleDnd {
-	fn spawn_on(&self, entities: impl Iterator<Item = Entity>, world: &mut World) -> bool {
+	fn insert(&self, entities: impl Iterator<Item = Entity>, world: &mut World) -> bool {
 		match self {
-			BundleDnd::AddComponent(type_id) => Self::spawn_component_on(entities, world, type_id),
-			BundleDnd::AddPrefab(type_id, name) => Self::spawn_prefab_on(entities, world, *type_id, name),
+			BundleDnd::AddComponent(type_id) => Self::insert_component(entities, world, type_id),
+			BundleDnd::AddPrefab(type_id, name) => Self::insert_prefab(entities, world, *type_id, name),
 		}
 	}
 
-	fn spawn_component_on(
+	fn insert_component(
 		entities: impl Iterator<Item = Entity>,
 		world: &mut World,
 		component_id: &TypeId,
@@ -52,7 +52,7 @@ impl BundleDnd {
 
 		for entity in entities {
 			if world.get_by_id(entity, component_id).is_none() {
-				component.spawn(entity, world);
+				component.insert(entity, world);
 			} else {
 				success = false;
 			}
@@ -61,7 +61,7 @@ impl BundleDnd {
 		success
 	}
 
-	fn spawn_prefab_on(
+	fn insert_prefab(
 		entities: impl Iterator<Item = Entity>,
 		world: &mut World,
 		type_id: TypeId,

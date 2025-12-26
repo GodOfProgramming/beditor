@@ -83,7 +83,9 @@ fn rebuild_vfs(
 	let type_registry = app_type_regsitry.0.read();
 	for (type_id, variants) in prefabs.iter() {
 		let Some(type_registration) = type_registry.get(type_id) else {
-			warn!("Failed to get type registration for prefab. It will not be found in the editor.");
+			warn!(
+				"Failed to get type registration for prefab type {type_id:?}. It will not be found in the editor."
+			);
 			continue;
 		};
 

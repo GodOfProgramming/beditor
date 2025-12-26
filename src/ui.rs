@@ -668,7 +668,7 @@ struct TabViewer<'a> {
 }
 
 impl TabViewer<'_> {
-	fn ui_info(&self, entity: Entity, f: impl FnOnce(&mut UiState)) {
+	fn ui_state_mut(&self, entity: Entity, f: impl FnOnce(&mut UiState)) {
 		let mut world = self.world.borrow_mut();
 		let mut q_ids = world.query::<&mut UiState>();
 		let ui_info = q_ids.get_mut(&mut world, entity).ok();
@@ -689,8 +689,8 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 	fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
 		(tab.vtable.render)(tab.entity, ui, &mut self.world.borrow_mut());
 
-		self.ui_info(tab.entity, |ui_info| {
-			ui_info.hovered = ui.ui_contains_pointer();
+		self.ui_state_mut(tab.entity, |state| {
+			state.hovered = ui.ui_contains_pointer();
 		});
 	}
 

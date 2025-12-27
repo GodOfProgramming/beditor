@@ -212,9 +212,9 @@ impl InspectorPrimitive for bool {
 	fn ui_readonly(
 		&self,
 		ui: &mut egui::Ui,
-		options: &dyn Any,
-		id: egui::Id,
-		env: InspectorUi<ImmutableContext>,
+		_: &dyn Any,
+		_: egui::Id,
+		_: InspectorUi<ImmutableContext>,
 	) {
 		let mut copy = *self;
 		ui.add_enabled_ui(false, |ui| {

@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use crate::ui::{EditorUi, TabState, events::ShowUiMessage};
+use crate::{
+	ui::{EditorUi, TabState, events::ShowUiMessage},
+	util::egui::ContextExtensions,
+};
 use bevy::{
 	ecs::system::SystemParam,
 	platform::collections::HashSet,
@@ -79,10 +82,9 @@ impl EditorUi for ImageViewerUi {
 				.observe(save_to_disk(path));
 		}
 
-		let ppp = ui.ctx().pixels_per_point();
 		let image_size = image.size();
 		let image_size_vec2 = image_size.as_vec2();
-		let size_in_points = image_size_vec2 / ppp;
+		let size_in_points = ui.ctx().to_points(image_size_vec2);
 		let size_in_points = if size_in_points.is_finite() {
 			size_in_points
 		} else {

@@ -8,11 +8,11 @@ pub mod ui;
 use crate::{
 	TypeGroups, TypeList,
 	inspector::ui::hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
-	util::{self, AppExtensions, world::RestrictedWorldView},
+	util::{self, AppExtensions, WorldExtensions as _, world::RestrictedWorldView},
 };
 use bevy::{
 	asset::{ReflectAsset, ReflectHandle, UntypedAssetId},
-	ecs::{query::QueryFilter, world::CommandQueue},
+	ecs::query::QueryFilter,
 	prelude::*,
 	reflect::TypeRegistry,
 };
@@ -123,28 +123,24 @@ pub trait WorldExtensions: BorrowMut<World> {
 	) -> Option<egui::CollapsingResponse<components::ComponentInfo>> {
 		let world = self.borrow_mut();
 
-		let type_registry = world.resource::<AppTypeRegistry>().0.clone();
-		let type_registry = type_registry.read();
+		world.queue(|world, queue| {
+			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
+			let type_registry = type_registry.read();
 
-		let entity_name = util::entity::guess_entity_name(world, entity);
-		ui.label(entity_name);
+			let entity_name = util::entity::guess_entity_name(world, entity);
+			ui.label(entity_name);
 
-		let mut queue = CommandQueue::default();
+			let mut ctx = Context::new(RestrictedWorldView::new(world), queue);
 
-		let mut ctx = Context::new(RestrictedWorldView::new(world), &mut queue);
-
-		let response = components::ui_for_entity_components(
-			&mut ctx,
-			entity,
-			ui,
-			egui::Id::new(entity),
-			&type_registry,
-			highlight_changes,
-		);
-
-		queue.apply(world);
-
-		response
+			components::ui_for_entity_components(
+				&mut ctx,
+				entity,
+				ui,
+				egui::Id::new(entity),
+				&type_registry,
+				highlight_changes,
+			)
+		})
 	}
 
 	fn ui_for_entities(
@@ -159,28 +155,28 @@ pub trait WorldExtensions: BorrowMut<World> {
 	fn ui_for_resource<R: Resource + Reflect>(&mut self, ui: &mut egui::Ui) {
 		let world = self.borrow_mut();
 
-		let type_registry = world.resource::<AppTypeRegistry>().0.clone();
-		let type_registry = type_registry.read();
+		world.queue(|world, queue| {
+			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
+			let type_registry = type_registry.read();
 
-		// create a context with access to the world except for the `R` resource
-		let Some((mut resource, world_view)) =
-			RestrictedWorldView::new(world).split_off_resource_typed::<R>()
-		else {
-			errors::resource_does_not_exist(ui, &util::pretty_type_name::<R>());
-			return;
-		};
-		let mut queue = CommandQueue::default();
-		let mut cx = Context {
-			world: world_view,
-			queue: &mut queue,
-		};
-		let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
+			// create a context with access to the world except for the `R` resource
+			let Some((mut resource, world_view)) =
+				RestrictedWorldView::new(world).split_off_resource_typed::<R>()
+			else {
+				errors::resource_does_not_exist(ui, &util::pretty_type_name::<R>());
+				return;
+			};
 
-		if env.ui_for_reflect(resource.bypass_change_detection(), ui) {
-			resource.set_changed();
-		}
+			let mut cx = Context {
+				world: world_view,
+				queue,
+			};
+			let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
 
-		queue.apply(world);
+			if env.ui_for_reflect(resource.bypass_change_detection(), ui) {
+				resource.set_changed();
+			}
+		});
 	}
 
 	fn ui_for_resource_type(
@@ -192,15 +188,13 @@ pub trait WorldExtensions: BorrowMut<World> {
 	) {
 		let world = self.borrow_mut();
 
-		let mut queue = CommandQueue::default();
-
-		{
+		world.queue(|world, queue| {
 			// create a context with access to the world except for the current resource
-			let mut world_view = RestrictedWorldView::new(world);
+			let world_view = RestrictedWorldView::new(world);
 			let (mut resource_view, world_view) = world_view.split_off_resource(resource_type_id);
 			let mut cx = Context {
 				world: world_view,
-				queue: &mut queue,
+				queue,
 			};
 			let mut env = InspectorUi::new(type_registry, Some(&mut cx));
 
@@ -217,9 +211,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			if changed {
 				resource.set_changed();
 			}
-		}
-
-		queue.apply(world);
+		});
 	}
 
 	fn ui_for_asset(
@@ -231,77 +223,72 @@ pub trait WorldExtensions: BorrowMut<World> {
 	) -> bool {
 		let world = self.borrow_mut();
 
-		let Some(registration) = type_registry.get(asset_type_id) else {
-			errors::reflect::not_in_type_registry(
-				ui,
-				&errors::name_of_type(asset_type_id, type_registry),
-			);
-			return false;
-		};
-		let Some(reflect_asset) = registration.data::<ReflectAsset>() else {
-			errors::no_type_data(
-				ui,
-				&errors::name_of_type(asset_type_id, type_registry),
-				"ReflectAsset",
-			);
-			return false;
-		};
-		let Some(reflect_handle) =
-			type_registry.get_type_data::<ReflectHandle>(reflect_asset.handle_type_id())
-		else {
-			errors::no_type_data(
-				ui,
-				&errors::name_of_type(reflect_asset.handle_type_id(), type_registry),
-				"ReflectHandle",
-			);
-			return false;
-		};
+		world.queue(|world, queue| {
+			let Some(registration) = type_registry.get(asset_type_id) else {
+				errors::reflect::not_in_type_registry(
+					ui,
+					&errors::name_of_type(asset_type_id, type_registry),
+				);
+				return false;
+			};
+			let Some(reflect_asset) = registration.data::<ReflectAsset>() else {
+				errors::no_type_data(
+					ui,
+					&errors::name_of_type(asset_type_id, type_registry),
+					"ReflectAsset",
+				);
+				return false;
+			};
+			let Some(reflect_handle) =
+				type_registry.get_type_data::<ReflectHandle>(reflect_asset.handle_type_id())
+			else {
+				errors::no_type_data(
+					ui,
+					&errors::name_of_type(reflect_asset.handle_type_id(), type_registry),
+					"ReflectHandle",
+				);
+				return false;
+			};
 
-		let _: Vec<_> = reflect_asset.ids(world).collect();
+			let _: Vec<_> = reflect_asset.ids(world).collect();
 
-		// Create a context with access to the entire world. Displaying the `Handle<T>` will short circuit into
-		// displaying the T with a world view excluding Assets<T>.
-		let world_view = RestrictedWorldView::new(world);
-		let mut queue = CommandQueue::default();
-		let mut cx = Context {
-			world: world_view,
-			queue: &mut queue,
-		};
+			// Create a context with access to the entire world. Displaying the `Handle<T>` will short circuit into
+			// displaying the T with a world view excluding Assets<T>.
+			let world_view = RestrictedWorldView::new(world);
+			let mut cx = Context {
+				world: world_view,
+				queue,
+			};
 
-		let id = egui::Id::new(handle);
+			let id = egui::Id::new(handle);
 
-		if let UntypedAssetId::Uuid { uuid, type_id } = handle {
-			let mut handle = reflect_handle
-				.typed(UntypedHandle::Uuid { uuid, type_id })
-				.into_partial_reflect();
+			if let UntypedAssetId::Uuid { uuid, type_id } = handle {
+				let mut handle = reflect_handle
+					.typed(UntypedHandle::Uuid { uuid, type_id })
+					.into_partial_reflect();
 
-			let mut env = InspectorUi::new(type_registry, Some(&mut cx));
-			let changed = env.ui_for_reflect_with_options(&mut *handle, ui, id, &());
+				let mut env = InspectorUi::new(type_registry, Some(&mut cx));
+				let changed = env.ui_for_reflect_with_options(&mut *handle, ui, id, &());
 
-			queue.apply(world);
-
-			changed
-		} else {
-			false
-		}
+				changed
+			} else {
+				false
+			}
+		})
 	}
 
 	fn ui_for_value(&mut self, ui: &mut egui::Ui, value: &mut dyn Reflect) -> bool {
 		let world = self.borrow_mut();
 
-		let type_registry = world.resource::<AppTypeRegistry>().0.clone();
-		let type_registry = type_registry.read();
+		world.queue(|world, queue| {
+			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
+			let type_registry = type_registry.read();
 
-		let mut queue = CommandQueue::default();
+			let mut cx = Context::new(RestrictedWorldView::new(world), queue);
+			let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
 
-		let mut cx = Context::new(RestrictedWorldView::new(world), &mut queue);
-		let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
-
-		let changed = env.ui_for_reflect(value.as_partial_reflect_mut(), ui);
-
-		queue.apply(world);
-
-		changed
+			env.ui_for_reflect(value.as_partial_reflect_mut(), ui)
+		})
 	}
 }
 

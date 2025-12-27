@@ -102,6 +102,17 @@ pub fn no_type_data(ui: &mut egui::Ui, type_name: &str, type_data: &str) {
 	ui.label(job);
 }
 
+pub fn no_asset_handle(ui: &mut egui::Ui, type_name: &str) {
+	let job = layout_job(&[
+		(FontId::monospace(12.0), type_name),
+		(FontId::proportional(13.0), " cannot be made into an "),
+		(FontId::monospace(12.0), "UntypedHandle"),
+		(FontId::proportional(13.0), " , so it cannot be displayed"),
+	]);
+
+	ui.label(job);
+}
+
 pub fn entity_does_not_exist(ui: &mut egui::Ui, entity: Entity) {
 	let job = layout_job(&[
 		(FontId::proportional(13.0), "Entity "),

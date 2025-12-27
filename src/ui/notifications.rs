@@ -100,6 +100,12 @@ impl Notification {
 	}
 }
 
+impl Command for Notification {
+	fn apply(self, world: &mut World) {
+		world.trigger(self);
+	}
+}
+
 fn show_toasts(
 	mut contexts: bevy_egui::EguiContexts,
 	mut toasts: ResMut<Toasts>,

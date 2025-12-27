@@ -146,7 +146,7 @@ impl<'w> RestrictedWorldView<'w> {
 
 	/// Splits this view into one view that only has access the the resource `resource` (`.0`), and the rest (`.1`).
 	pub fn split_off_resource(
-		&mut self,
+		&self,
 		resource: TypeId,
 	) -> (RestrictedWorldView<'_>, RestrictedWorldView<'_>) {
 		assert!(self.allows_access_to_resource(resource));
@@ -187,7 +187,7 @@ impl<'w> RestrictedWorldView<'w> {
 
 	/// Splits this view into one view that only has access the the component `component.1` at the entity `component.0` (`.0`), and the rest (`.1`).
 	pub fn split_off_component(
-		&mut self,
+		&self,
 		component: EntityComponent,
 	) -> (RestrictedWorldView<'_>, RestrictedWorldView<'_>) {
 		assert!(self.allows_access_to_component(component));
@@ -209,7 +209,7 @@ impl<'w> RestrictedWorldView<'w> {
 
 	/// Splits this view into one view that only has access the the component-entity pairs `components` (`.0`), and the rest (`.1`)
 	pub fn split_off_components(
-		&mut self,
+		&self,
 		components: impl Iterator<Item = EntityComponent> + Copy,
 	) -> (RestrictedWorldView<'_>, RestrictedWorldView<'_>) {
 		for component in components {
@@ -499,7 +499,7 @@ mod tests {
 		world.insert_resource(A("a".to_string()));
 		world.insert_resource(B("b".to_string()));
 
-		let mut world = RestrictedWorldView::new(&mut world);
+		let world = RestrictedWorldView::new(&mut world);
 
 		let (mut a_view, mut world) = world.split_off_resource(TypeId::of::<A>());
 		let mut a = a_view.get_resource_mut::<A>().unwrap();
@@ -529,9 +529,9 @@ mod tests {
 	#[test]
 	fn invalid_resource_access() {
 		let mut world = World::new();
-		let mut world = RestrictedWorldView::new(&mut world);
+		let world = RestrictedWorldView::new(&mut world);
 
-		let (a_view, mut a_remaining) = world.split_off_resource(TypeId::of::<A>());
+		let (a_view, a_remaining) = world.split_off_resource(TypeId::of::<A>());
 
 		assert!(a_view.allows_access_to_resource(TypeId::of::<A>()));
 		assert!(!a_remaining.allows_access_to_resource(TypeId::of::<A>()));
@@ -557,7 +557,7 @@ mod tests {
 		world.insert_resource(A("a".to_string()));
 		let entity = world.spawn(ComponentA("a".to_string())).id();
 
-		let mut world = RestrictedWorldView::new(&mut world);
+		let world = RestrictedWorldView::new(&mut world);
 
 		let (mut component_view, mut world) =
 			world.split_off_component((entity, TypeId::of::<ComponentA>()));

@@ -4,16 +4,12 @@ use crate::{
 		ui::{Context, InspectorUi},
 	},
 	util::{
-		self,
+		self, WorldExtensions,
 		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
 		world::{ReflectBorrow, RestrictedWorldView},
 	},
 };
-use bevy::{
-	ecs::{component::ComponentId, world::CommandQueue},
-	prelude::*,
-	reflect::TypeRegistry,
-};
+use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
 use std::any::TypeId;
 
 pub struct ComponentInfo {
@@ -195,121 +191,119 @@ pub fn ui_for_entities_with_shared_components(
 	entities: &[Entity],
 	ui: &mut egui::Ui,
 ) -> Option<egui::CollapsingResponse<ComponentInfo>> {
-	let type_registry = world.resource::<AppTypeRegistry>().0.clone();
-	let type_registry = type_registry.read();
+	world.queue(|world, queue| {
+		let type_registry = world.resource::<AppTypeRegistry>().0.clone();
+		let type_registry = type_registry.read();
 
-	let &first = entities.first()?;
+		let &first = entities.first()?;
 
-	let Ok(mut components) = components_of_entity(&world.into(), first) else {
-		errors::entity_does_not_exist(ui, first);
-		return None;
-	};
-
-	for &entity in entities.iter().skip(1) {
-		components.retain(|(_, id, _, _)| {
-			world
-				.get_entity(entity)
-				.map_or(true, |entity| entity.contains_id(*id))
-		})
-	}
-
-	let mut queue = CommandQueue::default();
-
-	let mut clicked_header = None;
-
-	let id = egui::Id::NULL;
-	for (name, component_id, component_type_id, size) in components {
-		let id = id.with(component_id);
-
-		let header = egui::CollapsingHeader::new(&name).id_salt(id);
-
-		let Some(type_id) = component_type_id else {
-			header.show(ui, |ui| errors::no_type_id(ui, &name));
-			continue;
+		let Ok(mut components) = components_of_entity(&world.into(), first) else {
+			errors::entity_does_not_exist(ui, first);
+			return None;
 		};
 
-		let type_docs = type_registry
-			.get_type_info(type_id)
-			.and_then(|info| info.docs());
-
-		if size == 0 {
-			ui.indent(id, |ui| {
-				let _response = ui.label(&name);
-				util::egui::show_docs(_response, type_docs);
-			});
-			continue;
+		for &entity in entities.iter().skip(1) {
+			components.retain(|(_, id, _, _)| {
+				world
+					.get_entity(entity)
+					.map_or(true, |entity| entity.contains_id(*id))
+			})
 		}
 
-		let (resources_view, components_view) = RestrictedWorldView::resources_components(world);
-		let mut cx = Context {
-			world: resources_view,
-			queue: &mut queue,
-		};
+		let mut clicked_header = None;
 
-		let mut values = Vec::with_capacity(entities.len());
-		for (i, &entity) in entities.iter().enumerate() {
-			// skip duplicate entities
-			if entities[0..i].contains(&entity) {
+		let id = egui::Id::NULL;
+		for (name, component_id, component_type_id, size) in components {
+			let id = id.with(component_id);
+
+			let header = egui::CollapsingHeader::new(&name).id_salt(id);
+
+			let Some(type_id) = component_type_id else {
+				header.show(ui, |ui| errors::no_type_id(ui, &name));
 				continue;
 			};
 
-			// SAFETY: entities are distinct, env has a context with just resources
-			match unsafe {
-				components_view.get_entity_component_reflect_unchecked(entity, type_id, &type_registry)
-			} {
-				Ok(value) => {
-					values.push(value);
-				}
-				Err(error) => {
-					error.ui(ui, &name);
+			let type_docs = type_registry
+				.get_type_info(type_id)
+				.and_then(|info| info.docs());
+
+			if size == 0 {
+				ui.indent(id, |ui| {
+					let _response = ui.label(&name);
+					util::egui::show_docs(_response, type_docs);
+				});
+				continue;
+			}
+
+			let (resources_view, components_view) = RestrictedWorldView::resources_components(world);
+			let mut cx = Context {
+				world: resources_view,
+				queue,
+			};
+
+			let mut values = Vec::with_capacity(entities.len());
+			for (i, &entity) in entities.iter().enumerate() {
+				// skip duplicate entities
+				if entities[0..i].contains(&entity) {
 					continue;
+				};
+
+				// SAFETY: entities are distinct, env has a context with just resources
+				match unsafe {
+					components_view.get_entity_component_reflect_unchecked(entity, type_id, &type_registry)
+				} {
+					Ok(value) => {
+						values.push(value);
+					}
+					Err(error) => {
+						error.ui(ui, &name);
+						continue;
+					}
 				}
 			}
+
+			let response = header.show(ui, |ui| {
+				ui.reset_style();
+
+				let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
+				let id = id.with(component_id);
+				let options = &();
+
+				let mut values_reflect: Vec<_> = values
+					.iter_mut()
+					.map(|value| value.bypass_change_detection().as_partial_reflect_mut())
+					.collect();
+
+				let changed = env.ui_for_reflect_many_with_options(
+					type_id,
+					&name,
+					ui,
+					id,
+					options,
+					values_reflect.as_mut_slice(),
+					&|a| a,
+				);
+
+				if changed {
+					for value in values.iter_mut() {
+						value.set_changed();
+					}
+				}
+
+				changed
+			});
+
+			let changed = response.body_returned.unwrap_or_default();
+			clicked_header.maybe_take(ComponentInfo::from_collapsing(
+				response,
+				changed,
+				type_id,
+				component_id,
+			));
 		}
 
-		let response = header.show(ui, |ui| {
-			ui.reset_style();
-
-			let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
-			let id = id.with(component_id);
-			let options = &();
-
-			let mut values_reflect: Vec<_> = values
-				.iter_mut()
-				.map(|value| value.bypass_change_detection().as_partial_reflect_mut())
-				.collect();
-
-			let changed = env.ui_for_reflect_many_with_options(
-				type_id,
-				&name,
-				ui,
-				id,
-				options,
-				values_reflect.as_mut_slice(),
-				&|a| a,
-			);
-
-			if changed {
-				for value in values.iter_mut() {
-					value.set_changed();
-				}
-			}
-
-			changed
-		});
-
-		let changed = response.body_returned.unwrap_or_default();
-		clicked_header.maybe_take(ComponentInfo::from_collapsing(
-			response,
-			changed,
-			type_id,
-			component_id,
-		));
-	}
-
-	queue.apply(world);
-
-	clicked_header
+		clicked_header
+	})
 }
 
 fn components_of_entity(

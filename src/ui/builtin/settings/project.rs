@@ -9,7 +9,6 @@ use crate::{
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use egui::TextBuffer;
-use egui_dock::DockState;
 use persistent_id::PersistentId;
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};

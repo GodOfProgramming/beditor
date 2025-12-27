@@ -337,6 +337,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		display_range_readonly::<T>(ui, options, id, env, "..", Some(start), Some(end));
 	}
 }
+
 fn display_range<T: egui::emath::Numeric + InspectorOptionsType>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,

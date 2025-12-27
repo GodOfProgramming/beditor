@@ -1,9 +1,6 @@
 use std::time::Duration;
 
-use crate::{
-	UiManager,
-	ui::{EditorUi, TabState, events::ShowUiMessage},
-};
+use crate::ui::{EditorUi, TabState, events::ShowUiMessage};
 use bevy::{
 	ecs::system::SystemParam,
 	platform::collections::HashSet,
@@ -64,9 +61,9 @@ impl EditorUi for ImageViewerUi {
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Self::Params {
 			mut commands,
-			contexts,
 			images,
 			mut file_dialog,
+			..
 		} = params;
 
 		let Some(image) = images.get(self.image.id()) else {

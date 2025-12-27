@@ -104,11 +104,12 @@ pub trait AppExtensions: BorrowMut<App> {
 impl<T> AppExtensions for T where T: BorrowMut<App> {}
 
 pub trait WorldExtensions: BorrowMut<World> {
-	fn queue(&mut self, f: impl FnOnce(&mut World, &mut CommandQueue)) {
+	fn queue<R>(&mut self, f: impl FnOnce(&mut World, &mut CommandQueue) -> R) -> R {
 		let world = self.borrow_mut();
 		let mut queue = CommandQueue::default();
-		f(world, &mut queue);
+		let r = f(world, &mut queue);
 		queue.apply(world);
+		r
 	}
 
 	fn state<S: States>(&self) -> S {

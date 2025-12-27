@@ -2079,7 +2079,10 @@ enum SetOp {
 
 pub mod short_circuit {
 	use super::errors::{self, name_of_type};
-	use crate::inspector::ui::{Context, InspectorUi, ProjectorReflect};
+	use crate::{
+		Notification,
+		inspector::ui::{Context, InspectorUi, ProjectorReflect},
+	};
 	use bevy::{
 		asset::{ReflectAsset, ReflectHandle},
 		prelude::*,
@@ -2097,15 +2100,16 @@ pub mod short_circuit {
 			return Some(false);
 		};
 
-		let value = value.try_as_reflect()?;
+		let reflected_value = value.try_as_reflect()?;
 
-		let reflect_handle = env
-			.type_registry
-			.get_type_data::<ReflectHandle>(value.type_id())?;
+		let type_id = reflected_value.type_id();
 
-		let handle = reflect_handle
-			.downcast_handle_untyped(value.as_any())
-			.unwrap();
+		let reflect_handle = env.type_registry.get_type_data::<ReflectHandle>(type_id)?;
+
+		let Some(handle) = reflect_handle.downcast_handle_untyped(reflected_value.as_any()) else {
+			errors::no_asset_handle(ui, &name_of_type(type_id, env.type_registry));
+			return Some(false);
+		};
 
 		let handle_id = handle.id();
 
@@ -2123,9 +2127,9 @@ pub mod short_circuit {
 
 		let (assets_view, world) = world.split_off_resource(reflect_asset.assets_resource_type_id());
 
-		let asset_value = {
-			assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
+		assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
 
+		let asset_value = {
 			// SAFETY: the world allows mutable access to `Assets<T>`
 			let asset_value = unsafe { reflect_asset.get_unchecked_mut(world.world(), &handle) };
 
@@ -2138,23 +2142,45 @@ pub mod short_circuit {
 			}
 		};
 
+		'asset_ui: {
+			match handle {
+				UntypedHandle::Strong(strong_handle) => {
+					if ui.button("Make Persistent").clicked() {
+						warn!("TODO");
+					}
+				}
+				UntypedHandle::Uuid { type_id, uuid } => {
+					if ui.button("Make Strong").clicked() {
+						let Ok(asset_value) = asset_value.reflect_clone() else {
+							queue.push(Notification::error("Failed copy asset").with_context(
+								serde_json::json!({
+									"type_id": format!("{type_id:?}"),
+								}),
+							));
+							break 'asset_ui;
+						};
+
+						// SAFETY: the world allows mutable access to `Assets<T>`
+						let instance_handle = unsafe {
+							reflect_asset.add(world.world().world_mut(), asset_value.as_partial_reflect())
+						};
+
+						let instance_handle = reflect_handle.typed(instance_handle);
+
+						let value = value.try_as_reflect_mut()?;
+
+						if let Err(err) = value.try_apply(instance_handle.as_partial_reflect()) {
+							queue.push(Notification::error("Failed to apply asset handle").with_context(err));
+						}
+					}
+				}
+			}
+		}
+
 		let mut restricted_env = InspectorUi {
 			type_registry: env.type_registry,
 			context: Some(&mut Context::new(world, queue)),
 		};
-
-		match handle {
-			UntypedHandle::Strong(strong_handle) => {
-				if ui.button("Make Persistent").clicked() {
-					warn!("TODO");
-				}
-			}
-			UntypedHandle::Uuid { type_id, uuid } => {
-				if ui.button("Save Asset").clicked() {
-					warn!("TODO");
-				}
-			}
-		}
 
 		Some(restricted_env.ui_for_reflect_with_options(
 			asset_value.as_partial_reflect_mut(),

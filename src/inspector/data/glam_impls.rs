@@ -1,6 +1,6 @@
 use crate::inspector::{
 	options::NumberOptions,
-	ui::{InspectorUi, ProjectorReflect},
+	ui::{ImmutableContext, InspectorUi, MutableContext, ProjectorReflect},
 };
 use bevy::{
 	math::{DMat2, DMat3, DMat4, DVec2, DVec3, DVec4},
@@ -10,11 +10,11 @@ use std::any::Any;
 
 macro_rules! vec_ui_many {
     ($name_many:ident $ty:ty>$elem_ty:ty: $count:literal $($component:ident)*) => {
-        pub fn $name_many(
+        pub fn $name_many<'c>(
             ui: &mut egui::Ui,
             _: &dyn Any,
             id: egui::Id,
-            _env: InspectorUi<'_, '_>,
+            _env: InspectorUi<'_, 'c, MutableContext<'c>>,
             values: &mut [&mut dyn PartialReflect],
             projector: &dyn ProjectorReflect,
         ) -> bool {
@@ -58,12 +58,12 @@ macro_rules! vec_ui_many {
 
 macro_rules! vec_ui {
     ($name:ident $name_readonly:ident $ty:ty: $count:literal $($component:ident)*) => {
-        pub fn $name(
+        pub fn $name<'c>(
             value: &mut dyn Any,
             ui: &mut egui::Ui,
             options: &dyn Any,
             id: egui::Id,
-            mut env: InspectorUi<'_, '_>,
+            mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
         ) -> bool {
             let value = value.downcast_mut::<$ty>().unwrap();
 
@@ -86,12 +86,12 @@ macro_rules! vec_ui {
             changed
         }
 
-        pub fn $name_readonly(
+        pub fn $name_readonly<'c>(
             value: &dyn Any,
             ui: &mut egui::Ui,
             _: &dyn Any,
             _: egui::Id,
-            mut env: InspectorUi<'_, '_>,
+             env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
         ) {
             let value = value.downcast_ref::<$ty>().unwrap();
 
@@ -111,12 +111,12 @@ macro_rules! vec_ui {
 
 macro_rules! mat_ui {
     ($name:ident $name_readonly:ident $ty:ty: $($component:ident)*) => {
-        pub fn $name(
+        pub fn $name<'c>(
             value: &mut dyn Any,
             ui: &mut egui::Ui,
             _: &dyn Any,
             _: egui::Id,
-            mut env: InspectorUi<'_, '_>,
+            mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
         ) -> bool {
             let value = value.downcast_mut::<$ty>().unwrap();
 
@@ -127,12 +127,12 @@ macro_rules! mat_ui {
             changed
         }
 
-        pub fn $name_readonly(
+        pub fn $name_readonly<'c>(
             value: &dyn Any,
             ui: &mut egui::Ui,
             _: &dyn Any,
             _: egui::Id,
-            mut env: InspectorUi<'_, '_>,
+            env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
         ) {
             let value = value.downcast_ref::<$ty>().unwrap();
 
@@ -189,7 +189,7 @@ pub mod quat {
 	use crate::{
 		inspector::{
 			options::{QuatDisplay, QuatOptions},
-			ui::InspectorUi,
+			ui::{ImmutableContext, InspectorUi, MutableContext},
 		},
 		many_ui,
 	};
@@ -205,7 +205,8 @@ pub mod quat {
 		fn from_quat(quat: Quat) -> Self;
 		fn to_quat(self) -> Quat;
 
-		fn ui(&mut self, ui: &mut egui::Ui, env: InspectorUi<'_, '_>) -> bool;
+		fn ui<'c>(&mut self, ui: &mut egui::Ui, env: InspectorUi<'_, 'c, MutableContext<'c>>) -> bool;
+		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, env: InspectorUi<'_, 'c, ImmutableContext<'c>>);
 	}
 
 	impl RotationEdit for Euler {
@@ -217,8 +218,16 @@ pub mod quat {
 			Quat::from_euler(EulerRot::XYZ, self.0.x, self.0.y, self.0.z)
 		}
 
-		fn ui(&mut self, ui: &mut egui::Ui, mut env: InspectorUi<'_, '_>) -> bool {
+		fn ui<'c>(
+			&mut self,
+			ui: &mut egui::Ui,
+			mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		) -> bool {
 			env.ui_for_reflect(&mut self.0, ui)
+		}
+
+		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, env: InspectorUi<'_, 'c, ImmutableContext<'c>>) {
+			env.ui_for_reflect_readonly(&self.0, ui);
 		}
 	}
 
@@ -232,7 +241,7 @@ pub mod quat {
 			Quat::from_euler(EulerRot::YXZ, y, p, r)
 		}
 
-		fn ui(&mut self, ui: &mut egui::Ui, _env: InspectorUi<'_, '_>) -> bool {
+		fn ui<'c>(&mut self, ui: &mut egui::Ui, _env: InspectorUi<'_, 'c, MutableContext<'c>>) -> bool {
 			let (yaw, pitch, roll) = &mut self.0;
 
 			let mut changed = false;
@@ -241,15 +250,34 @@ pub mod quat {
 					ui.label("Yaw");
 					changed |= ui.drag_angle(yaw).changed();
 					ui.end_row();
-					ui.label("Pitch").changed();
+
+					ui.label("Pitch");
 					changed |= ui.drag_angle(pitch).changed();
 					ui.end_row();
+
 					ui.label("Roll");
 					changed |= ui.drag_angle(roll).changed();
 					ui.end_row();
 				});
 			});
 			changed
+		}
+
+		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, _env: InspectorUi<'_, 'c, ImmutableContext<'c>>) {
+			let (yaw, pitch, roll) = self.0;
+
+			ui.vertical(|ui| {
+				egui::Grid::new("ypr grid").show(ui, |ui| {
+					ui.label(format!("Yaw: {yaw}"));
+					ui.end_row();
+
+					ui.label(format!("Pitch: {pitch}"));
+					ui.end_row();
+
+					ui.label(format!("Roll: {roll}"));
+					ui.end_row();
+				});
+			});
 		}
 	}
 
@@ -268,7 +296,11 @@ pub mod quat {
 			}
 		}
 
-		fn ui(&mut self, ui: &mut egui::Ui, mut env: InspectorUi<'_, '_>) -> bool {
+		fn ui<'c>(
+			&mut self,
+			ui: &mut egui::Ui,
+			mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		) -> bool {
 			let (axis, angle) = &mut self.0;
 
 			let mut changed = false;
@@ -284,12 +316,27 @@ pub mod quat {
 			});
 			changed
 		}
+
+		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, env: InspectorUi<'_, 'c, ImmutableContext<'c>>) {
+			let (axis, angle) = self.0;
+
+			ui.vertical(|ui| {
+				egui::Grid::new("axis-angle quat").show(ui, |ui| {
+					ui.label("Axis");
+					env.ui_for_reflect_readonly(&axis, ui);
+					ui.end_row();
+
+					ui.label(format!("Angle: {angle}"));
+					ui.end_row();
+				});
+			});
+		}
 	}
 
-	fn quat_ui_kind<T: Send + Sync + 'static + Copy + RotationEdit>(
+	fn quat_ui_kind<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
 		val: &mut Quat,
 		ui: &mut egui::Ui,
-		env: InspectorUi<'_, '_>,
+		env: InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let id = ui.id();
 		let mut intermediate = ui.memory_mut(|memory| {
@@ -313,12 +360,36 @@ pub mod quat {
 		changed
 	}
 
-	pub fn quat_ui(
+	fn quat_ui_kind_readonly<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
+		val: &Quat,
+		ui: &mut egui::Ui,
+		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	) {
+		let id = ui.id();
+		let mut intermediate = ui.memory_mut(|memory| {
+			*memory
+				.data
+				.get_temp_mut_or_insert_with(id, || T::from_quat(*val))
+		});
+
+		let externally_changed = !intermediate.to_quat().abs_diff_eq(*val, f32::EPSILON);
+		if externally_changed {
+			intermediate = T::from_quat(*val);
+		}
+
+		intermediate.ui_readonly(ui, env);
+
+		if externally_changed {
+			ui.memory_mut(|memory| memory.data.insert_temp(id, intermediate));
+		}
+	}
+
+	pub fn quat_ui<'c>(
 		value: &mut dyn Any,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		_: egui::Id,
-		mut env: InspectorUi<'_, '_>,
+		mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let value = value.downcast_mut::<Quat>().unwrap();
 
@@ -343,15 +414,32 @@ pub mod quat {
 		.inner
 	}
 
-	pub fn quat_ui_readonly(
+	pub fn quat_ui_readonly<'c>(
 		value: &dyn Any,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
-		id: egui::Id,
-		env: InspectorUi<'_, '_>,
+		_id: egui::Id,
+		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
-		let mut value = *value.downcast_ref::<Quat>().unwrap();
-		ui.add_enabled_ui(false, |ui| quat_ui(&mut value, ui, options, id, env));
+		ui.add_enabled_ui(false, |ui| {
+			let value = value.downcast_ref::<Quat>().unwrap();
+
+			let options = options
+				.downcast_ref::<QuatOptions>()
+				.cloned()
+				.unwrap_or_default();
+
+			ui.vertical(|ui| match options.display {
+				QuatDisplay::Raw => {
+					let vec4 = Vec4::from(*value);
+					env.ui_for_reflect_readonly(&vec4, ui);
+				}
+				QuatDisplay::Euler => quat_ui_kind_readonly::<Euler>(value, ui, env),
+				QuatDisplay::YawPitchRoll => quat_ui_kind_readonly::<YawPitchRoll>(value, ui, env),
+				QuatDisplay::AxisAngle => quat_ui_kind_readonly::<AxisAngle>(value, ui, env),
+			})
+			.inner
+		});
 	}
 
 	many_ui!(quat_ui_many quat_ui Quat);

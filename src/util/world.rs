@@ -483,7 +483,7 @@ mod tests {
 		world.insert_resource(A("a".to_string()));
 		world.insert_resource(B("b".to_string()));
 
-		let mut world = RestrictedWorldView::new(&mut world);
+		let world = RestrictedWorldView::new(&mut world);
 
 		let (mut a_view, mut world) = world.split_off_resource(TypeId::of::<A>());
 		let mut a = a_view.get_resource_mut::<A>().unwrap();

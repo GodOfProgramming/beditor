@@ -1,7 +1,7 @@
 use crate::{
 	inspector::{
 		errors,
-		ui::{Context, InspectorUi},
+		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
 	util::{
 		self, WorldExtensions,
@@ -75,7 +75,7 @@ impl ComponentInfo {
 }
 
 pub fn ui_for_entity_components(
-	ctx: &mut Context<'_>,
+	ctx: &mut MutableContext<'_>,
 	entity: Entity,
 	ui: &mut egui::Ui,
 	id: egui::Id,
@@ -115,11 +115,6 @@ pub fn ui_for_entity_components(
 		// create a context with access to the world except for the currently viewed component
 		let (mut component_view, world) = ctx.world.split_off_component((entity, type_id));
 
-		let mut cx = Context {
-			world,
-			queue: ctx.queue,
-		};
-
 		let value = match component_view.get_entity_component_reflect(entity, type_id, type_registry) {
 			Ok(value) => value,
 			Err(_) => {
@@ -146,12 +141,16 @@ pub fn ui_for_entity_components(
 		let response = header.show(ui, |ui| {
 			ui.reset_style();
 
-			let mut env = InspectorUi::new(type_registry, Some(&mut cx));
-			let id = id.with(component_id);
-			let options = &();
-
 			match value {
 				ReflectBorrow::Mutable(mut value) => {
+					let mut cx = MutableContext {
+						world,
+						queue: ctx.queue,
+					};
+
+					let mut env = InspectorUi::new(type_registry, Some(&mut cx));
+					let id = id.with(component_id);
+					let options = &();
 					let changed = env.ui_for_reflect_with_options(
 						value.bypass_change_detection().as_partial_reflect_mut(),
 						ui,
@@ -166,6 +165,11 @@ pub fn ui_for_entity_components(
 					changed
 				}
 				ReflectBorrow::Immutable(value) => {
+					let cx = ImmutableContext::new(unsafe { world.world().world() });
+					let env = InspectorUi::new(type_registry, Some(&cx));
+					let id = id.with(component_id);
+					let options = &();
+
 					env.ui_for_reflect_readonly_with_options(value.as_partial_reflect(), ui, id, options);
 					false
 				}
@@ -236,10 +240,7 @@ pub fn ui_for_entities_with_shared_components(
 			}
 
 			let (resources_view, components_view) = RestrictedWorldView::resources_components(world);
-			let mut cx = Context {
-				world: resources_view,
-				queue,
-			};
+			let mut cx = MutableContext::new(resources_view, queue);
 
 			let mut values = Vec::with_capacity(entities.len());
 			for (i, &entity) in entities.iter().enumerate() {

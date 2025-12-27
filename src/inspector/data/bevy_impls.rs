@@ -3,9 +3,9 @@ mod image_texture_conversion;
 use super::InspectorPrimitive;
 use crate::{
 	inspector::{
-		errors::{dead_asset_handle, no_world_in_context},
+		errors::{self, dead_asset_handle, no_world_in_context},
 		options::{EntityDisplay, EntityOptions},
-		ui::{Context, InspectorUi},
+		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
 	ui::builtin::inspector::entity_context_menu,
 	util::{self, pretty_type_name, world::RestrictedWorldView},
@@ -26,22 +26,35 @@ use std::{any::Any, sync::LazyLock};
 static SCALED_DOWN_TEXTURES: LazyLock<Mutex<ScaledDownTextures>> = LazyLock::new(Default::default);
 
 impl InspectorPrimitive for uuid::Uuid {
-	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: InspectorUi<'_, '_>) -> bool {
+	fn ui<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		_: egui::Id,
+		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+	) -> bool {
 		ui.label(self.to_string());
 		false
 	}
-	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: InspectorUi<'_, '_>) {
+
+	fn ui_readonly<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		_: egui::Id,
+		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	) {
 		ui.label(self.to_string());
 	}
 }
 
 impl InspectorPrimitive for Entity {
-	fn ui(
+	fn ui<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		mut env: InspectorUi<'_, '_>,
+		mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let entity = *self;
 
@@ -93,13 +106,25 @@ impl InspectorPrimitive for Entity {
 		false
 	}
 
-	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: InspectorUi<'_, '_>) {
+	fn ui_readonly<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		_: egui::Id,
+		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	) {
 		ui.label(format!("{self:?}"));
 	}
 }
 
 impl InspectorPrimitive for Handle<Mesh> {
-	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, id: egui::Id, env: InspectorUi<'_, '_>) -> bool {
+	fn ui<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		id: egui::Id,
+		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+	) -> bool {
 		asset_picker(
 			self,
 			ui,
@@ -144,16 +169,22 @@ impl InspectorPrimitive for Handle<Mesh> {
 		)
 	}
 
-	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, env: InspectorUi<'_, '_>) {
-		let Some(Context { world, .. }) = env.context else {
+	fn ui_readonly<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		_: egui::Id,
+		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	) {
+		let Some(ImmutableContext { world, .. }) = env.context else {
 			no_world_in_context(ui, "Handle<Mesh>");
 			return;
 		};
 
-		let meshes = match world.get_resource_mut::<Assets<Mesh>>() {
-			Ok(meshes) => meshes,
-			Err(e) => {
-				e.ui(ui, "Assets<Mesh>");
+		let meshes = match world.get_resource::<Assets<Mesh>>() {
+			Some(meshes) => meshes,
+			None => {
+				errors::resource_does_not_exist(ui, "Assets<Mesh>");
 				return;
 			}
 		};
@@ -166,7 +197,13 @@ impl InspectorPrimitive for Handle<Mesh> {
 }
 
 impl InspectorPrimitive for Handle<Image> {
-	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, id: egui::Id, env: InspectorUi<'_, '_>) -> bool {
+	fn ui<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		id: egui::Id,
+		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+	) -> bool {
 		asset_picker(
 			self,
 			ui,
@@ -187,8 +224,14 @@ impl InspectorPrimitive for Handle<Image> {
 		)
 	}
 
-	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, env: InspectorUi<'_, '_>) {
-		let Some(Context { world, .. }) = env.context else {
+	fn ui_readonly<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		_: egui::Id,
+		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	) {
+		let Some(ImmutableContext { world, .. }) = env.context else {
 			no_world_in_context(ui, self.reflect_short_type_path());
 			return;
 		};
@@ -198,7 +241,13 @@ impl InspectorPrimitive for Handle<Image> {
 }
 
 impl InspectorPrimitive for Color {
-	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: InspectorUi<'_, '_>) -> bool {
+	fn ui<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		_: egui::Id,
+		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+	) -> bool {
 		match self {
 			Color::Srgba(Srgba {
 				red,
@@ -286,20 +335,77 @@ impl InspectorPrimitive for Color {
 		false
 	}
 
-	fn ui_readonly(
+	fn ui_readonly<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, '_>,
+		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
-		let mut copy = *self;
-		ui.add_enabled_ui(false, |ui| copy.ui(ui, options, id, env));
+		ui.add_enabled_ui(false, |ui| match self {
+			Color::Srgba(Srgba {
+				red,
+				green,
+				blue,
+				alpha,
+			}) => {
+				let mut color = egui::Color32::from_rgba_unmultiplied(
+					(*red * 255.) as u8,
+					(*green * 255.) as u8,
+					(*blue * 255.) as u8,
+					(*alpha * 255.) as u8,
+				);
+				ui.color_edit_button_srgba(&mut color);
+			}
+			Color::LinearRgba(LinearRgba {
+				red,
+				green,
+				blue,
+				alpha,
+			}) => {
+				let mut color = [*red, *green, *blue, *alpha];
+				ui.color_edit_button_rgba_premultiplied(&mut color);
+			}
+			Color::Hsla(Hsla {
+				hue,
+				saturation,
+				lightness,
+				alpha,
+			}) => {
+				let mut hsva = egui::ecolor::Hsva::new(*hue, *saturation, *lightness, *alpha);
+				ui.color_edit_button_hsva(&mut hsva);
+			}
+			Color::Lcha(Lcha {
+				hue,
+				chroma,
+				lightness,
+				alpha,
+			}) => {
+				let mut hsva = egui::ecolor::Hsva::new(*hue, *chroma, *lightness, *alpha);
+				ui.color_edit_button_hsva(&mut hsva);
+			}
+			Color::Hsva(_)
+			| Color::Hwba(_)
+			| Color::Laba(_)
+			| Color::Oklaba(_)
+			| Color::Oklcha(_)
+			| Color::Xyza(_) => {
+				ui.label(format!(
+					"Colorspace of {self:?} is not supported yet. PRs welcome"
+				));
+			}
+		});
 	}
 }
 
 impl InspectorPrimitive for RenderLayers {
-	fn ui(&mut self, ui: &mut egui::Ui, _: &dyn Any, id: egui::Id, _: InspectorUi<'_, '_>) -> bool {
+	fn ui<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		id: egui::Id,
+		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+	) -> bool {
 		let mut new_value = None;
 		egui::Grid::new(id).num_columns(2).show(ui, |ui| {
 			for layer in self.iter() {
@@ -330,7 +436,13 @@ impl InspectorPrimitive for RenderLayers {
 		}
 	}
 
-	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: InspectorUi<'_, '_>) {
+	fn ui_readonly<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		_: egui::Id,
+		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	) {
 		for layer in self.iter() {
 			ui.label(format!("- {layer}"));
 		}
@@ -338,12 +450,12 @@ impl InspectorPrimitive for RenderLayers {
 }
 
 impl InspectorPrimitive for Name {
-	fn ui(
+	fn ui<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, '_>,
+		env: InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let mut value = self.to_string();
 		if value.ui(ui, options, id, env) {
@@ -354,7 +466,13 @@ impl InspectorPrimitive for Name {
 		}
 	}
 
-	fn ui_readonly(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: InspectorUi<'_, '_>) {
+	fn ui_readonly<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		_: &dyn Any,
+		_: egui::Id,
+		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	) {
 		if self.contains('\n') {
 			ui.text_edit_multiline(&mut self.as_str());
 		} else {
@@ -364,12 +482,12 @@ impl InspectorPrimitive for Name {
 }
 
 impl InspectorPrimitive for GizmoConfigStore {
-	fn ui(
+	fn ui<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		mut env: InspectorUi<'_, '_>,
+		mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		for (ty, group, value) in self.iter_mut() {
 			use egui::CollapsingHeader;
@@ -390,12 +508,12 @@ impl InspectorPrimitive for GizmoConfigStore {
 
 		false
 	}
-	fn ui_readonly(
+	fn ui_readonly<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		mut env: InspectorUi<'_, '_>,
+		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		for (ty, group, value) in self.iter() {
 			use egui::CollapsingHeader;
@@ -405,6 +523,7 @@ impl InspectorPrimitive for GizmoConfigStore {
 				.get(*ty)
 				.map(|x| x.type_info().ty().short_path())
 				.unwrap_or("<unknown gizmo group>");
+
 			CollapsingHeader::new(name)
 				.id_salt(id.with(ty))
 				.show(ui, |ui| {
@@ -585,16 +704,16 @@ fn rescaled_image(
 	Some((texture, texture_id))
 }
 
-fn asset_picker<A: Asset>(
+fn asset_picker<'c, A: Asset>(
 	handle: &mut Handle<A>,
 	ui: &mut egui::Ui,
-	env: InspectorUi<'_, '_>,
+	env: InspectorUi<'_, 'c, MutableContext<'c>>,
 	id: egui::Id,
 	prefix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut RestrictedWorldView),
 	hover_ui: impl FnOnce(&mut egui::Ui, &str, &HashMap<String, AssetId<A>>),
 	postfix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut Assets<A>) -> bool,
 ) -> bool {
-	let Some(Context { world, .. }) = env.context else {
+	let Some(MutableContext { world, .. }) = env.context else {
 		no_world_in_context(ui, "Handle<Mesh>");
 		return false;
 	};

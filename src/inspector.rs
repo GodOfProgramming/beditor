@@ -7,7 +7,10 @@ pub mod ui;
 
 use crate::{
 	TypeGroups, TypeList,
-	inspector::ui::hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
+	inspector::ui::{
+		MutableContext,
+		hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
+	},
 	util::{self, AppExtensions, WorldExtensions as _, world::RestrictedWorldView},
 };
 use bevy::{
@@ -20,7 +23,7 @@ use std::{
 	any::TypeId,
 	borrow::{Borrow, BorrowMut},
 };
-use ui::{Context, InspectorUi, components, hierarchy};
+use ui::{InspectorUi, components, hierarchy};
 
 pub struct InspectorPlugin;
 
@@ -130,7 +133,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let entity_name = util::entity::guess_entity_name(world, entity);
 			ui.label(entity_name);
 
-			let mut ctx = Context::new(RestrictedWorldView::new(world), queue);
+			let mut ctx = MutableContext::new(RestrictedWorldView::new(world), queue);
 
 			components::ui_for_entity_components(
 				&mut ctx,
@@ -167,10 +170,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 				return;
 			};
 
-			let mut cx = Context {
-				world: world_view,
-				queue,
-			};
+			let mut cx = MutableContext::new(world_view, queue);
 			let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
 
 			if env.ui_for_reflect(resource.bypass_change_detection(), ui) {
@@ -192,10 +192,8 @@ pub trait WorldExtensions: BorrowMut<World> {
 			// create a context with access to the world except for the current resource
 			let world_view = RestrictedWorldView::new(world);
 			let (mut resource_view, world_view) = world_view.split_off_resource(resource_type_id);
-			let mut cx = Context {
-				world: world_view,
-				queue,
-			};
+
+			let mut cx = MutableContext::new(world_view, queue);
 			let mut env = InspectorUi::new(type_registry, Some(&mut cx));
 
 			let mut resource =
@@ -255,10 +253,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			// Create a context with access to the entire world. Displaying the `Handle<T>` will short circuit into
 			// displaying the T with a world view excluding Assets<T>.
 			let world_view = RestrictedWorldView::new(world);
-			let mut cx = Context {
-				world: world_view,
-				queue,
-			};
+			let mut cx = MutableContext::new(world_view, queue);
 
 			let id = egui::Id::new(handle);
 
@@ -284,7 +279,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
 			let type_registry = type_registry.read();
 
-			let mut cx = Context::new(RestrictedWorldView::new(world), queue);
+			let mut cx = MutableContext::new(RestrictedWorldView::new(world), queue);
 			let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
 
 			env.ui_for_reflect(value.as_partial_reflect_mut(), ui)

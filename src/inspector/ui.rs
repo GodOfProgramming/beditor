@@ -2142,41 +2142,6 @@ pub mod short_circuit {
 			}
 		};
 
-		'asset_ui: {
-			match handle {
-				UntypedHandle::Strong(strong_handle) => {
-					if ui.button("Make Persistent").clicked() {
-						warn!("TODO");
-					}
-				}
-				UntypedHandle::Uuid { type_id, uuid } => {
-					if ui.button("Make Strong").clicked() {
-						let Ok(asset_value) = asset_value.reflect_clone() else {
-							queue.push(Notification::error("Failed copy asset").with_context(
-								serde_json::json!({
-									"type_id": format!("{type_id:?}"),
-								}),
-							));
-							break 'asset_ui;
-						};
-
-						// SAFETY: the world allows mutable access to `Assets<T>`
-						let instance_handle = unsafe {
-							reflect_asset.add(world.world().world_mut(), asset_value.as_partial_reflect())
-						};
-
-						let instance_handle = reflect_handle.typed(instance_handle);
-
-						let value = value.try_as_reflect_mut()?;
-
-						if let Err(err) = value.try_apply(instance_handle.as_partial_reflect()) {
-							queue.push(Notification::error("Failed to apply asset handle").with_context(err));
-						}
-					}
-				}
-			}
-		}
-
 		let mut restricted_env = InspectorUi {
 			type_registry: env.type_registry,
 			context: Some(&mut Context::new(world, queue)),

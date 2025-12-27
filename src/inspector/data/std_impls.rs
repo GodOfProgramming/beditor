@@ -30,7 +30,7 @@ impl<T: Reflect + Num> InspectorPrimitive for T {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<MutableContext>,
+		_: &mut InspectorUi<MutableContext>,
 	) -> bool {
 		let options = options
 			.downcast_ref::<NumberOptions<T>>()
@@ -44,7 +44,7 @@ impl<T: Reflect + Num> InspectorPrimitive for T {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<ImmutableContext>,
+		_: &InspectorUi<ImmutableContext>,
 	) {
 		let options = options
 			.downcast_ref::<NumberOptions<T>>()
@@ -72,7 +72,7 @@ pub fn number_ui<T: egui::emath::Numeric>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	_: egui::Id,
-	_: InspectorUi<MutableContext>,
+	_: &mut InspectorUi<MutableContext>,
 ) -> bool {
 	let value = value.downcast_mut::<T>().unwrap();
 	let options = options
@@ -81,12 +81,13 @@ pub fn number_ui<T: egui::emath::Numeric>(
 		.unwrap_or_default();
 	display_number(value, &options, ui, 0.1)
 }
+
 pub fn number_ui_readonly<T: egui::emath::Numeric>(
 	value: &dyn Any,
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	_: egui::Id,
-	_: InspectorUi<ImmutableContext>,
+	_: &InspectorUi<ImmutableContext>,
 ) {
 	let value = value.downcast_ref::<T>().unwrap();
 	let options = options
@@ -169,7 +170,7 @@ pub fn number_ui_many<T>(
 	ui: &mut egui::Ui,
 	_: &dyn Any,
 	id: egui::Id,
-	_env: InspectorUi<MutableContext>,
+	_env: &mut InspectorUi<MutableContext>,
 	values: &mut [&mut dyn PartialReflect],
 	projector: &dyn ProjectorReflect,
 ) -> bool
@@ -204,7 +205,7 @@ impl InspectorPrimitive for bool {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<MutableContext>,
+		_: &mut InspectorUi<MutableContext>,
 	) -> bool {
 		ui.checkbox(self, "").changed()
 	}
@@ -214,7 +215,7 @@ impl InspectorPrimitive for bool {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<ImmutableContext>,
+		_: &InspectorUi<ImmutableContext>,
 	) {
 		let mut copy = *self;
 		ui.add_enabled_ui(false, |ui| {
@@ -229,7 +230,7 @@ impl InspectorPrimitive for String {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<MutableContext>,
+		_: &mut InspectorUi<MutableContext>,
 	) -> bool {
 		if self.contains('\n') {
 			ui.text_edit_multiline(self).changed()
@@ -243,7 +244,7 @@ impl InspectorPrimitive for String {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<ImmutableContext>,
+		_: &InspectorUi<ImmutableContext>,
 	) {
 		if self.contains('\n') {
 			ui.text_edit_multiline(&mut self.as_str());
@@ -259,7 +260,7 @@ impl InspectorPrimitive for Cow<'static, str> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<MutableContext>,
+		_: &mut InspectorUi<MutableContext>,
 	) -> bool {
 		let mut clone = self.to_string();
 		let changed = if self.contains('\n') {
@@ -280,7 +281,7 @@ impl InspectorPrimitive for Cow<'static, str> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<ImmutableContext>,
+		_: &InspectorUi<ImmutableContext>,
 	) {
 		if self.contains('\n') {
 			ui.text_edit_multiline(&mut self.as_str());
@@ -296,7 +297,7 @@ impl InspectorPrimitive for Duration {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let mut seconds = self.as_secs_f64();
 		let options = NumberOptions {
@@ -317,7 +318,7 @@ impl InspectorPrimitive for Duration {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		let seconds = self.as_secs_f64();
 		let options = NumberOptions {
@@ -335,7 +336,7 @@ impl InspectorPrimitive for Instant {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let mut secs = self.elapsed().as_secs_f32();
 		ui.horizontal(|ui| {
@@ -350,7 +351,7 @@ impl InspectorPrimitive for Instant {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		let mut secs = self.elapsed().as_secs_f32();
 		ui.horizontal(|ui| {
@@ -368,7 +369,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let std::ops::Range { start, end } = self;
 		display_range::<T>(ui, options, id, env, "..", Some(start), Some(end))
@@ -379,7 +380,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		let std::ops::Range { start, end } = self;
 		display_range_readonly::<T>(ui, options, id, env, "..", Some(start), Some(end));
@@ -390,7 +391,7 @@ fn display_range<'c, T: egui::emath::Numeric + InspectorOptionsType>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
-	mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
+	env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 
 	// this is made to be generic but I'm currently just using it for a..b, not a..=b, ..a, a.., .., etc., because these types don't hand out mutable references
 	symbol: &'static str,
@@ -405,11 +406,11 @@ fn display_range<'c, T: egui::emath::Numeric + InspectorOptionsType>(
 	let mut changed = false;
 	ui.horizontal(|ui| {
 		if let Some(start) = start {
-			changed |= number_ui::<T>(start, ui, start_options, id, env.reborrow_mut());
+			changed |= number_ui::<T>(start, ui, start_options, id, env);
 		}
 		ui.label(symbol);
 		if let Some(end) = end {
-			changed |= number_ui::<T>(end, ui, end_options, id, env.reborrow_mut());
+			changed |= number_ui::<T>(end, ui, end_options, id, env);
 		}
 	});
 
@@ -420,7 +421,7 @@ fn display_range_readonly<'c, T: egui::emath::Numeric + InspectorOptionsType>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
-	env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 
 	symbol: &'static str,
 	start: Option<&T>,
@@ -433,11 +434,11 @@ fn display_range_readonly<'c, T: egui::emath::Numeric + InspectorOptionsType>(
 
 	ui.horizontal(|ui| {
 		if let Some(start) = start {
-			number_ui_readonly::<T>(start, ui, start_options, id, env.clone());
+			number_ui_readonly::<T>(start, ui, start_options, id, env);
 		}
 		ui.label(symbol);
 		if let Some(end) = end {
-			number_ui_readonly::<T>(end, ui, end_options, id, env.clone());
+			number_ui_readonly::<T>(end, ui, end_options, id, env);
 		}
 	});
 }
@@ -450,7 +451,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let mut start = *self.start();
 		let mut end = *self.end();
@@ -477,7 +478,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		display_range_readonly::<T>(
 			ui,
@@ -497,7 +498,7 @@ impl InspectorPrimitive for PathBuf {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let mut str = self.to_string_lossy();
 		let changed = ui.text_edit_singleline(&mut str).changed();
@@ -514,7 +515,7 @@ impl InspectorPrimitive for PathBuf {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		ui.text_edit_singleline(&mut self.to_string_lossy());
 	}
@@ -526,7 +527,7 @@ impl InspectorPrimitive for TypeId {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let str = format!("{:?}", self);
 		ui.label(str);
@@ -538,7 +539,7 @@ impl InspectorPrimitive for TypeId {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		let str = format!("{:?}", self);
 		ui.label(str);

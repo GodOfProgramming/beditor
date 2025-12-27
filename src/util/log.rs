@@ -19,6 +19,7 @@ use egui_tracing::EventCollector;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::{any::TypeId, sync::Arc};
+use strum_macros::{Display, EnumIter};
 use tracing::{Dispatch, Metadata, span, subscriber::Interest};
 use tracing_log::LogTracer;
 
@@ -215,7 +216,9 @@ where
 	}
 }
 
-#[derive(Reflect, Default, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(
+	Reflect, Default, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, EnumIter, Display,
+)]
 pub enum LogLevel {
 	Trace,
 	Debug,

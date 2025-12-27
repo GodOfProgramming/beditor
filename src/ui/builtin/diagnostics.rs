@@ -1,6 +1,5 @@
 use crate::{
 	RuntimeSettings,
-	inspector::TypeRegistryExtensions,
 	ui::{EditorUi, builtin::inspector::InspectorSettings},
 	util::{egui::ContextExtensions, log::LogLevel},
 	view::cam::{RenderCameras, SyncRenderCamerasEvent},
@@ -36,7 +35,6 @@ impl DiagnosticsUi {
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
 	commands: Commands<'w, 's>,
-	type_registry: Res<'w, AppTypeRegistry>,
 	diagnostics: Res<'w, DiagnosticsStore>,
 	render_cameras: ResMut<'w, RenderCameras>,
 	editor_settings: ResMut<'w, RuntimeSettings>,
@@ -67,7 +65,6 @@ impl EditorUi for DiagnosticsUi {
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
 			mut commands,
-			type_registry,
 			diagnostics,
 			mut render_cameras,
 			mut editor_settings,
@@ -102,8 +99,7 @@ impl EditorUi for DiagnosticsUi {
 			"Highlight Component Changes",
 		);
 
-		let type_registry = type_registry.read();
-		type_registry.ui_for_value(ui, &mut *editor_settings);
+		ui.toggle_value(&mut editor_settings.render_ui, "Render Ui");
 
 		ui.separator();
 

@@ -1,9 +1,7 @@
-mod image_texture_conversion;
-
 use super::InspectorPrimitive;
 use crate::{
 	inspector::{
-		errors::{self, dead_asset_handle, no_world_in_context},
+		errors::{self, dead_asset_handle},
 		options::{EntityDisplay, EntityOptions},
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
@@ -11,19 +9,12 @@ use crate::{
 	util::{self, pretty_type_name, world::RestrictedWorldView},
 };
 use bevy::{
-	camera::visibility::RenderLayers,
-	gizmos::config::GizmoConfigStore,
-	mesh::Indices,
-	platform::collections::{HashMap, HashSet, hash_map},
-	prelude::*,
-	reflect::DynamicTypePath,
+	camera::visibility::RenderLayers, ecs::world::CommandQueue, gizmos::config::GizmoConfigStore,
+	mesh::Indices, platform::collections::HashMap, prelude::*,
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
 use egui::{Widget, load::SizedTexture};
-use parking_lot::Mutex;
-use std::{any::Any, sync::LazyLock};
-
-static SCALED_DOWN_TEXTURES: LazyLock<Mutex<ScaledDownTextures>> = LazyLock::new(Default::default);
+use std::any::Any;
 
 impl InspectorPrimitive for uuid::Uuid {
 	fn ui<'c>(
@@ -31,7 +22,7 @@ impl InspectorPrimitive for uuid::Uuid {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		ui.label(self.to_string());
 		false
@@ -42,7 +33,7 @@ impl InspectorPrimitive for uuid::Uuid {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		ui.label(self.to_string());
 	}
@@ -54,7 +45,7 @@ impl InspectorPrimitive for Entity {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let entity = *self;
 
@@ -68,10 +59,7 @@ impl InspectorPrimitive for Entity {
 				ui.label(format!("{entity:?}"));
 			}
 			EntityDisplay::Components => {
-				let Some(ctx) = &mut env.context else {
-					no_world_in_context(ui, "Entity");
-					return false;
-				};
+				let ctx = &mut env.context;
 
 				let entity_name =
 					util::entity::guess_entity_name_restricted(unsafe { ctx.world.world().world() }, entity);
@@ -111,7 +99,7 @@ impl InspectorPrimitive for Entity {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		ui.label(format!("{self:?}"));
 	}
@@ -123,14 +111,14 @@ impl InspectorPrimitive for Handle<Mesh> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		asset_picker(
 			self,
 			ui,
 			env,
 			id,
-			|_, _, _| {},
+			|_, _, _, _| {},
 			|_, _, _| {},
 			|ui, handle, meshes| {
 				ui.horizontal(|ui| {
@@ -174,12 +162,9 @@ impl InspectorPrimitive for Handle<Mesh> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
-		let Some(ImmutableContext { world, .. }) = env.context else {
-			no_world_in_context(ui, "Handle<Mesh>");
-			return;
-		};
+		let ImmutableContext { world, .. } = env.context;
 
 		let meshes = match world.get_resource::<Assets<Mesh>>() {
 			Some(meshes) => meshes,
@@ -202,15 +187,23 @@ impl InspectorPrimitive for Handle<Image> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		asset_picker(
 			self,
 			ui,
 			env,
 			id,
-			|ui, handle, world| {
-				update_and_show_image(handle, world, ui);
+			|ui, handle, world, queue| {
+				let egui_user_textures = match world.resource::<EguiUserTextures>() {
+					Ok(v) => v,
+					Err(err) => {
+						err.ui(ui, "EguiUserTextures");
+						return;
+					}
+				};
+
+				show_image(ui, handle, queue, egui_user_textures);
 			},
 			|ui, search_text, handles| {
 				if let Some(id) = handles.get(search_text) {
@@ -229,14 +222,14 @@ impl InspectorPrimitive for Handle<Image> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
-		let Some(ImmutableContext { world, .. }) = env.context else {
-			no_world_in_context(ui, self.reflect_short_type_path());
-			return;
-		};
+		let ImmutableContext { world, queue } = env.context;
 
-		update_and_show_image(self, world, ui);
+		let mut queue = queue.borrow_mut();
+		let egui_user_textures = world.resource::<EguiUserTextures>();
+
+		show_image(ui, self, &mut queue, egui_user_textures);
 	}
 }
 
@@ -246,7 +239,7 @@ impl InspectorPrimitive for Color {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		match self {
 			Color::Srgba(Srgba {
@@ -338,9 +331,9 @@ impl InspectorPrimitive for Color {
 	fn ui_readonly<'c>(
 		&self,
 		ui: &mut egui::Ui,
-		options: &dyn Any,
-		id: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &dyn Any,
+		_: egui::Id,
+		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		ui.add_enabled_ui(false, |ui| match self {
 			Color::Srgba(Srgba {
@@ -404,7 +397,7 @@ impl InspectorPrimitive for RenderLayers {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		_: InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let mut new_value = None;
 		egui::Grid::new(id).num_columns(2).show(ui, |ui| {
@@ -441,7 +434,7 @@ impl InspectorPrimitive for RenderLayers {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		for layer in self.iter() {
 			ui.label(format!("- {layer}"));
@@ -455,7 +448,7 @@ impl InspectorPrimitive for Name {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		let mut value = self.to_string();
 		if value.ui(ui, options, id, env) {
@@ -471,7 +464,7 @@ impl InspectorPrimitive for Name {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		if self.contains('\n') {
 			ui.text_edit_multiline(&mut self.as_str());
@@ -487,7 +480,7 @@ impl InspectorPrimitive for GizmoConfigStore {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		mut env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		for (ty, group, value) in self.iter_mut() {
 			use egui::CollapsingHeader;
@@ -513,7 +506,7 @@ impl InspectorPrimitive for GizmoConfigStore {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		for (ty, group, value) in self.iter() {
 			use egui::CollapsingHeader;
@@ -535,80 +528,23 @@ impl InspectorPrimitive for GizmoConfigStore {
 	}
 }
 
-fn update_and_show_image(
-	image: &Handle<Image>,
-	world: &mut RestrictedWorldView,
-	ui: &mut egui::Ui,
-) {
-	let (mut egui_user_textures, mut images) =
-		match world.get_two_resources_mut::<bevy_egui::EguiUserTextures, Assets<Image>>() {
-			(Ok(a), Ok(b)) => (a, b),
-			(a, b) => {
-				if let Err(e) = a {
-					e.ui(ui, &pretty_type_name::<bevy_egui::EguiContext>());
-				}
-
-				if let Err(e) = b {
-					e.ui(ui, &pretty_type_name::<Assets<Image>>());
-				}
-
-				return;
-			}
-		};
-
-	let mut scaled_down_textures = SCALED_DOWN_TEXTURES.lock();
-
-	// todo: read asset events to re-rescale images if they changed
-	let rescaled = rescaled_image(
-		image,
-		&mut scaled_down_textures,
-		&mut images,
-		&mut egui_user_textures,
-	);
-	let (rescaled_handle, texture_id) = match rescaled {
-		Some(it) => it,
-		None => {
-			ui.label("<texture>");
-			return;
-		}
-	};
-
-	let rescaled_image = images.get(&rescaled_handle).unwrap();
-	ui.data_mut(|d| {
-		d.insert_temp(
-			format!("image:{}", image.id()).into(),
-			SizedTexture {
-				id: texture_id,
-				size: egui::Vec2::new(
-					rescaled_image.texture_descriptor.size.width as f32,
-					rescaled_image.texture_descriptor.size.height as f32,
-				),
-			},
-		)
-	});
-	show_image(rescaled_image, texture_id, ui);
-}
-
 fn show_image(
-	image: &Image,
-	texture_id: egui::TextureId,
 	ui: &mut egui::Ui,
+	handle: &Handle<Image>,
+	queue: &mut CommandQueue,
+	egui_user_textures: &EguiUserTextures,
 ) -> Option<egui::Response> {
-	let size = image.texture_descriptor.size;
-	let size = egui::Vec2::new(size.width as f32, size.height as f32);
+	let Some(tex) = egui_user_textures.image_id(handle.id()) else {
+		queue.push(MakeEguiTexture(handle.clone()));
+		return None;
+	};
 
 	let source = SizedTexture {
-		id: texture_id,
-		size,
+		id: tex,
+		size: egui::Vec2::new(64.0, 64.0),
 	};
 
-	if size.max_elem() >= 128.0 {
-		let response = egui::CollapsingHeader::new("Texture").show(ui, |ui| ui.image(source));
-		response.body_response
-	} else {
-		let response = ui.image(source);
-		Some(response)
-	}
+	Some(ui.image(source))
 }
 
 fn mesh_ui_inner(mesh: &Mesh, ui: &mut egui::Ui) {
@@ -654,73 +590,30 @@ fn mesh_ui_inner(mesh: &Mesh, ui: &mut egui::Ui) {
 	});
 }
 
-#[derive(Default)]
-struct ScaledDownTextures {
-	textures: HashMap<Handle<Image>, Handle<Image>>,
-	rescaled_textures: HashSet<Handle<Image>>,
-}
+#[derive(Deref)]
+struct MakeEguiTexture(Handle<Image>);
 
-const RESCALE_TO_FIT: (u32, u32) = (100, 100);
-
-fn rescaled_image(
-	handle: &Handle<Image>,
-	scaled_down_textures: &mut ScaledDownTextures,
-	textures: &mut Assets<Image>,
-	egui_usere_textures: &mut EguiUserTextures,
-) -> Option<(Handle<Image>, egui::TextureId)> {
-	let (texture, texture_id) = match scaled_down_textures.textures.entry(handle.clone()) {
-		hash_map::Entry::Occupied(handle) => {
-			let handle: Handle<Image> = handle.get().clone();
-			(
-				handle.clone(),
-				egui_usere_textures.add_image(EguiTextureHandle::Weak(handle.id())),
-			)
-		}
-		hash_map::Entry::Vacant(entry) => {
-			if scaled_down_textures.rescaled_textures.contains(handle) {
-				return None;
-			}
-
-			let original = textures.get(handle)?;
-
-			let (image, is_srgb) = image_texture_conversion::try_into_dynamic(original)?;
-			let resized = image.resize(
-				RESCALE_TO_FIT.0,
-				RESCALE_TO_FIT.1,
-				image::imageops::FilterType::Triangle,
-			);
-			let resized = image_texture_conversion::from_dynamic(resized, is_srgb);
-
-			let resized_handle = textures.add(resized);
-			let weak = resized_handle.clone();
-			let texture_id = egui_usere_textures.add_image(EguiTextureHandle::Weak(resized_handle.id()));
-			entry.insert(resized_handle);
-			scaled_down_textures.rescaled_textures.insert(weak.clone());
-
-			(weak, texture_id)
-		}
-	};
-
-	Some((texture, texture_id))
+impl Command for MakeEguiTexture {
+	fn apply(self, world: &mut World) {
+		let mut egui_user_textures = world.resource_mut::<EguiUserTextures>();
+		egui_user_textures.add_image(EguiTextureHandle::Weak(self.id()));
+	}
 }
 
 fn asset_picker<'c, A: Asset>(
 	handle: &mut Handle<A>,
 	ui: &mut egui::Ui,
-	env: InspectorUi<'_, 'c, MutableContext<'c>>,
+	env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	id: egui::Id,
-	prefix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut RestrictedWorldView),
+	prefix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut RestrictedWorldView, &mut CommandQueue),
 	hover_ui: impl FnOnce(&mut egui::Ui, &str, &HashMap<String, AssetId<A>>),
 	postfix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut Assets<A>) -> bool,
 ) -> bool {
-	let Some(MutableContext { world, .. }) = env.context else {
-		no_world_in_context(ui, "Handle<Mesh>");
-		return false;
-	};
+	let MutableContext { world, queue } = env.context;
 
-	(prefix_ui)(ui, handle, world);
+	(prefix_ui)(ui, handle, world, queue);
 
-	let (asset_server, mut assets) = match world.get_two_resources_mut::<AssetServer, Assets<A>>() {
+	let (asset_server, mut assets) = match world.two_resources_mut::<AssetServer, Assets<A>>() {
 		(Ok(a), Ok(b)) => (a, b),
 		(a, b) => {
 			if let Err(e) = a {

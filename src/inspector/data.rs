@@ -27,11 +27,14 @@ use std::{
 	time::Instant,
 };
 
-pub fn register_type_data(type_registry: &mut TypeRegistry) {
-	register_default_options(type_registry);
-	register_std_impls(type_registry);
-	register_bevy_impls(type_registry);
-	register_glam_impls(type_registry);
+pub fn init_app(app: &mut App) {
+	let type_registry = app.world().resource::<AppTypeRegistry>();
+	let mut type_registry = type_registry.write();
+
+	register_default_options(&mut type_registry);
+	register_std_impls(&mut type_registry);
+	register_bevy_impls(&mut type_registry);
+	register_glam_impls(&mut type_registry);
 }
 
 fn register_default_options(type_registry: &mut TypeRegistry) {
@@ -567,7 +570,7 @@ type InspectorEguiImplFn = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	InspectorUi<'_, 'c, MutableContext<'c>>,
+	&mut InspectorUi<'_, 'c, MutableContext<'c>>,
 ) -> bool;
 
 type InspectorEguiImplFnReadonly = for<'c> fn(
@@ -575,14 +578,14 @@ type InspectorEguiImplFnReadonly = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	&InspectorUi<'_, 'c, ImmutableContext<'c>>,
 );
 
 type InspectorEguiImplFnMany = for<'c, 'a> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	InspectorUi<'_, 'c, MutableContext<'c>>,
+	&mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	&mut [&mut dyn PartialReflect],
 	&dyn ProjectorReflect,
 ) -> bool;
@@ -593,7 +596,7 @@ pub trait InspectorPrimitive: Reflect {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool;
 
 	fn ui_readonly<'c>(
@@ -601,7 +604,7 @@ pub trait InspectorPrimitive: Reflect {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	);
 }
 
@@ -635,7 +638,7 @@ pub fn many_unimplemented<T: Any>(
 	ui: &mut egui::Ui,
 	_options: &dyn Any,
 	_id: egui::Id,
-	_env: InspectorUi<'_, '_, MutableContext<'_>>,
+	_env: &mut InspectorUi<'_, '_, MutableContext<'_>>,
 	_values: &mut [&mut dyn PartialReflect],
 	_projector: &dyn ProjectorReflect,
 ) -> bool {

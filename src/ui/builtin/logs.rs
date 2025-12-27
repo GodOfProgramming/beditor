@@ -1,10 +1,10 @@
 use crate::{
 	EditorUi, ProjectSettings, SettingChanged,
-	inspector::TypeRegistryExtensions,
 	settings::LogLevelSetting,
 	util::log::{EventCollectorHandle, LogLevel},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
+use strum::IntoEnumIterator;
 use uuid::{Uuid, uuid};
 
 #[derive(Default, Component, Reflect)]
@@ -16,7 +16,6 @@ pub struct LogUi {
 pub struct Params<'w, 's> {
 	project_settings: ProjectSettings<'w, 's>,
 	log_collector: Res<'w, EventCollectorHandle>,
-	type_registry: Res<'w, AppTypeRegistry>,
 }
 
 impl EditorUi for LogUi {
@@ -47,17 +46,24 @@ impl EditorUi for LogUi {
 }
 
 impl LogUi {
-	fn log_level_selector(&self, ui: &mut egui::Ui, params: &mut Params) {
+	fn log_level_selector(&mut self, ui: &mut egui::Ui, params: &mut Params) {
 		ui.push_id("log-level-selector", |ui| {
-			ui.horizontal(|ui| {
-				let type_registry = params.type_registry.as_ref().read();
-
-				ui.label("Log Level");
-				let mut log_level = self.log_level;
-				if type_registry.ui_for_value(ui, &mut log_level) {
-					params.project_settings.set(LogLevelSetting, log_level).ok();
+			let previous = self.log_level;
+			let mut clicked = false;
+			egui::ComboBox::new("log-level-selector", "Log Level").show_ui(ui, |ui| {
+				for level in LogLevel::iter() {
+					clicked |= ui
+						.selectable_value(&mut self.log_level, level, level.to_string())
+						.clicked();
 				}
 			});
+
+			if clicked && previous != self.log_level {
+				params
+					.project_settings
+					.set(LogLevelSetting, self.log_level)
+					.ok();
+			}
 		});
 	}
 }

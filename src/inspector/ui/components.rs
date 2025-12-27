@@ -143,12 +143,12 @@ pub fn ui_for_entity_components(
 
 			match value {
 				ReflectBorrow::Mutable(mut value) => {
-					let mut cx = MutableContext {
+					let mut ctx = MutableContext {
 						world,
 						queue: ctx.queue,
 					};
 
-					let mut env = InspectorUi::new(type_registry, Some(&mut cx));
+					let mut env = InspectorUi::new(type_registry, &mut ctx);
 					let id = id.with(component_id);
 					let options = &();
 					let changed = env.ui_for_reflect_with_options(
@@ -165,8 +165,8 @@ pub fn ui_for_entity_components(
 					changed
 				}
 				ReflectBorrow::Immutable(value) => {
-					let cx = ImmutableContext::new(unsafe { world.world().world() });
-					let env = InspectorUi::new(type_registry, Some(&cx));
+					let ctx = ImmutableContext::new(unsafe { world.world().world() }, ctx.queue);
+					let env = InspectorUi::new(type_registry, &ctx);
 					let id = id.with(component_id);
 					let options = &();
 
@@ -227,14 +227,10 @@ pub fn ui_for_entities_with_shared_components(
 				continue;
 			};
 
-			let type_docs = type_registry
-				.get_type_info(type_id)
-				.and_then(|info| info.docs());
-
 			if size == 0 {
 				ui.indent(id, |ui| {
-					let _response = ui.label(&name);
-					util::egui::show_docs(_response, type_docs);
+					let response = ui.label(&name);
+					util::egui::show_docs(&type_registry, type_id, response);
 				});
 				continue;
 			}
@@ -266,7 +262,7 @@ pub fn ui_for_entities_with_shared_components(
 			let response = header.show(ui, |ui| {
 				ui.reset_style();
 
-				let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
+				let mut env = InspectorUi::new(&type_registry, &mut cx);
 				let id = id.with(component_id);
 				let options = &();
 

@@ -1,8 +1,12 @@
+use bevy::reflect::TypeRegistry;
 use egui::FontId;
 use egui_commonmark::{CommonMarkCache, CommonMarkViewer};
+use parking_lot::Mutex;
 use std::{
+	any::TypeId,
 	borrow::{self, BorrowMut},
 	ops::{Div, Mul},
+	sync::LazyLock,
 };
 
 pub trait ContextExtensions: borrow::Borrow<egui::Context> {
@@ -40,6 +44,31 @@ pub trait ContextExtensions: borrow::Borrow<egui::Context> {
 }
 
 impl<T> ContextExtensions for T where T: borrow::Borrow<egui::Context> {}
+
+pub fn show_docs(
+	type_registry: &TypeRegistry,
+	type_id: TypeId,
+	response: egui::Response,
+) -> Option<egui::Response> {
+	type_registry
+		.get_type_info(type_id)
+		.and_then(|info| info.docs())
+		.map(|docs| {
+			response.on_hover_ui(|ui| {
+				show_markdown(ui, CommonMarkViewer::new(), docs);
+			})
+		})
+}
+
+pub fn show_markdown(
+	ui: &mut egui::Ui,
+	viewer: CommonMarkViewer,
+	text: &str,
+) -> egui::InnerResponse<()> {
+	static CACHE: LazyLock<Mutex<CommonMarkCache>> = LazyLock::new(Default::default);
+	let mut cache = CACHE.lock();
+	viewer.show(ui, &mut cache, text)
+}
 
 pub fn layout_job(text: &[(FontId, &str)]) -> egui::epaint::text::LayoutJob {
 	let mut job = egui::epaint::text::LayoutJob::default();
@@ -142,15 +171,6 @@ pub fn up_button(ui: &mut egui::Ui) -> egui::Response {
 
 pub fn down_button(ui: &mut egui::Ui) -> egui::Response {
 	IconButton::new(ui).down_button()
-}
-
-pub fn show_docs(response: egui::Response, docs: Option<&str>) {
-	if let Some(docs) = docs {
-		response.on_hover_ui(|ui| {
-			let mut cache = CommonMarkCache::default();
-			CommonMarkViewer::new().show(ui, &mut cache, docs);
-		});
-	}
 }
 
 pub fn maybe_grid(

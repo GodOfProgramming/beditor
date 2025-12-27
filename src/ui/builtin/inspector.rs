@@ -1,8 +1,8 @@
 use super::BundleDnd;
 use crate::{
-	inspector::{TypeRegistryExtensions, WorldExtensions as _, ui::components::ComponentInfo},
+	inspector::{WorldExtensions as _, ui::components::ComponentInfo},
 	ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui},
-	util::WorldExtensions as _,
+	util::{WorldExtensions as _, egui::show_docs},
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};
 use uuid::{Uuid, uuid};
@@ -65,7 +65,7 @@ impl EditorUiBundle for InspectorUi {
 								return;
 							};
 
-							type_registry.show_docs(response.header_response, info.type_id);
+							show_docs(&type_registry, info.type_id, response.header_response);
 						});
 					}
 					entities => {
@@ -83,7 +83,11 @@ impl EditorUiBundle for InspectorUi {
 								return;
 							};
 
-							type_registry.show_docs(response.header_response, component_info.type_id);
+							show_docs(
+								&type_registry,
+								component_info.type_id,
+								response.header_response,
+							);
 						});
 					}
 				},

@@ -32,7 +32,9 @@ use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
 use std::{
 	any::{Any, TypeId},
 	borrow::{Borrow, Cow},
+	cell::RefCell,
 	marker::PhantomData,
+	rc::Rc,
 };
 
 pub trait ProjectorReflect: Fn(&mut dyn PartialReflect) -> &mut dyn PartialReflect {}
@@ -43,23 +45,19 @@ pub trait Context {
 	type Mutability<'t>
 	where
 		Self: 't;
-
-	fn world(&self) -> &World;
 }
 
 pub struct ImmutableContext<'w> {
 	pub world: &'w World,
-}
-
-impl Clone for ImmutableContext<'_> {
-	fn clone(&self) -> Self {
-		Self { world: self.world }
-	}
+	pub queue: Rc<RefCell<&'w mut CommandQueue>>,
 }
 
 impl<'w> ImmutableContext<'w> {
-	pub fn new(world: &'w World) -> Self {
-		Self { world }
+	pub fn new(world: &'w World, queue: &'w mut CommandQueue) -> Self {
+		Self {
+			world,
+			queue: Rc::new(RefCell::new(queue)),
+		}
 	}
 }
 
@@ -68,10 +66,6 @@ impl<'w> Context for ImmutableContext<'w> {
 		= &'c Self
 	where
 		Self: 'c;
-
-	fn world(&self) -> &World {
-		self.world
-	}
 }
 
 #[derive(new)]
@@ -80,25 +74,11 @@ pub struct MutableContext<'w> {
 	pub queue: &'w mut CommandQueue,
 }
 
-impl<'w> MutableContext<'w> {
-	unsafe fn as_immutable(&'w self) -> ImmutableContext<'w> {
-		ImmutableContext {
-			world: unsafe { self.world.world().world() },
-		}
-	}
-}
-
 impl<'w> Context for MutableContext<'w> {
 	type Mutability<'c>
 		= &'c mut Self
 	where
 		Self: 'c;
-
-	fn world(&self) -> &'w World {
-		// SAFETY: Only used where mutable access would normally be used but can't
-		// i.e. hashmap keys & set values
-		unsafe { self.world.world().world() }
-	}
 }
 
 #[derive(new)]
@@ -107,18 +87,8 @@ where
 	C: 't + Context,
 {
 	pub type_registry: &'t TypeRegistry,
-	pub context: Option<C::Mutability<'t>>,
+	pub context: C::Mutability<'t>,
 	_pd: PhantomData<&'c ()>,
-}
-
-impl<'t, 'c> Clone for InspectorUi<'t, 'c, ImmutableContext<'c>> {
-	fn clone(&self) -> Self {
-		Self {
-			type_registry: self.type_registry,
-			context: self.context.clone(),
-			_pd: default(),
-		}
-	}
 }
 
 impl<'t, 'c, C> InspectorUi<'t, 'c, C>
@@ -209,7 +179,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, ImmutableContext<'c>> {
 		let reason = match value.try_as_reflect() {
 			Some(value) => match get_type_data(self.type_registry, value) {
 				Ok(ui_impl) => {
-					return ui_impl.execute_readonly(value.as_any(), ui, options, id, self.clone());
+					return ui_impl.execute_readonly(value.as_any(), ui, options, id, self);
 				}
 				Err(e) => e,
 			},
@@ -240,28 +210,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, ImmutableContext<'c>> {
 	}
 }
 
-impl<'c> InspectorUi<'_, 'c, MutableContext<'c>> {
-	fn as_immutable(&self, f: impl FnOnce(InspectorUi<'_, '_, ImmutableContext<'c>>)) {
-		if let Some(world) = self.context.as_ref().map(|ctx| ctx.world()) {
-			let ctx = ImmutableContext::new(world);
-			let immutable = InspectorUi::new(self.type_registry, Some(&ctx));
-			(f)(immutable);
-		} else {
-			let immutable = InspectorUi::new(self.type_registry, None);
-			(f)(immutable);
-		}
-	}
-}
-
 impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
-	pub fn reborrow_mut<'s>(&'s mut self) -> InspectorUi<'s, 'c, MutableContext<'c>> {
-		InspectorUi {
-			type_registry: self.type_registry,
-			context: self.context.as_deref_mut(),
-			_pd: default(),
-		}
-	}
-
 	/// Draws the inspector UI for the given value.
 	pub fn ui_for_reflect(&mut self, value: &mut dyn PartialReflect, ui: &mut egui::Ui) -> bool {
 		self.ui_for_reflect_with_options(value, ui, egui::Id::NULL, &())
@@ -291,7 +240,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 		let reason = match value.try_as_reflect_mut() {
 			Some(value) => match get_type_data(self.type_registry, value) {
 				Ok(ui_impl) => {
-					return ui_impl.execute(value.as_any_mut(), ui, options, id, self.reborrow_mut());
+					return ui_impl.execute(value.as_any_mut(), ui, options, id, self);
 				}
 				Err(e) => e,
 			},
@@ -362,7 +311,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 
 		let reason = match registration.data::<InspectorEguiImpl>() {
 			Some(ui_impl) => {
-				return ui_impl.execute_many(ui, options, id, self.reborrow_mut(), values, projector);
+				return ui_impl.execute_many(ui, options, id, self, values, projector);
 			}
 			None => TypeDataError::NoTypeData,
 		};
@@ -371,7 +320,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 			.type_registry
 			.get_type_data::<InspectorEguiImpl>(type_id)
 		{
-			return s.execute_many(ui, options, id, self.reborrow_mut(), values, projector);
+			return s.execute_many(ui, options, id, self, values, projector);
 		}
 
 		if let Some(changed) = self.short_circuit_many(type_id, ui, id, options, values, projector) {
@@ -419,9 +368,9 @@ impl<'t, 'c> InspectorUi<'t, 'c, ImmutableContext<'c>> {
 			for i in 0..value.field_len() {
 				let field_info = type_info.field_at(i).unwrap();
 
-				let _response = ui.label(field_info.name());
+				let response = ui.label(field_info.name());
 
-				show_docs(_response, field_info.docs());
+				show_docs(self.type_registry, field_info.type_id(), response);
 
 				let field = value.field_at(i).unwrap();
 				self.ui_for_reflect_readonly_with_options(
@@ -604,9 +553,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, ImmutableContext<'c>> {
 		id: egui::Id,
 		options: &dyn Any,
 	) -> Option<()> {
-		let Some(ImmutableContext { world, .. }) = &self.context else {
-			return Some(());
-		};
+		let ImmutableContext { world, .. } = self.context;
 
 		let value = value.try_as_reflect()?;
 
@@ -681,7 +628,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 
 				let response = ui.label(field_info.name());
 
-				show_docs(response, field_info.docs());
+				show_docs(self.type_registry, field_info.type_id(), response);
 
 				let field = value.field_at_mut(i).unwrap();
 				changed |= self.ui_for_reflect_with_options(
@@ -708,9 +655,9 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 		let mut changed = false;
 		egui::Grid::new(id).show(ui, |ui| {
 			for (i, field) in info.iter().enumerate() {
-				let _response = ui.label(field.name());
+				let response = ui.label(field.name());
 
-				show_docs(_response, field.docs());
+				show_docs(self.type_registry, field.type_id(), response);
 
 				changed |= self.ui_for_reflect_many_with_options(
 					field.type_id(),
@@ -856,66 +803,6 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 		})
 	}
 
-	/// Mutate one or more lists based on a [`ListOp`], generated by some user interaction.
-	fn respond_to_list_op<'a>(
-		&mut self,
-		ui: &mut egui::Ui,
-		id: egui::Id,
-		lists: impl Iterator<Item = &'a mut dyn List>,
-		op: ListOp,
-	) -> bool {
-		use ListOp::*;
-		let mut changed = false;
-		let error_id = id.with("error");
-
-		for list in lists {
-			let Some(TypeInfo::List(info)) = list.get_represented_type_info() else {
-				continue;
-			};
-			match op {
-				AddElement(i) => {
-					let default = self
-						.get_default_value_for(info.item_ty().id())
-						.map(|def| def.into_partial_reflect())
-						.or_else(|| list.get(i).map(|v| v.to_dynamic()));
-					if let Some(new_value) = default {
-						list.insert(i, new_value);
-					} else {
-						ui.data_mut(|data| data.insert_temp::<bool>(error_id, true));
-					}
-					changed = true;
-				}
-				RemoveElement(i) => {
-					list.remove(i);
-					changed = true;
-				}
-				MoveElementUp(i) => {
-					if let Some(prev_idx) = i.checked_sub(1) {
-						// Clone this element and insert it at its index - 1.
-						if let Some(element) = list.get(i) {
-							let clone = element.to_dynamic();
-							list.insert(prev_idx, clone);
-						}
-						// Remove the original, now at its index + 1.
-						list.remove(i + 1);
-						changed = true;
-					}
-				}
-				MoveElementDown(i) => {
-					// Clone the next element and insert it at this index.
-					if let Some(next_element) = list.get(i + 1) {
-						let next_clone = next_element.to_dynamic();
-						list.insert(i, next_clone);
-					}
-					// Remove the original, now at i + 2.
-					list.remove(i + 2);
-					changed = true;
-				}
-			}
-		}
-		changed
-	}
-
 	fn ui_for_list(
 		&mut self,
 		list: &mut dyn List,
@@ -959,8 +846,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 
 			// Respond to control interaction
 			if let Some(op) = op {
-				let lists = std::iter::once(list);
-				changed |= self.respond_to_list_op(ui, id, lists, op);
+				changed |= op.execute(list, self);
 			}
 
 			let error = ui.data_mut(|data| *data.get_temp_mut_or_default::<bool>(error_id));
@@ -1055,7 +941,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 						ReflectMut::List(list) => list,
 						_ => unreachable!(),
 					});
-				changed |= self.respond_to_list_op(ui, id, lists, op);
+				changed |= op.execute_many(lists, self);
 			}
 		});
 
@@ -1083,9 +969,12 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 				i += 1;
 
 				{
-					self.as_immutable(|ctx| {
-						ctx.ui_for_reflect_readonly_with_options(key, ui, ui_id, &());
-					});
+					let ctx = ImmutableContext::new(
+						unsafe { self.context.world.world().world() },
+						self.context.queue,
+					);
+					let env = InspectorUi::new(self.type_registry, &ctx);
+					env.ui_for_reflect_readonly_with_options(key, ui, ui_id, &());
 				}
 
 				changed |= self.ui_for_reflect_with_options(value, ui, ui_id, &());
@@ -1094,104 +983,70 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 				!delete
 			});
 
-			self.map_add_element_ui(map, ui, id, &mut changed);
-		});
+			{
+				let map_draft_id = id.with("map_draft");
+				let draft_clone = ui.data_mut(|data| {
+					data
+						.get_temp_mut_or_default::<Option<MapDraftElement>>(map_draft_id)
+						.to_owned()
+				});
 
-		changed
-	}
+				let map_info = map.get_represented_map_info()?;
 
-	fn map_add_element_ui(
-		&mut self,
-		map: &mut (dyn Map + 'static),
-		ui: &mut egui::Ui,
-		id: egui::Id,
-		changed: &mut bool,
-	) -> Option<()> {
-		let map_draft_id = id.with("map_draft");
-		let draft_clone = ui.data_mut(|data| {
-			data
-				.get_temp_mut_or_default::<Option<MapDraftElement>>(map_draft_id)
-				.to_owned()
-		});
+				let key_default = self.get_reflect_default(map_info.key_ty().id())?;
+				let value_default = self.get_reflect_default(map_info.value_ty().id())?;
 
-		let map_info = map.get_represented_map_info()?;
-
-		let key_default = self.get_reflect_default(map_info.key_ty().id())?;
-		let value_default = self.get_reflect_default(map_info.value_ty().id())?;
-
-		ui.separator();
-		ui.end_row();
-		ui.label("New element");
-		match draft_clone {
-			None => {
-				// If no draft element exists, show a button to create one.
-				if add_button(ui).clicked() {
-					// Insert a temporary 'draft' key-value pair into UI state.
-					let key = key_default.default().into_partial_reflect();
-					let value = value_default.default().into_partial_reflect();
-					ui.data_mut(|data| data.insert_temp(map_draft_id, MapDraftElement { key, value }));
-				}
+				ui.separator();
 				ui.end_row();
-			}
-			Some(MapDraftElement { mut key, mut value }) => {
-				ui.end_row();
-				// Show controls for editing our draft element.
-				let key_changed = self.ui_for_reflect_with_options(key.as_mut(), ui, id, &());
-				let value_changed = self.ui_for_reflect_with_options(value.as_mut(), ui, id, &());
-
-				// If the clone changed, update the data in UI state.
-				if key_changed || value_changed {
-					let next_draft = MapDraftElement { key, value };
-					ui.data_mut(|data| data.insert_temp(map_draft_id, Some(next_draft)));
-				}
-
-				// Show controls to insert the draft into the map, or remove it.
-				if ui.button("Insert").clicked() {
-					let draft = ui
-						.data_mut(|data| data.get_temp::<Option<MapDraftElement>>(map_draft_id))
-						.flatten();
-					if let Some(draft) = draft {
-						map.insert_boxed(draft.key, draft.value);
-						ui.data_mut(|data| data.remove_by_type::<Option<MapDraftElement>>());
+				ui.label("New element");
+				match draft_clone {
+					None => {
+						// If no draft element exists, show a button to create one.
+						if add_button(ui).clicked() {
+							// Insert a temporary 'draft' key-value pair into UI state.
+							let key = key_default.default().into_partial_reflect();
+							let value = value_default.default().into_partial_reflect();
+							ui.data_mut(|data| data.insert_temp(map_draft_id, MapDraftElement { key, value }));
+						}
+						ui.end_row();
 					}
-					*changed = true;
+					Some(MapDraftElement { mut key, mut value }) => {
+						ui.end_row();
+						// Show controls for editing our draft element.
+						let key_changed = self.ui_for_reflect_with_options(key.as_mut(), ui, id, &());
+						let value_changed = self.ui_for_reflect_with_options(value.as_mut(), ui, id, &());
+
+						// If the clone changed, update the data in UI state.
+						if key_changed || value_changed {
+							let next_draft = MapDraftElement { key, value };
+							ui.data_mut(|data| data.insert_temp(map_draft_id, Some(next_draft)));
+						}
+
+						// Show controls to insert the draft into the map, or remove it.
+						if ui.button("Insert").clicked() {
+							let draft = ui
+								.data_mut(|data| data.get_temp::<Option<MapDraftElement>>(map_draft_id))
+								.flatten();
+							if let Some(draft) = draft {
+								map.insert_boxed(draft.key, draft.value);
+								ui.data_mut(|data| data.remove_by_type::<Option<MapDraftElement>>());
+							}
+							changed |= true;
+						}
+
+						if ui.button("Cancel").clicked() {
+							ui.data_mut(|data| data.remove_by_type::<Option<MapDraftElement>>());
+							changed |= true;
+						}
+						ui.end_row();
+					}
 				}
 
-				if ui.button("Cancel").clicked() {
-					ui.data_mut(|data| data.remove_by_type::<Option<MapDraftElement>>());
-					*changed = true;
-				}
-				ui.end_row();
+				Some(())
 			}
-		}
+		});
 
-		Some(())
-	}
-
-	/// Mutate one or more lists based on a [`SetOp`], generated by some user interaction.
-	fn respond_to_sets_op<'a>(
-		&mut self,
-		sets: impl Iterator<Item = &'a mut dyn Set>,
-		op: SetOp,
-	) -> bool {
-		let mut changed = false;
-
-		for set in sets {
-			changed |= self.respond_to_set_op(set, &op);
-		}
 		changed
-	}
-	fn respond_to_set_op(&mut self, set: &mut dyn Set, op: &SetOp) -> bool {
-		use SetOp::*;
-		match &op {
-			AddElement(new_value) => {
-				set.insert_boxed(new_value.to_dynamic());
-			}
-			RemoveElement(val) => {
-				set.remove(&**val);
-			}
-		}
-		true
 	}
 
 	fn ui_for_set(
@@ -1216,9 +1071,12 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 			for (i, val) in set.iter().enumerate() {
 				egui::Grid::new((id, i)).show(ui, |ui| {
 					ui.horizontal_top(|ui| {
-						self.as_immutable(|ctx| {
-							ctx.ui_for_reflect_readonly_with_options(val, ui, id.with(i), options);
-						});
+						let ctx = ImmutableContext::new(
+							unsafe { self.context.world.world().world() },
+							self.context.queue,
+						);
+						let env = InspectorUi::new(self.type_registry, &ctx);
+						env.ui_for_reflect_readonly_with_options(val, ui, id.with(i), options);
 					});
 					ui.horizontal_top(|ui| {
 						if remove_button(ui).on_hover_text("Remove element").clicked() {
@@ -1248,7 +1106,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 
 			// Respond to control interaction
 			if let Some(op) = op {
-				changed |= self.respond_to_set_op(set, &op);
+				changed |= op.execute(set);
 			}
 
 			let error = ui.data_mut(|data| *data.get_temp_mut_or_default::<bool>(error_id));
@@ -1390,15 +1248,18 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 						}) {
 						// All sets contain this value: Show value
 						ui.horizontal_top(|ui| {
-							self.as_immutable(|ctx| {
-								ctx.ui_for_reflect_readonly_with_options(
-									value_to_check.borrow(),
-									ui,
-									// FIXME: is the id passed here correct?
-									id.with(i),
-									options,
-								);
-							});
+							let ctx = ImmutableContext::new(
+								unsafe { self.context.world.world().world() },
+								self.context.queue,
+							);
+							let env = InspectorUi::new(self.type_registry, &ctx);
+							env.ui_for_reflect_readonly_with_options(
+								value_to_check.borrow(),
+								ui,
+								// FIXME: is the id passed here correct?
+								id.with(i),
+								options,
+							);
 						});
 						ui.horizontal_top(|ui| {
 							if remove_button(ui).on_hover_text("Remove element").clicked() {
@@ -1435,7 +1296,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 						ReflectMut::Set(list) => list,
 						_ => unreachable!(),
 					});
-				changed |= self.respond_to_sets_op(sets, op);
+				op.execute_many(sets);
 			}
 		});
 
@@ -1500,20 +1361,13 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 				(0..value.field_len())
 					.map(|i| {
 						if label {
-							let field_docs = type_info
-								.variant_at(variant_index)
-								.and_then(|info| match info {
-									VariantInfo::Struct(info) => info.field_at(i)?.docs(),
-									_ => None,
-								});
-
-							let _response = if let Some(name) = value.name_at(i) {
+							let response = if let Some(name) = value.name_at(i) {
 								ui.label(name)
 							} else {
 								ui.label(i.to_string())
 							};
 
-							show_docs(_response, field_docs);
+							show_docs(self.type_registry, type_info.type_id(), response);
 						}
 						let field_value = value
 							.field_at_mut(i)
@@ -1709,9 +1563,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 		id: egui::Id,
 		options: &dyn Any,
 	) -> Option<bool> {
-		let Some(MutableContext { world, queue }) = &mut self.context else {
-			return Some(false);
-		};
+		let MutableContext { world, queue } = &mut self.context;
 
 		let reflected_value = value.try_as_reflect()?;
 
@@ -1756,7 +1608,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 		};
 
 		let mut ctx = MutableContext::new(world, queue);
-		let mut restricted_env = InspectorUi::new(self.type_registry, Some(&mut ctx));
+		let mut restricted_env = InspectorUi::new(self.type_registry, &mut ctx);
 
 		Some(restricted_env.ui_for_reflect_with_options(
 			asset_value.as_partial_reflect_mut(),
@@ -1775,9 +1627,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 		values: &mut [&mut dyn PartialReflect],
 		projector: &dyn ProjectorReflect,
 	) -> Option<bool> {
-		let Some(MutableContext { world, queue }) = &mut self.context else {
-			return Some(false);
-		};
+		let MutableContext { world, queue } = &mut self.context;
 
 		let reflect_handle = self.type_registry.get_type_data::<ReflectHandle>(type_id)?;
 
@@ -1833,7 +1683,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 			new_values.push(asset_value.as_partial_reflect_mut());
 		}
 		let mut ctx = MutableContext::new(world, queue);
-		let mut restricted_env = InspectorUi::new(self.type_registry, Some(&mut ctx));
+		let mut restricted_env = InspectorUi::new(self.type_registry, &mut ctx);
 
 		Some(restricted_env.ui_for_reflect_many_with_options(
 			reflect_handle.asset_type_id(),
@@ -1852,7 +1702,7 @@ type InspectorEguiImplFn = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	InspectorUi<'_, 'c, MutableContext<'c>>,
+	&mut InspectorUi<'_, 'c, MutableContext<'c>>,
 ) -> bool;
 
 type InspectorEguiImplFnReadonly = for<'c> fn(
@@ -1860,14 +1710,14 @@ type InspectorEguiImplFnReadonly = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	&InspectorUi<'_, 'c, ImmutableContext<'c>>,
 );
 
 type InspectorEguiImplFnMany = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	InspectorUi<'_, 'c, MutableContext<'c>>,
+	&mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	&mut [&mut dyn PartialReflect],
 	&dyn ProjectorReflect,
 ) -> bool;
@@ -1914,7 +1764,7 @@ impl InspectorEguiImpl {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	) -> bool {
 		(self.fn_mut)(value, ui, options, id, env)
 	}
@@ -1925,7 +1775,7 @@ impl InspectorEguiImpl {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 	) {
 		(self.fn_readonly)(value, ui, options, id, env)
 	}
@@ -1935,7 +1785,7 @@ impl InspectorEguiImpl {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 		values: &mut [&mut dyn PartialReflect],
 		projector: &dyn ProjectorReflect,
 	) -> bool {
@@ -2167,7 +2017,7 @@ macro_rules! many_ui {
 			ui: &mut egui::Ui,
 			options: &dyn Any,
 			id: egui::Id,
-			env: InspectorUi<'_, 'c, MutableContext<'c>>,
+			env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 			values: &mut [&mut dyn bevy::reflect::PartialReflect],
 			projector: &dyn $crate::inspector::ui::ProjectorReflect,
 		) -> bool {
@@ -2196,7 +2046,7 @@ fn ui_vtable<'c, T: InspectorPrimitive>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
-	env: InspectorUi<'_, 'c, MutableContext<'c>>,
+	env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 ) -> bool {
 	let val = val.downcast_mut::<T>().unwrap();
 	T::ui(val, ui, options, id, env)
@@ -2207,7 +2057,7 @@ fn ui_readonly_vtable<'c, T: InspectorPrimitive>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
-	env: InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
 ) {
 	let val = val.downcast_ref::<T>().unwrap();
 	T::ui_readonly(val, ui, options, id, env)
@@ -2217,7 +2067,7 @@ fn ui_many_vtable<'c, T: Reflect + PartialEq + Clone + Default + InspectorPrimit
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
-	env: InspectorUi<'_, 'c, MutableContext<'c>>,
+	env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
 	values: &mut [&mut dyn PartialReflect],
 	projector: &dyn ProjectorReflect,
 ) -> bool {
@@ -2348,11 +2198,78 @@ impl Clone for SetDraftElement {
 	}
 }
 
+#[derive(Clone, Copy)]
 enum ListOp {
 	AddElement(usize),
 	RemoveElement(usize),
 	MoveElementUp(usize),
 	MoveElementDown(usize),
+}
+
+impl ListOp {
+	fn execute(self, list: &mut dyn List, env: &mut InspectorUi<'_, '_, MutableContext<'_>>) -> bool {
+		let Some(TypeInfo::List(info)) = list.get_represented_type_info() else {
+			return false;
+		};
+
+		match self {
+			Self::AddElement(i) => {
+				let default = env
+					.get_default_value_for(info.item_ty().id())
+					.map(|def| def.into_partial_reflect())
+					.or_else(|| list.get(i).map(|v| v.to_dynamic()));
+
+				if let Some(new_value) = default {
+					list.insert(i, new_value);
+					true
+				} else {
+					false
+				}
+			}
+			Self::RemoveElement(i) => {
+				list.remove(i);
+				true
+			}
+			Self::MoveElementUp(i) => {
+				if let Some(prev_idx) = i.checked_sub(1) {
+					// Clone this element and insert it at its index - 1.
+					if let Some(element) = list.get(i) {
+						let clone = element.to_dynamic();
+						list.insert(prev_idx, clone);
+					}
+					// Remove the original, now at its index + 1.
+					list.remove(i + 1);
+					true
+				} else {
+					false
+				}
+			}
+			Self::MoveElementDown(i) => {
+				// Clone the next element and insert it at this index.
+				if let Some(next_element) = list.get(i + 1) {
+					let next_clone = next_element.to_dynamic();
+					list.insert(i, next_clone);
+				}
+				// Remove the original, now at i + 2.
+				list.remove(i + 2);
+				true
+			}
+		}
+	}
+
+	fn execute_many<'a>(
+		self,
+		lists: impl Iterator<Item = &'a mut dyn List>,
+		env: &mut InspectorUi<'_, '_, MutableContext<'_>>,
+	) -> bool {
+		let mut changed = false;
+
+		for list in lists {
+			changed |= self.execute(list, env);
+		}
+
+		changed
+	}
 }
 
 fn ui_for_list_controls(ui: &mut egui::Ui, index: usize, len: usize) -> Option<ListOp> {
@@ -2390,4 +2307,29 @@ fn ui_for_list_controls(ui: &mut egui::Ui, index: usize, len: usize) -> Option<L
 enum SetOp {
 	RemoveElement(Box<dyn PartialReflect>),
 	AddElement(Box<dyn PartialReflect>),
+}
+
+impl SetOp {
+	fn execute(&self, set: &mut dyn Set) -> bool {
+		match self {
+			Self::AddElement(new_value) => {
+				set.insert_boxed(new_value.to_dynamic());
+				true
+			}
+			Self::RemoveElement(val) => {
+				set.remove(&**val);
+				true
+			}
+		}
+	}
+
+	fn execute_many<'a>(&self, sets: impl Iterator<Item = &'a mut dyn Set>) -> bool {
+		let mut changed = false;
+
+		for set in sets {
+			changed |= self.execute(set);
+		}
+
+		changed
+	}
 }

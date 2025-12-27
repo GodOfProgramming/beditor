@@ -265,21 +265,27 @@ impl<'w> RestrictedWorldView<'w> {
 		self.world().entities().contains(entity)
 	}
 
-	/// Gets a mutable reference to the resource of the given type
-	pub fn get_resource_mut<R: Resource>(&mut self) -> Result<Mut<'_, R>, Error> {
+	/// Gets an immutable reference to the resource of the given type
+	pub fn resource<R: Resource>(&self) -> Result<&R, Error> {
 		// SAFETY: &mut self
-		unsafe { self.get_resource_unchecked_mut() }
+		unsafe { self.resource_unchecked() }
+	}
+
+	/// Gets a mutable reference to the resource of the given type
+	pub fn resource_mut<R: Resource>(&mut self) -> Result<Mut<'_, R>, Error> {
+		// SAFETY: &mut self
+		unsafe { self.resource_unchecked_mut() }
 	}
 
 	/// Gets mutable reference to two resources. Panics if `R1 = R2`.
-	pub fn get_two_resources_mut<R1: Resource, R2: Resource>(
+	pub fn two_resources_mut<R1: Resource, R2: Resource>(
 		&mut self,
 	) -> (Result<Mut<'_, R1>, Error>, Result<Mut<'_, R2>, Error>) {
 		assert_ne!(TypeId::of::<R1>(), TypeId::of::<R2>());
 		// SAFETY: &mut self, R1!=R2
-		let r1 = unsafe { self.get_resource_unchecked_mut::<R1>() };
+		let r1 = unsafe { self.resource_unchecked_mut::<R1>() };
 		// SAFETY: &mut self, R1!=R2
-		let r2 = unsafe { self.get_resource_unchecked_mut::<R2>() };
+		let r2 = unsafe { self.resource_unchecked_mut::<R2>() };
 
 		(r1, r2)
 	}
@@ -287,7 +293,25 @@ impl<'w> RestrictedWorldView<'w> {
 	/// # Safety
 	/// This method does validate that we have access to `R`, but takes `&self`
 	/// and as such doesn't check unique access.
-	unsafe fn get_resource_unchecked_mut<R: Resource>(&self) -> Result<Mut<'_, R>, Error> {
+	unsafe fn resource_unchecked<R: Resource>(&self) -> Result<&R, Error> {
+		let type_id = TypeId::of::<R>();
+		if !self.allows_access_to_resource(type_id) {
+			return Err(Error::NoAccessToResource);
+		}
+
+		// SAFETY: we have access to `type_id`, caller ensures unique access
+		unsafe {
+			self
+				.world()
+				.get_resource::<R>()
+				.ok_or(Error::ResourceDoesNotExist)
+		}
+	}
+
+	/// # Safety
+	/// This method does validate that we have access to `R`, but takes `&self`
+	/// and as such doesn't check unique access.
+	unsafe fn resource_unchecked_mut<R: Resource>(&self) -> Result<Mut<'_, R>, Error> {
 		let type_id = TypeId::of::<R>();
 		if !self.allows_access_to_resource(type_id) {
 			return Err(Error::NoAccessToResource);
@@ -307,7 +331,7 @@ impl<'w> RestrictedWorldView<'w> {
 	/// Returns an error if the type does not register [`Reflect`].
 	///
 	/// Also returns a `impl FnOnce()` to mark the value as changed.
-	pub fn get_resource_reflect_mut_by_id(
+	pub fn resource_reflect_mut_by_id(
 		&mut self,
 		type_id: TypeId,
 		type_registry: &TypeRegistry,
@@ -486,8 +510,8 @@ mod tests {
 		let world = RestrictedWorldView::new(&mut world);
 
 		let (mut a_view, mut world) = world.split_off_resource(TypeId::of::<A>());
-		let mut a = a_view.get_resource_mut::<A>().unwrap();
-		let mut b = world.get_resource_mut::<B>().unwrap();
+		let mut a = a_view.resource_mut::<A>().unwrap();
+		let mut b = world.resource_mut::<B>().unwrap();
 
 		a.0.clear();
 		b.0.clear();
@@ -502,12 +526,12 @@ mod tests {
 		let world = RestrictedWorldView::new(&mut world);
 
 		let (mut a_view, mut world) = world.split_off_resource(TypeId::of::<A>());
-		let mut a = a_view.get_resource_mut::<A>().unwrap();
+		let mut a = a_view.resource_mut::<A>().unwrap();
 
 		let mut type_registry = TypeRegistry::empty();
 		type_registry.register::<B>();
 		let mut b = world
-			.get_resource_reflect_mut_by_id(TypeId::of::<B>(), &type_registry)
+			.resource_reflect_mut_by_id(TypeId::of::<B>(), &type_registry)
 			.unwrap();
 
 		a.0.clear();
@@ -521,7 +545,7 @@ mod tests {
 		world.insert_resource(B("b".to_string()));
 
 		let mut world = RestrictedWorldView::new(&mut world);
-		let (a, b) = world.get_two_resources_mut::<A, B>();
+		let (a, b) = world.two_resources_mut::<A, B>();
 		a.unwrap().0.clear();
 		b.unwrap().0.clear();
 	}
@@ -564,7 +588,7 @@ mod tests {
 		let mut component = component_view
 			.get_entity_component_reflect(entity, TypeId::of::<ComponentA>(), &type_registry)
 			.unwrap();
-		let mut resource = world.get_resource_mut::<A>().unwrap();
+		let mut resource = world.resource_mut::<A>().unwrap();
 
 		component.downcast_mut::<ComponentA>().unwrap().0.clear();
 		resource.0.clear();

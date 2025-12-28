@@ -1,6 +1,7 @@
 use crate::{ui::widgets, util::components::ComponentRegistry};
 use bevy::prelude::*;
 use brefabs::Prefabs;
+use itertools::Itertools;
 use std::{
 	any::{Any, TypeId},
 	num::NonZeroUsize,
@@ -191,18 +192,25 @@ impl SearchableVfs {
 			}
 			None => {
 				let current_node = self.current_node(vfs);
-				let nodes = vfs.ls(current_node).filter(|node| {
-					self.filter.is_empty() || {
-						node
-							.basename(vfs)
-							.map(|name| {
-								name
-									.to_lowercase()
-									.contains(self.filter.to_lowercase().as_str())
-							})
-							.unwrap_or(false)
-					}
-				});
+				let nodes = vfs
+					.ls(current_node)
+					.filter(|node| {
+						self.filter.is_empty() || {
+							node
+								.basename(vfs)
+								.map(|name| {
+									name
+										.to_lowercase()
+										.contains(self.filter.to_lowercase().as_str())
+								})
+								.unwrap_or(false)
+						}
+					})
+					.sorted_by(|a, b| {
+						let a_name = a.basename(vfs);
+						let b_name = b.basename(vfs);
+						a_name.cmp(&b_name)
+					});
 
 				widgets::horizontal_list(ui, columns, nodes, |ui, _, node| {
 					next_path = next_path.or(ui_for_entry(ui, vfs, node, &mut item_ui));

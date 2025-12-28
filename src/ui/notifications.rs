@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use egui_toast::{Toast, ToastKind};
-use std::fmt::Debug;
 
 pub struct NotificationPlugin;
 
@@ -29,7 +28,7 @@ impl Default for Toasts {
 #[derive(Event)]
 pub struct Notification {
 	toast: Toast,
-	ctx: Option<Box<dyn Debug + Send + Sync>>,
+	ctx: Option<Box<dyn ToString + Send + Sync>>,
 }
 
 impl Notification {
@@ -65,32 +64,46 @@ impl Notification {
 		}
 	}
 
-	pub fn with_context(mut self, ctx: impl Debug + Send + Sync + 'static) -> Self {
+	pub fn with_context(mut self, ctx: impl ToString + Send + Sync + 'static) -> Self {
 		self.ctx = Some(Box::new(ctx));
 		self
 	}
 
-	fn handle(event: On<Self>, mut toasts: ResMut<Toasts>) {
-		toasts.add(event.toast.clone());
+	fn handle(event: On<Self>, toasts: Option<ResMut<Toasts>>) {
+		if let Some(mut toasts) = toasts {
+			toasts.add(event.toast.clone());
+		}
 
 		match event.toast.kind {
 			egui_toast::ToastKind::Info => {
 				if let Some(ctx) = &event.ctx {
-					info!(ctx = format!("{:#?}", ctx), "{}", event.toast.text.text())
+					info!(
+						ctx = format!("{}", ctx.to_string()),
+						"{}",
+						event.toast.text.text()
+					)
 				} else {
 					info!("{}", event.toast.text.text())
 				}
 			}
 			egui_toast::ToastKind::Warning => {
 				if let Some(ctx) = &event.ctx {
-					warn!(ctx = format!("{:#?}", ctx), "{}", event.toast.text.text())
+					warn!(
+						ctx = format!("{}", ctx.to_string()),
+						"{}",
+						event.toast.text.text()
+					)
 				} else {
 					warn!("{}", event.toast.text.text())
 				}
 			}
 			egui_toast::ToastKind::Error => {
 				if let Some(ctx) = &event.ctx {
-					warn!(ctx = format!("{:#?}", ctx), "{}", event.toast.text.text())
+					warn!(
+						ctx = format!("{}", ctx.to_string()),
+						"{}",
+						event.toast.text.text()
+					)
 				} else {
 					warn!("{}", event.toast.text.text())
 				}

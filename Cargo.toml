@@ -102,6 +102,7 @@ default = ["dev", "watch"]
 dev = ["bevy/track_location", "bevy/asset_processor"]
 profiling = ["bevy/trace_tracy", "dep:tracing-tracy"]
 watch = ["bevy/file_watcher"]
+validate = []
 
 [dev-dependencies]
 egui_demo_lib = "0.33.2"

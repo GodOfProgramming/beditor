@@ -236,7 +236,7 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 				errors::reflect::reflect_value_no_impl(ui, reason, value.reflect_short_type_path())
 			}
 			ReflectRef::Set(value) => self.ui_for_set_readonly(value, ui, id, options),
-			#[allow(unreachable_patterns)]
+			#[cfg_attr(not(feature = "validate"), allow(unreachable_patterns))]
 			_ => {
 				ui.label("unsupported");
 			}
@@ -298,7 +298,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				false
 			}
 			ReflectMut::Set(value) => self.ui_for_set(value, ui, id, options),
-			#[allow(unreachable_patterns)]
+			#[cfg_attr(not(feature = "validate"), allow(unreachable_patterns))]
 			_ => {
 				ui.label("unsupported");
 				false

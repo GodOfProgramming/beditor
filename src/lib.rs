@@ -54,7 +54,7 @@ use view::EditorViewPlugin;
 
 pub mod prelude {
 	pub use crate::{
-		EditorPlugin,
+		AppSystems, EditorPlugin,
 		ui::{EditorUi, EditorUiBundle, NoParams, UiManager, notifications::Notification, widgets},
 		util::{
 			AppExtensions, EntityManager, GameEntity, GameRenderLayer, RegisterableType, TypeGroups,
@@ -74,11 +74,21 @@ pub mod prelude {
 	pub use uuid;
 }
 
+/// All application systems that need to be editor controlled should be a part of this set
+#[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct AppSystems;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States)]
 pub enum EditorState {
 	Editing,
-	Testing,
+	Simulating(SimulationState),
 	Exiting,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SimulationState {
+	Live,
+	Idle,
 }
 
 type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
@@ -94,6 +104,7 @@ static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 
 #[derive(Default)]
 pub struct EditorPlugin {
+	skip_registering_reflected_components: bool,
 	default_plugins: Option<AppRegistrationFn>,
 	generic_registrations: Vec<AppRegistrationFn>,
 	ui_registrations: Vec<UiRegistrationFn>,
@@ -103,6 +114,11 @@ pub struct EditorPlugin {
 impl EditorPlugin {
 	pub fn new() -> Self {
 		Self::default()
+	}
+
+	pub fn skip_registering_reflected_components(mut self) -> Self {
+		self.skip_registering_reflected_components = true;
+		self
 	}
 
 	pub fn configure_defaults<P, F>(mut self, f: F) -> Self
@@ -170,10 +186,6 @@ impl EditorPlugin {
 	}
 
 	fn configure<'a>(&self, app: &'a mut App) -> &'a mut App {
-		app
-			.insert_resource(Settings::<Global>::new().unwrap())
-			.insert_resource(Settings::<Project>::new().unwrap());
-
 		if let Some(config_fn) = &self.default_plugins {
 			(config_fn)(app);
 		} else {
@@ -203,6 +215,11 @@ impl EditorPlugin {
 impl Plugin for EditorPlugin {
 	fn build(&self, app: &mut App) {
 		dotenvy::dotenv().ok();
+
+		app
+			.insert_resource(Settings::<Global>::new().unwrap())
+			.insert_resource(Settings::<Project>::new().unwrap())
+			.add_plugins(LogPlugin);
 
 		self
 			.configure(app)
@@ -246,7 +263,6 @@ impl Plugin for EditorPlugin {
 				EditorViewPlugin,
 				InputPlugin,
 				UiPlugin,
-				LogPlugin,
 				ReflectionExtensionsPlugin,
 				InspectorPlugin,
 			))
@@ -254,12 +270,7 @@ impl Plugin for EditorPlugin {
 			.add_observer(DisableGameUiEvent::handle)
 			.add_systems(
 				Startup,
-				(
-					configure_windows,
-					auto_register_components,
-					load_settings,
-					assets::add_primitives,
-				),
+				(configure_windows, load_settings, assets::add_primitives),
 			)
 			.add_systems(PostStartup, show_window)
 			.add_systems(
@@ -279,10 +290,22 @@ impl Plugin for EditorPlugin {
 				OnEnter(EditorState::Exiting),
 				(save_editor_settings, finish_exit).in_set(EditorGlobalSystems),
 			);
+
+		if !self.skip_registering_reflected_components {
+			app.add_systems(Startup, auto_register_components);
+		}
 	}
 
 	fn finish(&self, app: &mut App) {
 		app.try_add_plugin(PrefabPlugin::default());
+
+		let mut schedules = app.world_mut().resource_mut::<Schedules>();
+
+		for (_, schedule) in schedules.iter_mut() {
+			schedule.configure_sets(
+				AppSystems.run_if(in_state(EditorState::Simulating(SimulationState::Live))),
+			);
+		}
 	}
 }
 
@@ -323,7 +346,7 @@ fn load_settings(
 		.unwrap_or_default();
 
 	if start_in_testing {
-		next_state.set(EditorState::Testing);
+		next_state.set(EditorState::Simulating(SimulationState::Live));
 	}
 }
 

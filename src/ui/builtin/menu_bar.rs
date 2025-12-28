@@ -1,11 +1,12 @@
 use crate::{
-	EditorState,
+	EditorState, SimulationState,
 	ui::{
 		builtin::settings::{EditorSettingsUi, ProjectSettingsUi},
 		events::OpenSingleUiMessage,
 	},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
+use egui_phosphor_icons::icons;
 use uuid::Uuid;
 
 #[derive(SystemParam)]
@@ -92,21 +93,36 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 		EditorState::Editing => {
 			play_button(ui, params);
 		}
-		EditorState::Testing => {
+		EditorState::Simulating(SimulationState::Idle) => {
+			play_button(ui, params);
+			stop_button(ui, params);
+		}
+		EditorState::Simulating(SimulationState::Live) => {
 			pause_button(ui, params);
+			stop_button(ui, params);
 		}
 		_ => (),
 	}
 }
 
 fn play_button(ui: &mut egui::Ui, params: &mut Params) {
-	if ui.button("▶").clicked() {
-		params.next_editor_state.set(EditorState::Testing);
+	if ui.button(icons::PLAY).clicked() {
+		params
+			.next_editor_state
+			.set(EditorState::Simulating(SimulationState::Live));
 	}
 }
 
 fn pause_button(ui: &mut egui::Ui, params: &mut Params) {
-	if ui.button("⏸").clicked() {
+	if ui.button(icons::PAUSE).clicked() {
+		params
+			.next_editor_state
+			.set(EditorState::Simulating(SimulationState::Idle));
+	}
+}
+
+fn stop_button(ui: &mut egui::Ui, params: &mut Params) {
+	if ui.button(icons::STOP).clicked() {
 		params.next_editor_state.set(EditorState::Editing);
 	}
 }

@@ -22,7 +22,7 @@ fn main() {
 				.register_components::<(ExampleComponent<isize>, ExampleComponent<usize>)>(),
 		)
 		.add_systems(Startup, startup)
-		.add_systems(Update, (spin, grow))
+		.add_systems(Update, (spin, grow).in_set(AppSystems))
 		.run();
 }
 
@@ -73,18 +73,21 @@ fn grow(mut q_growths: Query<(&mut Transform, &GrowthComponent)>) {
 }
 
 #[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 struct SpinComponent {
 	velocity: f32,
 	angle: Vec3,
 }
 
 #[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 struct GrowthComponent {
 	rate: f32,
 	dims: Vec3,
 }
 
 #[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 struct ExampleComponent<T>(T)
 where
-	T: Reflect;
+	T: Reflect + Default;

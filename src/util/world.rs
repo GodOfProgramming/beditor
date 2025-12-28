@@ -8,94 +8,29 @@ use bevy::{
 	ptr::Ptr,
 	reflect::{ReflectFromPtr, TypeRegistry},
 };
+use derive_more::derive::From;
 use smallvec::{SmallVec, smallvec};
 use std::any::{Any, TypeId};
 
 pub type EntityComponent = (Entity, TypeId);
 
+pub trait WorldView {}
+
+#[derive(Deref)]
+struct ImmutableWorldView<'w> {
+	world: &'w World,
+}
+
+#[derive(Clone, Deref, DerefMut, From)]
+struct MutableWorldView<'w> {
+	world: UnsafeWorldCell<'w>,
+}
+
 #[derive(Clone)]
 pub struct RestrictedWorldView<'w> {
-	world: UnsafeWorldCell<'w>,
+	world: MutableWorldView<'w>,
 	resources: Allowed<TypeId>,
 	components: Allowed<EntityComponent>,
-}
-
-#[derive(Clone)]
-enum Allowed<T> {
-	// Allowed if included
-	AllowList(SmallVec<[T; 2]>),
-	// Allowed if not included
-	ForbidList(SmallVec<[T; 2]>),
-}
-impl<T: Clone + PartialEq> Allowed<T> {
-	fn allow_just(value: T) -> Allowed<T> {
-		Allowed::AllowList(smallvec![value])
-	}
-	fn allow(values: impl IntoIterator<Item = T>) -> Allowed<T> {
-		Allowed::AllowList(values.into_iter().collect())
-	}
-	fn everything() -> Allowed<T> {
-		Allowed::ForbidList(SmallVec::new())
-	}
-	fn nothing() -> Allowed<T> {
-		Allowed::AllowList(SmallVec::new())
-	}
-
-	fn allows_access_to(&self, value: T) -> bool {
-		match self {
-			Allowed::AllowList(list) => list.contains(&value),
-			Allowed::ForbidList(list) => !list.contains(&value),
-		}
-	}
-
-	fn without(&self, value: T) -> Allowed<T> {
-		match self {
-			Allowed::AllowList(list) => {
-				let position = list
-					.iter()
-					.position(|item| *item == value)
-					.expect("called `without` without access");
-				let mut new = list.clone();
-				new.swap_remove(position);
-				Allowed::AllowList(new)
-			}
-			Allowed::ForbidList(list) => {
-				let mut new = list.clone();
-				new.push(value);
-				Allowed::ForbidList(new)
-			}
-		}
-	}
-	fn without_many(&self, values: impl Iterator<Item = T>) -> Allowed<T>
-	where
-		T: Copy,
-	{
-		match self {
-			Allowed::AllowList(list) => {
-				let new = list.clone();
-				for value in values {
-					let position = list
-						.iter()
-						.position(|item| *item == value)
-						.expect("called `without` without access");
-					let mut new = list.clone();
-					new.swap_remove(position);
-				}
-				Allowed::AllowList(new)
-			}
-			Allowed::ForbidList(list) => {
-				let mut new = list.clone();
-				new.extend(values);
-				Allowed::ForbidList(new)
-			}
-		}
-	}
-}
-
-impl<'a> From<&'a mut World> for RestrictedWorldView<'a> {
-	fn from(value: &'a mut World) -> Self {
-		RestrictedWorldView::new(value)
-	}
 }
 
 /// Fundamental methods for working with a [`RestrictedWorldView`]
@@ -104,7 +39,7 @@ impl<'w> RestrictedWorldView<'w> {
 	pub fn new(world: &'w mut World) -> RestrictedWorldView<'w> {
 		// INVARIANTS: `world` is `&mut` so we have access to everything
 		RestrictedWorldView {
-			world: world.as_unsafe_world_cell(),
+			world: MutableWorldView::from(world.as_unsafe_world_cell()),
 			resources: Allowed::everything(),
 			components: Allowed::everything(),
 		}
@@ -118,12 +53,12 @@ impl<'w> RestrictedWorldView<'w> {
 
 		// INVARIANTS: `world` is `&mut` so we have access to everything
 		let resources = RestrictedWorldView {
-			world,
+			world: MutableWorldView::from(world),
 			resources: Allowed::everything(),
 			components: Allowed::nothing(),
 		};
 		let components = RestrictedWorldView {
-			world,
+			world: MutableWorldView::from(world),
 			resources: Allowed::nothing(),
 			components: Allowed::everything(),
 		};
@@ -132,7 +67,7 @@ impl<'w> RestrictedWorldView<'w> {
 	}
 
 	pub fn world(&self) -> UnsafeWorldCell<'w> {
-		self.world
+		self.world.world
 	}
 
 	/// Whether the resource with the given [`TypeId`] may be accessed from this world view
@@ -153,12 +88,12 @@ impl<'w> RestrictedWorldView<'w> {
 
 		// INVARIANTS: `self` had `resource` access, so `split` has access if we remove it from `self`
 		let split = RestrictedWorldView {
-			world: self.world,
+			world: self.world.clone(),
 			resources: Allowed::allow_just(resource),
 			components: Allowed::nothing(),
 		};
 		let rest = RestrictedWorldView {
-			world: self.world,
+			world: self.world.clone(),
 			resources: self.resources.without(resource),
 			components: self.components.clone(),
 		};
@@ -194,12 +129,12 @@ impl<'w> RestrictedWorldView<'w> {
 
 		// INVARIANTS: `self` had `component` access, so `split` has access if we remove it from `self`
 		let split = RestrictedWorldView {
-			world: self.world,
+			world: self.world.clone(),
 			resources: Allowed::nothing(),
 			components: Allowed::allow_just(component),
 		};
 		let rest = RestrictedWorldView {
-			world: self.world,
+			world: self.world.clone(),
 			resources: self.resources.clone(),
 			components: self.components.without(component),
 		};
@@ -218,43 +153,17 @@ impl<'w> RestrictedWorldView<'w> {
 
 		// INVARIANTS: `self` had `component` access, so `split` has access if we remove it from `self`
 		let split = RestrictedWorldView {
-			world: self.world,
+			world: self.world.clone(),
 			resources: Allowed::nothing(),
 			components: Allowed::allow(components),
 		};
 		let rest = RestrictedWorldView {
-			world: self.world,
+			world: self.world.clone(),
 			resources: self.resources.clone(),
 			components: self.components.without_many(components),
 		};
 
 		(split, rest)
-	}
-}
-
-pub enum ReflectBorrow<'a> {
-	Mutable(Mut<'a, dyn Reflect>),
-	Immutable(&'a dyn Reflect),
-}
-
-impl ReflectBorrow<'_> {
-	pub fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
-		match self {
-			ReflectBorrow::Mutable(value) => value.downcast_mut(),
-			ReflectBorrow::Immutable(_) => None,
-		}
-	}
-	pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
-		match self {
-			ReflectBorrow::Mutable(value) => value.downcast_ref(),
-			ReflectBorrow::Immutable(value) => value.downcast_ref(),
-		}
-	}
-	pub fn is_changed(&self) -> bool {
-		match self {
-			ReflectBorrow::Mutable(value) => value.is_changed(),
-			ReflectBorrow::Immutable(_) => false,
-		}
 	}
 }
 
@@ -436,6 +345,111 @@ impl<'w> RestrictedWorldView<'w> {
 
 		// SAFETY: value is of type component
 		unsafe { mut_untyped_to_reflect(value, type_registry, component) }
+	}
+}
+
+impl<'a> From<&'a mut World> for RestrictedWorldView<'a> {
+	fn from(value: &'a mut World) -> Self {
+		RestrictedWorldView::new(value)
+	}
+}
+
+#[derive(Clone)]
+enum Allowed<T> {
+	// Allowed if included
+	AllowList(SmallVec<[T; 2]>),
+	// Allowed if not included
+	ForbidList(SmallVec<[T; 2]>),
+}
+
+impl<T: Clone + PartialEq> Allowed<T> {
+	fn allow_just(value: T) -> Allowed<T> {
+		Allowed::AllowList(smallvec![value])
+	}
+	fn allow(values: impl IntoIterator<Item = T>) -> Allowed<T> {
+		Allowed::AllowList(values.into_iter().collect())
+	}
+	fn everything() -> Allowed<T> {
+		Allowed::ForbidList(SmallVec::new())
+	}
+	fn nothing() -> Allowed<T> {
+		Allowed::AllowList(SmallVec::new())
+	}
+
+	fn allows_access_to(&self, value: T) -> bool {
+		match self {
+			Allowed::AllowList(list) => list.contains(&value),
+			Allowed::ForbidList(list) => !list.contains(&value),
+		}
+	}
+
+	fn without(&self, value: T) -> Allowed<T> {
+		match self {
+			Allowed::AllowList(list) => {
+				let position = list
+					.iter()
+					.position(|item| *item == value)
+					.expect("called `without` without access");
+				let mut new = list.clone();
+				new.swap_remove(position);
+				Allowed::AllowList(new)
+			}
+			Allowed::ForbidList(list) => {
+				let mut new = list.clone();
+				new.push(value);
+				Allowed::ForbidList(new)
+			}
+		}
+	}
+	fn without_many(&self, values: impl Iterator<Item = T>) -> Allowed<T>
+	where
+		T: Copy,
+	{
+		match self {
+			Allowed::AllowList(list) => {
+				let new = list.clone();
+				for value in values {
+					let position = list
+						.iter()
+						.position(|item| *item == value)
+						.expect("called `without` without access");
+					let mut new = list.clone();
+					new.swap_remove(position);
+				}
+				Allowed::AllowList(new)
+			}
+			Allowed::ForbidList(list) => {
+				let mut new = list.clone();
+				new.extend(values);
+				Allowed::ForbidList(new)
+			}
+		}
+	}
+}
+
+pub enum ReflectBorrow<'a> {
+	Mutable(Mut<'a, dyn Reflect>),
+	Immutable(&'a dyn Reflect),
+}
+
+impl ReflectBorrow<'_> {
+	pub fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
+		match self {
+			ReflectBorrow::Mutable(value) => value.downcast_mut(),
+			ReflectBorrow::Immutable(_) => None,
+		}
+	}
+	pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+		match self {
+			ReflectBorrow::Mutable(value) => value.downcast_ref(),
+			ReflectBorrow::Immutable(value) => value.downcast_ref(),
+		}
+	}
+	pub fn is_changed(&self) -> bool {
+		match self {
+			ReflectBorrow::Mutable(value) => value.is_changed(),
+			ReflectBorrow::Immutable(_) => false,
+		}
 	}
 }
 

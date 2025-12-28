@@ -11,7 +11,10 @@ use crate::{
 		ImmutableContext, MutableContext,
 		hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
 	},
-	util::{self, AppExtensions, WorldExtensions as _, world::RestrictedWorldView},
+	util::{
+		self, AppExtensions, WorldExtensions as _,
+		world::{MutableWorldView, RestrictedWorldView},
+	},
 };
 use bevy::{
 	asset::{ReflectAsset, UntypedAssetId},
@@ -76,7 +79,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
 			let type_registry = type_registry.read();
 
-			let mut ctx = MutableContext::new(RestrictedWorldView::new(world), queue);
+			let mut ctx = MutableContext::new(world, queue);
 			let mut env = InspectorUi::new(&type_registry, &mut ctx);
 			env.ui_for_reflect(value, ui)
 		})
@@ -127,7 +130,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let entity_name = util::entity::guess_entity_name(world, entity);
 			ui.label(entity_name);
 
-			let mut ctx = MutableContext::new(RestrictedWorldView::new(world), queue);
+			let mut ctx = MutableContext::new(world, queue);
 
 			components::ui_for_entity_components(
 				&mut ctx,
@@ -156,13 +159,13 @@ pub trait WorldExtensions: BorrowMut<World> {
 
 			// create a context with access to the world except for the `R` resource
 			let Some((mut resource, world_view)) =
-				RestrictedWorldView::new(world).split_off_resource_typed::<R>()
+				RestrictedWorldView::<MutableWorldView>::from(world).split_off_resource_typed::<R>()
 			else {
 				errors::resource_does_not_exist(ui, &util::pretty_type_name::<R>());
 				return;
 			};
 
-			let mut ctx = MutableContext::new(world_view, queue);
+			let mut ctx = MutableContext::from_world_view(world_view, queue);
 			let mut env = InspectorUi::new(&type_registry, &mut ctx);
 
 			if env.ui_for_reflect(resource.bypass_change_detection(), ui) {
@@ -180,10 +183,10 @@ pub trait WorldExtensions: BorrowMut<World> {
 	) {
 		self.borrow_mut().queue(|world, queue| {
 			// create a context with access to the world except for the current resource
-			let world_view = RestrictedWorldView::new(world);
+			let world_view = RestrictedWorldView::<MutableWorldView>::from(world);
 			let (mut resource_view, world_view) = world_view.split_off_resource(resource_type_id);
 
-			let mut ctx = MutableContext::new(world_view, queue);
+			let mut ctx = MutableContext::from_world_view(world_view, queue);
 			let mut env = InspectorUi::new(type_registry, &mut ctx);
 
 			let mut resource =
@@ -227,7 +230,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 				return false;
 			};
 
-			let world = RestrictedWorldView::new(world);
+			let world = RestrictedWorldView::<MutableWorldView>::from(world);
 
 			let (assets_view, world_view) =
 				world.split_off_resource(reflect_asset.assets_resource_type_id());
@@ -241,8 +244,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 				return false;
 			};
 
-			// TODO safety
-			let mut ctx = MutableContext::new(world_view.clone(), queue);
+			let mut ctx = MutableContext::copy_from(&world_view, queue);
 
 			let id = egui::Id::new(asset_id);
 

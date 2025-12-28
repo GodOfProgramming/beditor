@@ -48,14 +48,24 @@ pub trait Context {
 }
 
 pub struct ImmutableContext<'w> {
-	pub world: ImmutableWorldView<'w>,
+	pub world_view: RestrictedWorldView<ImmutableWorldView<'w>>,
 	pub queue: Rc<RefCell<&'w mut CommandQueue>>,
 }
 
 impl<'w> ImmutableContext<'w> {
-	pub fn new(world: &'w World, queue: &'w mut CommandQueue) -> Self {
+	pub fn new(world_view: impl Into<ImmutableWorldView<'w>>, queue: &'w mut CommandQueue) -> Self {
 		Self {
-			world: ImmutableWorldView::from(world),
+			world_view: RestrictedWorldView::new(world_view.into()),
+			queue: Rc::new(RefCell::new(queue)),
+		}
+	}
+
+	pub fn from_world_view(
+		world_view: RestrictedWorldView<ImmutableWorldView<'w>>,
+		queue: &'w mut CommandQueue,
+	) -> Self {
+		Self {
+			world_view,
 			queue: Rc::new(RefCell::new(queue)),
 		}
 	}
@@ -68,10 +78,35 @@ impl<'w> Context for ImmutableContext<'w> {
 		Self: 'c;
 }
 
-#[derive(new)]
 pub struct MutableContext<'w> {
 	pub world_view: RestrictedWorldView<MutableWorldView<'w>>,
 	pub queue: &'w mut CommandQueue,
+}
+
+impl<'w> MutableContext<'w> {
+	pub fn new(world_view: impl Into<MutableWorldView<'w>>, queue: &'w mut CommandQueue) -> Self {
+		Self {
+			world_view: RestrictedWorldView::new(world_view.into()),
+			queue,
+		}
+	}
+
+	pub fn from_world_view(
+		world_view: RestrictedWorldView<MutableWorldView<'w>>,
+		queue: &'w mut CommandQueue,
+	) -> Self {
+		Self { world_view, queue }
+	}
+
+	pub fn copy_from(
+		world_view: &'w RestrictedWorldView<MutableWorldView<'w>>,
+		queue: &'w mut CommandQueue,
+	) -> Self {
+		Self {
+			world_view: world_view.clone(),
+			queue,
+		}
+	}
 }
 
 impl<'w> Context for MutableContext<'w> {
@@ -552,7 +587,9 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		id: egui::Id,
 		options: &dyn Any,
 	) -> Option<()> {
-		let ImmutableContext { world, .. } = self.context;
+		let ImmutableContext {
+			world_view: world, ..
+		} = self.context;
 
 		let value = value.try_as_reflect()?;
 
@@ -579,7 +616,7 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		};
 
 		let Some(asset_value) = reflect_asset
-			.get(world, &handle)
+			.get(world.world(), &handle)
 			.map(|asset_value| asset_value.as_partial_reflect())
 		else {
 			errors::dead_asset_handle(ui, handle_id);
@@ -1608,7 +1645,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		};
 
 		// TODO safety, make it so restricted world view also tracks handles such taht it can be split before the asset_value accessor above
-		let mut ctx = MutableContext::new(world.clone(), queue);
+		let mut ctx = MutableContext::copy_from(&world, queue);
 		let mut restricted_env = InspectorUi::new(self.type_registry, &mut ctx);
 
 		Some(restricted_env.ui_for_reflect_with_options(
@@ -1686,7 +1723,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		}
 
 		// TODO safety, make it so restricted world view also tracks handles such taht it can be split before the asset_value accessor above
-		let mut ctx = MutableContext::new(world.clone(), queue);
+		let mut ctx = MutableContext::copy_from(&world, queue);
 		let mut restricted_env = InspectorUi::new(self.type_registry, &mut ctx);
 
 		Some(restricted_env.ui_for_reflect_many_with_options(

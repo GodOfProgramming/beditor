@@ -6,7 +6,7 @@ use crate::{
 	util::{
 		self, WorldExtensions,
 		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
-		world::{ReflectBorrow, RestrictedWorldView, WorldView},
+		world::{MutableWorldView, ReflectBorrow, RestrictedWorldView, WorldView},
 	},
 };
 use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
@@ -165,7 +165,8 @@ pub fn ui_for_entity_components(
 					changed
 				}
 				ReflectBorrow::Immutable(value) => {
-					let ctx = ImmutableContext::new(unsafe { world_view.world() }, ctx.queue);
+					let world_view = RestrictedWorldView::copy_from(&world_view);
+					let ctx = ImmutableContext::from_world_view(world_view, ctx.queue);
 					let env = InspectorUi::new(type_registry, &ctx);
 					let id = id.with(component_id);
 					let options = &();
@@ -200,15 +201,17 @@ pub fn ui_for_entities_with_shared_components(
 		let type_registry = type_registry.read();
 
 		let &first = entities.first()?;
+		let world_view = RestrictedWorldView::<MutableWorldView>::from(world);
 
-		let Ok(mut components) = components_of_entity(&world.into(), first) else {
+		let Ok(mut components) = components_of_entity(&world_view, first) else {
 			errors::entity_does_not_exist(ui, first);
 			return None;
 		};
 
 		for &entity in entities.iter().skip(1) {
 			components.retain(|(_, id, _, _)| {
-				world
+				world_view
+					.world()
 					.get_entity(entity)
 					.map_or(true, |entity| entity.contains_id(*id))
 			})
@@ -235,8 +238,7 @@ pub fn ui_for_entities_with_shared_components(
 				continue;
 			}
 
-			let (resources_view, components_view) = RestrictedWorldView::resources_components(world);
-			let mut cx = MutableContext::new(resources_view, queue);
+			let (resources_view, components_view) = world_view.resources_components();
 
 			let mut values = Vec::with_capacity(entities.len());
 			for (i, &entity) in entities.iter().enumerate() {
@@ -262,7 +264,8 @@ pub fn ui_for_entities_with_shared_components(
 			let response = header.show(ui, |ui| {
 				ui.reset_style();
 
-				let mut env = InspectorUi::new(&type_registry, &mut cx);
+				let mut ctx = MutableContext::from_world_view(resources_view, queue);
+				let mut env = InspectorUi::new(&type_registry, &mut ctx);
 				let id = id.with(component_id);
 				let options = &();
 

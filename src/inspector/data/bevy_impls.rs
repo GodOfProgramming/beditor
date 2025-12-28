@@ -1,7 +1,7 @@
 use super::InspectorPrimitive;
 use crate::{
 	inspector::{
-		errors::{self, dead_asset_handle},
+		errors::dead_asset_handle,
 		options::{EntityDisplay, EntityOptions},
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
@@ -166,12 +166,14 @@ impl InspectorPrimitive for Handle<Mesh> {
 		_: egui::Id,
 		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
-		let ImmutableContext { world, .. } = env.context;
+		let ImmutableContext {
+			world_view: world, ..
+		} = env.context;
 
-		let meshes = match world.get_resource::<Assets<Mesh>>() {
-			Some(meshes) => meshes,
-			None => {
-				errors::resource_does_not_exist(ui, "Assets<Mesh>");
+		let meshes = match world.resource::<Assets<Mesh>>() {
+			Ok(meshes) => meshes,
+			Err(err) => {
+				err.ui(ui, "Assets<Mesh>");
 				return;
 			}
 		};
@@ -226,10 +228,19 @@ impl InspectorPrimitive for Handle<Image> {
 		_: egui::Id,
 		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
-		let ImmutableContext { world, queue } = env.context;
+		let ImmutableContext {
+			world_view: world,
+			queue,
+		} = env.context;
 
 		let mut queue = queue.borrow_mut();
-		let egui_user_textures = world.resource::<EguiUserTextures>();
+		let egui_user_textures = match world.resource::<EguiUserTextures>() {
+			Ok(res) => res,
+			Err(err) => {
+				err.ui(ui, "EguiUserTextures");
+				return;
+			}
+		};
 
 		show_image(ui, self, &mut queue, egui_user_textures);
 	}

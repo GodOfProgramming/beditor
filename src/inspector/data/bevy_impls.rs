@@ -22,7 +22,7 @@ impl InspectorPrimitive for uuid::Uuid {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		ui.label(self.to_string());
 		false
@@ -33,7 +33,7 @@ impl InspectorPrimitive for uuid::Uuid {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		ui.label(self.to_string());
 	}
@@ -45,7 +45,7 @@ impl InspectorPrimitive for Entity {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		let entity = *self;
 
@@ -99,7 +99,7 @@ impl InspectorPrimitive for Entity {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		ui.label(format!("{self:?}"));
 	}
@@ -111,7 +111,7 @@ impl InspectorPrimitive for Handle<Mesh> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		asset_picker(
 			self,
@@ -162,7 +162,7 @@ impl InspectorPrimitive for Handle<Mesh> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		let ImmutableContext { world, .. } = env.context;
 
@@ -187,7 +187,7 @@ impl InspectorPrimitive for Handle<Image> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		asset_picker(
 			self,
@@ -222,7 +222,7 @@ impl InspectorPrimitive for Handle<Image> {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		let ImmutableContext { world, queue } = env.context;
 
@@ -239,7 +239,7 @@ impl InspectorPrimitive for Color {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		match self {
 			Color::Srgba(Srgba {
@@ -333,7 +333,7 @@ impl InspectorPrimitive for Color {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		ui.add_enabled_ui(false, |ui| match self {
 			Color::Srgba(Srgba {
@@ -397,7 +397,7 @@ impl InspectorPrimitive for RenderLayers {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		_: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		_: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		let mut new_value = None;
 		egui::Grid::new(id).num_columns(2).show(ui, |ui| {
@@ -434,7 +434,7 @@ impl InspectorPrimitive for RenderLayers {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		for layer in self.iter() {
 			ui.label(format!("- {layer}"));
@@ -448,7 +448,7 @@ impl InspectorPrimitive for Name {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		let mut value = self.to_string();
 		if value.ui(ui, options, id, env) {
@@ -464,7 +464,7 @@ impl InspectorPrimitive for Name {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		_: egui::Id,
-		_: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		_: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		if self.contains('\n') {
 			ui.text_edit_multiline(&mut self.as_str());
@@ -480,7 +480,7 @@ impl InspectorPrimitive for GizmoConfigStore {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		for (ty, group, value) in self.iter_mut() {
 			use egui::CollapsingHeader;
@@ -506,7 +506,7 @@ impl InspectorPrimitive for GizmoConfigStore {
 		ui: &mut egui::Ui,
 		_: &dyn Any,
 		id: egui::Id,
-		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		for (ty, group, value) in self.iter() {
 			use egui::CollapsingHeader;
@@ -603,7 +603,7 @@ impl Command for MakeEguiTexture {
 fn asset_picker<'c, A: Asset>(
 	handle: &mut Handle<A>,
 	ui: &mut egui::Ui,
-	env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+	env: &mut InspectorUi<'_, MutableContext<'c>>,
 	id: egui::Id,
 	prefix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut RestrictedWorldView, &mut CommandQueue),
 	hover_ui: impl FnOnce(&mut egui::Ui, &str, &HashMap<String, AssetId<A>>),

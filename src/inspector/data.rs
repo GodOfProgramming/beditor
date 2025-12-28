@@ -570,22 +570,17 @@ type InspectorEguiImplFn = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	&mut InspectorUi<'_, 'c, MutableContext<'c>>,
+	&mut InspectorUi<'_, MutableContext<'c>>,
 ) -> bool;
 
-type InspectorEguiImplFnReadonly = for<'c> fn(
-	&dyn Any,
-	&mut egui::Ui,
-	&dyn Any,
-	egui::Id,
-	&InspectorUi<'_, 'c, ImmutableContext<'c>>,
-);
+type InspectorEguiImplFnReadonly =
+	for<'c> fn(&dyn Any, &mut egui::Ui, &dyn Any, egui::Id, &InspectorUi<'_, ImmutableContext<'c>>);
 
 type InspectorEguiImplFnMany = for<'c, 'a> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	&mut InspectorUi<'_, 'c, MutableContext<'c>>,
+	&mut InspectorUi<'_, MutableContext<'c>>,
 	&mut [&mut dyn PartialReflect],
 	&dyn ProjectorReflect,
 ) -> bool;
@@ -596,7 +591,7 @@ pub trait InspectorPrimitive: Reflect {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool;
 
 	fn ui_readonly<'c>(
@@ -604,7 +599,7 @@ pub trait InspectorPrimitive: Reflect {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	);
 }
 
@@ -638,7 +633,7 @@ pub fn many_unimplemented<T: Any>(
 	ui: &mut egui::Ui,
 	_options: &dyn Any,
 	_id: egui::Id,
-	_env: &mut InspectorUi<'_, '_, MutableContext<'_>>,
+	_env: &mut InspectorUi<'_, MutableContext<'_>>,
 	_values: &mut [&mut dyn PartialReflect],
 	_projector: &dyn ProjectorReflect,
 ) -> bool {

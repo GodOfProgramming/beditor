@@ -82,16 +82,15 @@ impl<'w> Context for MutableContext<'w> {
 }
 
 #[derive(new)]
-pub struct InspectorUi<'t, 'c, C>
+pub struct InspectorUi<'t, C>
 where
 	C: 't + Context,
 {
 	pub type_registry: &'t TypeRegistry,
 	pub context: C::Mutability<'t>,
-	_pd: PhantomData<&'c ()>,
 }
 
-impl<'t, 'c, C> InspectorUi<'t, 'c, C>
+impl<'t, C> InspectorUi<'t, C>
 where
 	C: Context,
 {
@@ -148,7 +147,7 @@ where
 	}
 }
 
-impl<'t, 'c> InspectorUi<'t, 'c, ImmutableContext<'c>> {
+impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 	/// Draws the inspector UI for the given value in a read-only way.
 	pub fn ui_for_reflect_readonly(&self, value: &dyn PartialReflect, ui: &mut egui::Ui) {
 		self.ui_for_reflect_readonly_with_options(value, ui, egui::Id::NULL, &());
@@ -210,7 +209,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, ImmutableContext<'c>> {
 	}
 }
 
-impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
+impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 	/// Draws the inspector UI for the given value.
 	pub fn ui_for_reflect(&mut self, value: &mut dyn PartialReflect, ui: &mut egui::Ui) -> bool {
 		self.ui_for_reflect_with_options(value, ui, egui::Id::NULL, &())
@@ -352,7 +351,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
 	}
 }
 
-impl<'t, 'c> InspectorUi<'t, 'c, ImmutableContext<'c>> {
+impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 	fn ui_for_struct_readonly(
 		&self,
 		value: &dyn Struct,
@@ -609,7 +608,7 @@ impl<'t, 'c> InspectorUi<'t, 'c, ImmutableContext<'c>> {
 	}
 }
 
-impl<'t, 'c> InspectorUi<'t, 'c, MutableContext<'c>> {
+impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 	fn ui_for_struct(
 		&mut self,
 		value: &mut dyn Struct,
@@ -1702,22 +1701,17 @@ type InspectorEguiImplFn = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	&mut InspectorUi<'_, 'c, MutableContext<'c>>,
+	&mut InspectorUi<'_, MutableContext<'c>>,
 ) -> bool;
 
-type InspectorEguiImplFnReadonly = for<'c> fn(
-	&dyn Any,
-	&mut egui::Ui,
-	&dyn Any,
-	egui::Id,
-	&InspectorUi<'_, 'c, ImmutableContext<'c>>,
-);
+type InspectorEguiImplFnReadonly =
+	for<'c> fn(&dyn Any, &mut egui::Ui, &dyn Any, egui::Id, &InspectorUi<'_, ImmutableContext<'c>>);
 
 type InspectorEguiImplFnMany = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
-	&mut InspectorUi<'_, 'c, MutableContext<'c>>,
+	&mut InspectorUi<'_, MutableContext<'c>>,
 	&mut [&mut dyn PartialReflect],
 	&dyn ProjectorReflect,
 ) -> bool;
@@ -1764,7 +1758,7 @@ impl InspectorEguiImpl {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		(self.fn_mut)(value, ui, options, id, env)
 	}
@@ -1775,7 +1769,7 @@ impl InspectorEguiImpl {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		(self.fn_readonly)(value, ui, options, id, env)
 	}
@@ -1785,7 +1779,7 @@ impl InspectorEguiImpl {
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
-		env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
 		values: &mut [&mut dyn PartialReflect],
 		projector: &dyn ProjectorReflect,
 	) -> bool {
@@ -2017,7 +2011,7 @@ macro_rules! many_ui {
 			ui: &mut egui::Ui,
 			options: &dyn Any,
 			id: egui::Id,
-			env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+			env: &mut InspectorUi<'_, MutableContext<'c>>,
 			values: &mut [&mut dyn bevy::reflect::PartialReflect],
 			projector: &dyn $crate::inspector::ui::ProjectorReflect,
 		) -> bool {
@@ -2046,7 +2040,7 @@ fn ui_vtable<'c, T: InspectorPrimitive>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
-	env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+	env: &mut InspectorUi<'_, MutableContext<'c>>,
 ) -> bool {
 	let val = val.downcast_mut::<T>().unwrap();
 	T::ui(val, ui, options, id, env)
@@ -2057,7 +2051,7 @@ fn ui_readonly_vtable<'c, T: InspectorPrimitive>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
-	env: &InspectorUi<'_, 'c, ImmutableContext<'c>>,
+	env: &InspectorUi<'_, ImmutableContext<'c>>,
 ) {
 	let val = val.downcast_ref::<T>().unwrap();
 	T::ui_readonly(val, ui, options, id, env)
@@ -2067,7 +2061,7 @@ fn ui_many_vtable<'c, T: Reflect + PartialEq + Clone + Default + InspectorPrimit
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
-	env: &mut InspectorUi<'_, 'c, MutableContext<'c>>,
+	env: &mut InspectorUi<'_, MutableContext<'c>>,
 	values: &mut [&mut dyn PartialReflect],
 	projector: &dyn ProjectorReflect,
 ) -> bool {
@@ -2207,7 +2201,7 @@ enum ListOp {
 }
 
 impl ListOp {
-	fn execute(self, list: &mut dyn List, env: &mut InspectorUi<'_, '_, MutableContext<'_>>) -> bool {
+	fn execute(self, list: &mut dyn List, env: &mut InspectorUi<'_, MutableContext<'_>>) -> bool {
 		let Some(TypeInfo::List(info)) = list.get_represented_type_info() else {
 			return false;
 		};
@@ -2260,7 +2254,7 @@ impl ListOp {
 	fn execute_many<'a>(
 		self,
 		lists: impl Iterator<Item = &'a mut dyn List>,
-		env: &mut InspectorUi<'_, '_, MutableContext<'_>>,
+		env: &mut InspectorUi<'_, MutableContext<'_>>,
 	) -> bool {
 		let mut changed = false;
 

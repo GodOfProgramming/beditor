@@ -6,6 +6,8 @@ use bevy::{
 };
 use std::any::TypeId;
 
+use crate::util::world::{RestrictedWorldView, WorldView};
+
 /// Guesses an appropriate entity name like `Light (6)` or falls back to `Entity (8)`
 pub fn guess_entity_name(world: &World, entity: Entity) -> String {
 	match world.get_entity(entity) {
@@ -20,13 +22,22 @@ pub fn guess_entity_name(world: &World, entity: Entity) -> String {
 	}
 }
 
-pub(crate) fn guess_entity_name_restricted(world: &World, entity: Entity) -> String {
-	match world.get_entity(entity) {
-		Ok(entity_ref) => {
-			if let Some(name) = entity_ref.get::<Name>() {
-				return format!("{} ({})", name.as_str(), entity);
+pub(crate) fn guess_entity_name_restricted<W>(
+	world_view: &RestrictedWorldView<W>,
+	entity: Entity,
+) -> String
+where
+	W: WorldView,
+{
+	match world_view.world().get_entity(entity) {
+		Ok(cell) => {
+			if world_view.allows_access_to_component((entity, std::any::TypeId::of::<Name>())) {
+				// SAFETY: we have access and don't keep reference
+				if let Some(name) = cell.get::<Name>() {
+					return format!("{} ({})", name.as_str(), entity);
+				}
 			}
-			guess_entity_name_inner(world, entity, entity_ref.archetype())
+			guess_entity_name_inner(world_view.world(), entity, cell.archetype())
 		}
 		Err(_) => format!("Entity {} (inexistent)", entity.index()),
 	}

@@ -14,164 +14,52 @@ use std::any::{Any, TypeId};
 
 pub type EntityComponent = (Entity, TypeId);
 
-pub trait WorldView {}
+pub trait WorldView: Clone {
+	fn world(&self) -> &World;
+}
 
-#[derive(Deref)]
-struct ImmutableWorldView<'w> {
+#[derive(Clone, Deref, From)]
+pub struct ImmutableWorldView<'w> {
 	world: &'w World,
 }
 
+impl<'w> WorldView for ImmutableWorldView<'w> {
+	fn world(&self) -> &World {
+		self.world
+	}
+}
+
 #[derive(Clone, Deref, DerefMut, From)]
-struct MutableWorldView<'w> {
+pub struct MutableWorldView<'w> {
 	world: UnsafeWorldCell<'w>,
 }
 
+impl<'w> WorldView for MutableWorldView<'w> {
+	fn world(&self) -> &World {
+		unsafe { self.world.world() }
+	}
+}
+
 #[derive(Clone)]
-pub struct RestrictedWorldView<'w> {
-	world: MutableWorldView<'w>,
+pub struct RestrictedWorldView<W>
+where
+	W: WorldView,
+{
+	world_view: W,
 	resources: Allowed<TypeId>,
 	components: Allowed<EntityComponent>,
 }
 
-/// Fundamental methods for working with a [`RestrictedWorldView`]
-impl<'w> RestrictedWorldView<'w> {
-	/// Create a new [`RestrictedWorldView`] with permission to access everything.
-	pub fn new(world: &'w mut World) -> RestrictedWorldView<'w> {
-		// INVARIANTS: `world` is `&mut` so we have access to everything
-		RestrictedWorldView {
-			world: MutableWorldView::from(world.as_unsafe_world_cell()),
-			resources: Allowed::everything(),
-			components: Allowed::everything(),
-		}
+impl<W> RestrictedWorldView<W>
+where
+	W: WorldView,
+{
+	pub fn world(&self) -> &World {
+		self.world_view.world()
 	}
 
-	/// Splits the world into one view which may only be used for resource access, and another which may only be used for component access.
-	pub fn resources_components(
-		world: &'w mut World,
-	) -> (RestrictedWorldView<'w>, RestrictedWorldView<'w>) {
-		let world = world.as_unsafe_world_cell();
-
-		// INVARIANTS: `world` is `&mut` so we have access to everything
-		let resources = RestrictedWorldView {
-			world: MutableWorldView::from(world),
-			resources: Allowed::everything(),
-			components: Allowed::nothing(),
-		};
-		let components = RestrictedWorldView {
-			world: MutableWorldView::from(world),
-			resources: Allowed::nothing(),
-			components: Allowed::everything(),
-		};
-
-		(resources, components)
-	}
-
-	pub fn world(&self) -> UnsafeWorldCell<'w> {
-		self.world.world
-	}
-
-	/// Whether the resource with the given [`TypeId`] may be accessed from this world view
-	pub fn allows_access_to_resource(&self, type_id: TypeId) -> bool {
-		self.resources.allows_access_to(type_id)
-	}
-	/// Whether the given component at the entity may be accessed from this world view
-	pub fn allows_access_to_component(&self, component: EntityComponent) -> bool {
-		self.components.allows_access_to(component)
-	}
-
-	/// Splits this view into one view that only has access the the resource `resource` (`.0`), and the rest (`.1`).
-	pub fn split_off_resource(
-		&self,
-		resource: TypeId,
-	) -> (RestrictedWorldView<'_>, RestrictedWorldView<'_>) {
-		assert!(self.allows_access_to_resource(resource));
-
-		// INVARIANTS: `self` had `resource` access, so `split` has access if we remove it from `self`
-		let split = RestrictedWorldView {
-			world: self.world.clone(),
-			resources: Allowed::allow_just(resource),
-			components: Allowed::nothing(),
-		};
-		let rest = RestrictedWorldView {
-			world: self.world.clone(),
-			resources: self.resources.without(resource),
-			components: self.components.clone(),
-		};
-
-		(split, rest)
-	}
-
-	/// Like [`RestrictedWorldView::split_off_resource`], but takes `self` and returns `'w` lifetimes.
-	pub fn split_off_resource_typed<R: Resource>(
-		self,
-	) -> Option<(Mut<'w, R>, RestrictedWorldView<'w>)> {
-		let type_id = TypeId::of::<R>();
-		assert!(self.allows_access_to_resource(type_id));
-
-		// SAFETY: `self` had `R` access, so we have unique access if we remove it from `self`
-		let resource = unsafe { self.world().get_resource_mut::<R>()? };
-
-		let rest = RestrictedWorldView {
-			world: self.world,
-			resources: self.resources.without(type_id),
-			components: self.components,
-		};
-
-		Some((resource, rest))
-	}
-
-	/// Splits this view into one view that only has access the the component `component.1` at the entity `component.0` (`.0`), and the rest (`.1`).
-	pub fn split_off_component(
-		&self,
-		component: EntityComponent,
-	) -> (RestrictedWorldView<'_>, RestrictedWorldView<'_>) {
-		assert!(self.allows_access_to_component(component));
-
-		// INVARIANTS: `self` had `component` access, so `split` has access if we remove it from `self`
-		let split = RestrictedWorldView {
-			world: self.world.clone(),
-			resources: Allowed::nothing(),
-			components: Allowed::allow_just(component),
-		};
-		let rest = RestrictedWorldView {
-			world: self.world.clone(),
-			resources: self.resources.clone(),
-			components: self.components.without(component),
-		};
-
-		(split, rest)
-	}
-
-	/// Splits this view into one view that only has access the the component-entity pairs `components` (`.0`), and the rest (`.1`)
-	pub fn split_off_components(
-		&self,
-		components: impl Iterator<Item = EntityComponent> + Copy,
-	) -> (RestrictedWorldView<'_>, RestrictedWorldView<'_>) {
-		for component in components {
-			assert!(self.allows_access_to_component(component));
-		}
-
-		// INVARIANTS: `self` had `component` access, so `split` has access if we remove it from `self`
-		let split = RestrictedWorldView {
-			world: self.world.clone(),
-			resources: Allowed::nothing(),
-			components: Allowed::allow(components),
-		};
-		let rest = RestrictedWorldView {
-			world: self.world.clone(),
-			resources: self.resources.clone(),
-			components: self.components.without_many(components),
-		};
-
-		(split, rest)
-	}
-}
-
-/// Some safe methods for getting values out of the [`RestrictedWorldView`].
-/// Also has some methods for getting values in their [`Reflect`] form.
-impl<'w> RestrictedWorldView<'w> {
 	pub fn contains_entity(&self, entity: Entity) -> bool {
-		self.world().entities().contains(entity)
+		self.world_view.world().entities().contains(entity)
 	}
 
 	/// Gets an immutable reference to the resource of the given type
@@ -180,10 +68,39 @@ impl<'w> RestrictedWorldView<'w> {
 		unsafe { self.resource_unchecked() }
 	}
 
-	/// Gets a mutable reference to the resource of the given type
-	pub fn resource_mut<R: Resource>(&mut self) -> Result<Mut<'_, R>, Error> {
-		// SAFETY: &mut self
-		unsafe { self.resource_unchecked_mut() }
+	/// Whether the resource with the given [`TypeId`] may be accessed from this world view
+	pub fn allows_access_to_resource(&self, type_id: TypeId) -> bool {
+		self.resources.allows_access_to(type_id)
+	}
+
+	/// Whether the given component at the entity may be accessed from this world view
+	pub fn allows_access_to_component(&self, component: EntityComponent) -> bool {
+		self.components.allows_access_to(component)
+	}
+
+	/// # Safety
+	/// This method does validate that we have access to `R`, but takes `&self`
+	/// and as such doesn't check unique access.
+	unsafe fn resource_unchecked<R: Resource>(&self) -> Result<&R, Error> {
+		let type_id = TypeId::of::<R>();
+		if !self.allows_access_to_resource(type_id) {
+			return Err(Error::NoAccessToResource);
+		}
+
+		// SAFETY: we have access to `type_id`, caller ensures unique access
+		unsafe {
+			self
+				.world_view
+				.world()
+				.get_resource::<R>()
+				.ok_or(Error::ResourceDoesNotExist)
+		}
+	}
+}
+
+impl RestrictedWorldView<MutableWorldView<'_>> {
+	pub fn world_cell<'w>(&'w self) -> UnsafeWorldCell<'w> {
+		self.world_view.world
 	}
 
 	/// Gets mutable reference to two resources. Panics if `R1 = R2`.
@@ -199,40 +116,10 @@ impl<'w> RestrictedWorldView<'w> {
 		(r1, r2)
 	}
 
-	/// # Safety
-	/// This method does validate that we have access to `R`, but takes `&self`
-	/// and as such doesn't check unique access.
-	unsafe fn resource_unchecked<R: Resource>(&self) -> Result<&R, Error> {
-		let type_id = TypeId::of::<R>();
-		if !self.allows_access_to_resource(type_id) {
-			return Err(Error::NoAccessToResource);
-		}
-
-		// SAFETY: we have access to `type_id`, caller ensures unique access
-		unsafe {
-			self
-				.world()
-				.get_resource::<R>()
-				.ok_or(Error::ResourceDoesNotExist)
-		}
-	}
-
-	/// # Safety
-	/// This method does validate that we have access to `R`, but takes `&self`
-	/// and as such doesn't check unique access.
-	unsafe fn resource_unchecked_mut<R: Resource>(&self) -> Result<Mut<'_, R>, Error> {
-		let type_id = TypeId::of::<R>();
-		if !self.allows_access_to_resource(type_id) {
-			return Err(Error::NoAccessToResource);
-		}
-
-		// SAFETY: we have access to `type_id`, caller ensures unique access
-		unsafe {
-			self
-				.world()
-				.get_resource_mut::<R>()
-				.ok_or(Error::ResourceDoesNotExist)
-		}
+	/// Gets a mutable reference to the resource of the given type
+	pub fn resource_mut<R: Resource>(&mut self) -> Result<Mut<'_, R>, Error> {
+		// SAFETY: &mut self
+		unsafe { self.resource_unchecked_mut() }
 	}
 
 	/// Gets a mutable reference in form of a [`&mut dyn Reflect`](bevy_reflect::Reflect) to the resource given by `type_id`.
@@ -250,7 +137,8 @@ impl<'w> RestrictedWorldView<'w> {
 		}
 
 		let component_id = self
-			.world()
+			.world_view
+			.world
 			.components()
 			.get_resource_id(type_id)
 			.ok_or(Error::ResourceDoesNotExist)?;
@@ -258,7 +146,8 @@ impl<'w> RestrictedWorldView<'w> {
 		// SAFETY: we have access to `type_id` and borrow `&mut self`
 		let value = unsafe {
 			self
-				.world()
+				.world_view
+				.world
 				.get_resource_mut_by_id(component_id)
 				.ok_or(Error::ResourceDoesNotExist)?
 		};
@@ -274,7 +163,7 @@ impl<'w> RestrictedWorldView<'w> {
 	/// Returns an error if the type does not register [`Reflect`].
 	///
 	/// Also returns a `impl FnOnce()` to mark the value as changed.
-	pub fn get_entity_component_reflect(
+	pub fn entity_component_reflect_mut(
 		&mut self,
 		entity: Entity,
 		component: TypeId,
@@ -286,13 +175,15 @@ impl<'w> RestrictedWorldView<'w> {
 
 		// SAFETY: this only accesses the component ID and doesn't keep any references
 		let component_id = self
-			.world()
+			.world_view
+			.world
 			.components()
 			.get_id(component)
 			.ok_or(Error::NoComponentId)?;
 
 		let entity_ref = self
-			.world()
+			.world_view
+			.world
 			.get_entity(entity)
 			.map_err(|_| Error::ComponentDoesNotExist(entity))?;
 
@@ -328,7 +219,8 @@ impl<'w> RestrictedWorldView<'w> {
 
 		// SAFETY: this only accesses the component ID and doesn't keep any references
 		let component_id = self
-			.world()
+			.world_view
+			.world
 			.components()
 			.get_id(component)
 			.ok_or(Error::NoComponentId)?;
@@ -336,7 +228,8 @@ impl<'w> RestrictedWorldView<'w> {
 		// SAFETY: we have access to (entity, component) and caller ensures distinct access
 		let value = unsafe {
 			self
-				.world()
+				.world_view
+				.world
 				.get_entity(entity)
 				.map_err(|_| Error::ComponentDoesNotExist(entity))?
 				.get_mut_by_id(component_id)
@@ -346,10 +239,141 @@ impl<'w> RestrictedWorldView<'w> {
 		// SAFETY: value is of type component
 		unsafe { mut_untyped_to_reflect(value, type_registry, component) }
 	}
+
+	/// # Safety
+	/// This method does validate that we have access to `R`, but takes `&self`
+	/// and as such doesn't check unique access.
+	unsafe fn resource_unchecked_mut<R: Resource>(&self) -> Result<Mut<'_, R>, Error> {
+		let type_id = TypeId::of::<R>();
+		if !self.allows_access_to_resource(type_id) {
+			return Err(Error::NoAccessToResource);
+		}
+
+		// SAFETY: we have access to `type_id`, caller ensures unique access
+		unsafe {
+			self
+				.world_view
+				.world
+				.get_resource_mut::<R>()
+				.ok_or(Error::ResourceDoesNotExist)
+		}
+	}
+
+	/// Splits this view into one view that only has access the the resource `resource` (`.0`), and the rest (`.1`).
+	pub fn split_off_resource(&self, resource: TypeId) -> (Self, Self) {
+		assert!(self.allows_access_to_resource(resource));
+
+		// INVARIANTS: `self` had `resource` access, so `split` has access if we remove it from `self`
+		let split = RestrictedWorldView {
+			world_view: self.world_view.clone(),
+			resources: Allowed::allow_just(resource),
+			components: Allowed::nothing(),
+		};
+
+		let rest = RestrictedWorldView {
+			world_view: self.world_view.clone(),
+			resources: self.resources.without(resource),
+			components: self.components.clone(),
+		};
+
+		(split, rest)
+	}
+
+	/// Splits this view into one view that only has access the the component `component.1` at the entity `component.0` (`.0`), and the rest (`.1`).
+	pub fn split_off_component(&self, component: EntityComponent) -> (Self, Self) {
+		assert!(self.allows_access_to_component(component));
+
+		// INVARIANTS: `self` had `component` access, so `split` has access if we remove it from `self`
+		let split = RestrictedWorldView {
+			world_view: self.world_view.clone(),
+			resources: Allowed::nothing(),
+			components: Allowed::allow_just(component),
+		};
+
+		let rest = RestrictedWorldView {
+			world_view: self.world_view.clone(),
+			resources: self.resources.clone(),
+			components: self.components.without(component),
+		};
+
+		(split, rest)
+	}
+
+	/// Splits this view into one view that only has access the the component-entity pairs `components` (`.0`), and the rest (`.1`)
+	pub fn split_off_components(
+		&self,
+		components: impl Iterator<Item = EntityComponent> + Copy,
+	) -> (Self, Self) {
+		for component in components {
+			assert!(self.allows_access_to_component(component));
+		}
+
+		// INVARIANTS: `self` had `component` access, so `split` has access if we remove it from `self`
+		let split = RestrictedWorldView {
+			world_view: self.world_view.clone(),
+			resources: Allowed::nothing(),
+			components: Allowed::allow(components),
+		};
+		let rest = RestrictedWorldView {
+			world_view: self.world_view.clone(),
+			resources: self.resources.clone(),
+			components: self.components.without_many(components),
+		};
+
+		(split, rest)
+	}
 }
 
-impl<'a> From<&'a mut World> for RestrictedWorldView<'a> {
-	fn from(value: &'a mut World) -> Self {
+impl<'w> RestrictedWorldView<MutableWorldView<'w>> {
+	/// Create a new [`RestrictedWorldView`] with permission to access everything.
+	pub fn new(world: &'w mut World) -> Self {
+		// INVARIANTS: `world` is `&mut` so we have access to everything
+		Self {
+			world_view: MutableWorldView::from(world.as_unsafe_world_cell()),
+			resources: Allowed::everything(),
+			components: Allowed::everything(),
+		}
+	}
+
+	/// Like [`RestrictedWorldView::split_off_resource`], but takes `self` and returns `'w` lifetimes.
+	pub fn split_off_resource_typed<R: Resource>(self) -> Option<(Mut<'w, R>, Self)> {
+		let type_id = TypeId::of::<R>();
+		assert!(self.allows_access_to_resource(type_id));
+
+		// SAFETY: `self` had `R` access, so we have unique access if we remove it from `self`
+		let resource = unsafe { self.world_view.world_mut().get_resource_mut::<R>()? };
+
+		let rest = RestrictedWorldView {
+			world_view: self.world_view,
+			resources: self.resources.without(type_id),
+			components: self.components,
+		};
+
+		Some((resource, rest))
+	}
+
+	/// Splits the world into one view which may only be used for resource access, and another which may only be used for component access.
+	pub fn resources_components(world: &'w mut World) -> (Self, Self) {
+		let world = world.as_unsafe_world_cell();
+
+		// INVARIANTS: `world` is `&mut` so we have access to everything
+		let resources = RestrictedWorldView {
+			world_view: MutableWorldView::from(world),
+			resources: Allowed::everything(),
+			components: Allowed::nothing(),
+		};
+		let components = RestrictedWorldView {
+			world_view: MutableWorldView::from(world),
+			resources: Allowed::nothing(),
+			components: Allowed::everything(),
+		};
+
+		(resources, components)
+	}
+}
+
+impl<'w> From<&'w mut World> for RestrictedWorldView<MutableWorldView<'w>> {
+	fn from(value: &'w mut World) -> Self {
 		RestrictedWorldView::new(value)
 	}
 }
@@ -600,7 +624,7 @@ mod tests {
 		let (mut component_view, mut world) =
 			world.split_off_component((entity, TypeId::of::<ComponentA>()));
 		let mut component = component_view
-			.get_entity_component_reflect(entity, TypeId::of::<ComponentA>(), &type_registry)
+			.entity_component_reflect_mut(entity, TypeId::of::<ComponentA>(), &type_registry)
 			.unwrap();
 		let mut resource = world.resource_mut::<A>().unwrap();
 

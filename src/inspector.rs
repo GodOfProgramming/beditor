@@ -235,13 +235,14 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let Some(asset_value) = ({
 				assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
 				// SAFETY: the world allows mutable access to `Assets<T>`
-				unsafe { reflect_asset.get_unchecked_mut(world_view.world(), asset_id) }
+				unsafe { reflect_asset.get_unchecked_mut(world_view.world_cell(), asset_id) }
 			}) else {
 				errors::dead_asset_handle(ui, asset_id);
 				return false;
 			};
 
-			let mut ctx = MutableContext::new(world_view, queue);
+			// TODO safety
+			let mut ctx = MutableContext::new(world_view.clone(), queue);
 
 			let id = egui::Id::new(asset_id);
 

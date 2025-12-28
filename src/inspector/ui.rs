@@ -14,7 +14,7 @@ use crate::{
 			maybe_grid_readonly_label_if, remove_button, show_docs, up_button,
 		},
 		entity, or,
-		world::RestrictedWorldView,
+		world::{ImmutableWorldView, MutableWorldView, RestrictedWorldView},
 	},
 };
 use bevy::{
@@ -48,14 +48,14 @@ pub trait Context {
 }
 
 pub struct ImmutableContext<'w> {
-	pub world: &'w World,
+	pub world: ImmutableWorldView<'w>,
 	pub queue: Rc<RefCell<&'w mut CommandQueue>>,
 }
 
 impl<'w> ImmutableContext<'w> {
 	pub fn new(world: &'w World, queue: &'w mut CommandQueue) -> Self {
 		Self {
-			world,
+			world: ImmutableWorldView::from(world),
 			queue: Rc::new(RefCell::new(queue)),
 		}
 	}
@@ -70,7 +70,7 @@ impl<'w> Context for ImmutableContext<'w> {
 
 #[derive(new)]
 pub struct MutableContext<'w> {
-	pub world: RestrictedWorldView<'w>,
+	pub world_view: RestrictedWorldView<MutableWorldView<'w>>,
 	pub queue: &'w mut CommandQueue,
 }
 
@@ -969,7 +969,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 
 				{
 					let ctx = ImmutableContext::new(
-						unsafe { self.context.world.world().world() },
+						unsafe { self.context.world_view.world_cell().world() },
 						self.context.queue,
 					);
 					let env = InspectorUi::new(self.type_registry, &ctx);
@@ -1071,7 +1071,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				egui::Grid::new((id, i)).show(ui, |ui| {
 					ui.horizontal_top(|ui| {
 						let ctx = ImmutableContext::new(
-							unsafe { self.context.world.world().world() },
+							unsafe { self.context.world_view.world_cell().world() },
 							self.context.queue,
 						);
 						let env = InspectorUi::new(self.type_registry, &ctx);
@@ -1248,7 +1248,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 						// All sets contain this value: Show value
 						ui.horizontal_top(|ui| {
 							let ctx = ImmutableContext::new(
-								unsafe { self.context.world.world().world() },
+								unsafe { self.context.world_view.world_cell().world() },
 								self.context.queue,
 							);
 							let env = InspectorUi::new(self.type_registry, &ctx);
@@ -1562,7 +1562,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		id: egui::Id,
 		options: &dyn Any,
 	) -> Option<bool> {
-		let MutableContext { world, queue } = &mut self.context;
+		let MutableContext { world_view, queue } = &mut self.context;
 
 		let reflected_value = value.try_as_reflect()?;
 
@@ -1589,13 +1589,14 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			return Some(false);
 		};
 
-		let (assets_view, world) = world.split_off_resource(reflect_asset.assets_resource_type_id());
+		let (assets_view, world) =
+			world_view.split_off_resource(reflect_asset.assets_resource_type_id());
 
 		assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
 
 		let asset_value = {
 			// SAFETY: the world allows mutable access to `Assets<T>`
-			let asset_value = unsafe { reflect_asset.get_unchecked_mut(world.world(), &handle) };
+			let asset_value = unsafe { reflect_asset.get_unchecked_mut(world.world_cell(), &handle) };
 
 			match asset_value {
 				Some(value) => value,
@@ -1606,7 +1607,8 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			}
 		};
 
-		let mut ctx = MutableContext::new(world, queue);
+		// TODO safety, make it so restricted world view also tracks handles such taht it can be split before the asset_value accessor above
+		let mut ctx = MutableContext::new(world.clone(), queue);
 		let mut restricted_env = InspectorUi::new(self.type_registry, &mut ctx);
 
 		Some(restricted_env.ui_for_reflect_with_options(
@@ -1626,7 +1628,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		values: &mut [&mut dyn PartialReflect],
 		projector: &dyn ProjectorReflect,
 	) -> Option<bool> {
-		let MutableContext { world, queue } = &mut self.context;
+		let MutableContext { world_view, queue } = &mut self.context;
 
 		let reflect_handle = self.type_registry.get_type_data::<ReflectHandle>(type_id)?;
 
@@ -1642,7 +1644,8 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			return Some(false);
 		};
 
-		let (assets_view, world) = world.split_off_resource(reflect_asset.assets_resource_type_id());
+		let (assets_view, world) =
+			world_view.split_off_resource(reflect_asset.assets_resource_type_id());
 
 		let mut new_values = Vec::with_capacity(values.len());
 		let mut used_handles = Vec::with_capacity(values.len());
@@ -1668,7 +1671,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
 
 				// SAFETY: the world allows mutable access to `Assets<T>`
-				let asset_value = unsafe { reflect_asset.get_unchecked_mut(world.world(), &handle) };
+				let asset_value = unsafe { reflect_asset.get_unchecked_mut(world.world_cell(), &handle) };
 
 				match asset_value {
 					Some(value) => value,
@@ -1681,7 +1684,9 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 
 			new_values.push(asset_value.as_partial_reflect_mut());
 		}
-		let mut ctx = MutableContext::new(world, queue);
+
+		// TODO safety, make it so restricted world view also tracks handles such taht it can be split before the asset_value accessor above
+		let mut ctx = MutableContext::new(world.clone(), queue);
 		let mut restricted_env = InspectorUi::new(self.type_registry, &mut ctx);
 
 		Some(restricted_env.ui_for_reflect_many_with_options(

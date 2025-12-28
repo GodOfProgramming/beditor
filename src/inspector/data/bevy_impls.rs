@@ -6,7 +6,10 @@ use crate::{
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
 	ui::builtin::inspector::entity_context_menu,
-	util::{self, pretty_type_name, world::RestrictedWorldView},
+	util::{
+		self, pretty_type_name,
+		world::{MutableWorldView, RestrictedWorldView},
+	},
 };
 use bevy::{
 	camera::visibility::RenderLayers, ecs::world::CommandQueue, gizmos::config::GizmoConfigStore,
@@ -61,8 +64,7 @@ impl InspectorPrimitive for Entity {
 			EntityDisplay::Components => {
 				let ctx = &mut env.context;
 
-				let entity_name =
-					util::entity::guess_entity_name_restricted(unsafe { ctx.world.world().world() }, entity);
+				let entity_name = util::entity::guess_entity_name_restricted(&ctx.world_view, entity);
 
 				egui::CollapsingHeader::new(entity_name)
 					.id_salt(id)
@@ -81,7 +83,7 @@ impl InspectorPrimitive for Entity {
 						}
 
 						if options.despawnable
-							&& ctx.world.contains_entity(entity)
+							&& ctx.world_view.contains_entity(entity)
 							&& util::egui::label_button(ui, "✖ Despawn", egui::Color32::RED)
 						{
 							ctx.queue.push(move |world: &mut World| {
@@ -605,15 +607,20 @@ fn asset_picker<'c, A: Asset>(
 	ui: &mut egui::Ui,
 	env: &mut InspectorUi<'_, MutableContext<'c>>,
 	id: egui::Id,
-	prefix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut RestrictedWorldView, &mut CommandQueue),
+	prefix_ui: impl FnOnce(
+		&mut egui::Ui,
+		&mut Handle<A>,
+		&mut RestrictedWorldView<MutableWorldView<'c>>,
+		&mut CommandQueue,
+	),
 	hover_ui: impl FnOnce(&mut egui::Ui, &str, &HashMap<String, AssetId<A>>),
 	postfix_ui: impl FnOnce(&mut egui::Ui, &mut Handle<A>, &mut Assets<A>) -> bool,
 ) -> bool {
-	let MutableContext { world, queue } = env.context;
+	let MutableContext { world_view, queue } = env.context;
 
-	(prefix_ui)(ui, handle, world, queue);
+	(prefix_ui)(ui, handle, world_view, queue);
 
-	let (asset_server, mut assets) = match world.two_resources_mut::<AssetServer, Assets<A>>() {
+	let (asset_server, mut assets) = match world_view.two_resources_mut::<AssetServer, Assets<A>>() {
 		(Ok(a), Ok(b)) => (a, b),
 		(a, b) => {
 			if let Err(e) = a {

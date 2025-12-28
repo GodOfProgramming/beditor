@@ -6,7 +6,7 @@ use crate::{
 	util::{
 		self, WorldExtensions,
 		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
-		world::{ReflectBorrow, RestrictedWorldView},
+		world::{ReflectBorrow, RestrictedWorldView, WorldView},
 	},
 };
 use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
@@ -82,7 +82,7 @@ pub fn ui_for_entity_components(
 	type_registry: &TypeRegistry,
 	highlight_changes: bool,
 ) -> Option<egui::CollapsingResponse<ComponentInfo>> {
-	let Ok(components) = components_of_entity(&ctx.world, entity) else {
+	let Ok(components) = components_of_entity(&ctx.world_view, entity) else {
 		errors::entity_does_not_exist(ui, entity);
 		return None;
 	};
@@ -113,9 +113,9 @@ pub fn ui_for_entity_components(
 		}
 
 		// create a context with access to the world except for the currently viewed component
-		let (mut component_view, world) = ctx.world.split_off_component((entity, type_id));
+		let (mut component_view, world_view) = ctx.world_view.split_off_component((entity, type_id));
 
-		let value = match component_view.get_entity_component_reflect(entity, type_id, type_registry) {
+		let value = match component_view.entity_component_reflect_mut(entity, type_id, type_registry) {
 			Ok(value) => value,
 			Err(_) => {
 				let response = ui.indent(id, |ui| {
@@ -144,7 +144,7 @@ pub fn ui_for_entity_components(
 			match value {
 				ReflectBorrow::Mutable(mut value) => {
 					let mut ctx = MutableContext {
-						world,
+						world_view,
 						queue: ctx.queue,
 					};
 
@@ -165,7 +165,7 @@ pub fn ui_for_entity_components(
 					changed
 				}
 				ReflectBorrow::Immutable(value) => {
-					let ctx = ImmutableContext::new(unsafe { world.world().world() }, ctx.queue);
+					let ctx = ImmutableContext::new(unsafe { world_view.world() }, ctx.queue);
 					let env = InspectorUi::new(type_registry, &ctx);
 					let id = id.with(component_id);
 					let options = &();
@@ -303,18 +303,22 @@ pub fn ui_for_entities_with_shared_components(
 	})
 }
 
-fn components_of_entity(
-	world: &RestrictedWorldView<'_>,
+fn components_of_entity<W: WorldView>(
+	world_view: &RestrictedWorldView<W>,
 	entity: Entity,
 ) -> Result<Vec<(String, ComponentId, Option<TypeId>, usize)>> {
-	let entity_ref = world.world().get_entity(entity)?;
+	let entity_ref = world_view.world().get_entity(entity)?;
 
 	let archetype = entity_ref.archetype();
 	let mut components: Vec<_> = archetype
 		.components()
 		.iter()
 		.map(|component_id| {
-			let info = world.world().components().get_info(*component_id).unwrap();
+			let info = world_view
+				.world()
+				.components()
+				.get_info(*component_id)
+				.unwrap();
 			let name = util::pretty_type_name_str(&info.name().to_string());
 
 			(name, *component_id, info.type_id(), info.layout().size())

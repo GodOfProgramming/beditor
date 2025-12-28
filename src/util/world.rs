@@ -221,7 +221,7 @@ where
 }
 
 impl<'w> RestrictedWorldView<ImmutableWorldView<'w>> {
-	pub fn copy_from<W>(other: &'w RestrictedWorldView<W>) -> Self
+	pub fn to_immutable<W>(other: &'w RestrictedWorldView<W>) -> Self
 	where
 		W: 'w + WorldView,
 	{

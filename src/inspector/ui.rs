@@ -1005,10 +1005,8 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				i += 1;
 
 				{
-					let ctx = ImmutableContext::new(
-						unsafe { self.context.world_view.world_cell().world() },
-						self.context.queue,
-					);
+					let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
+					let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
 					let env = InspectorUi::new(self.type_registry, &ctx);
 					env.ui_for_reflect_readonly_with_options(key, ui, ui_id, &());
 				}
@@ -1107,10 +1105,8 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			for (i, val) in set.iter().enumerate() {
 				egui::Grid::new((id, i)).show(ui, |ui| {
 					ui.horizontal_top(|ui| {
-						let ctx = ImmutableContext::new(
-							unsafe { self.context.world_view.world_cell().world() },
-							self.context.queue,
-						);
+						let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
+						let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
 						let env = InspectorUi::new(self.type_registry, &ctx);
 						env.ui_for_reflect_readonly_with_options(val, ui, id.with(i), options);
 					});
@@ -1284,10 +1280,8 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 						}) {
 						// All sets contain this value: Show value
 						ui.horizontal_top(|ui| {
-							let ctx = ImmutableContext::new(
-								unsafe { self.context.world_view.world_cell().world() },
-								self.context.queue,
-							);
+							let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
+							let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
 							let env = InspectorUi::new(self.type_registry, &ctx);
 							env.ui_for_reflect_readonly_with_options(
 								value_to_check.borrow(),

@@ -165,7 +165,7 @@ pub fn ui_for_entity_components(
 					changed
 				}
 				ReflectBorrow::Immutable(value) => {
-					let world_view = RestrictedWorldView::copy_from(&world_view);
+					let world_view = RestrictedWorldView::to_immutable(&world_view);
 					let ctx = ImmutableContext::from_world_view(world_view, ctx.queue);
 					let env = InspectorUi::new(type_registry, &ctx);
 					let id = id.with(component_id);

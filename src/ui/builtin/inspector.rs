@@ -1,13 +1,12 @@
 use super::BundleDnd;
 use crate::{
-	inspector::{WorldExtensions as _, ui::components::ComponentInfo},
-	ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui},
-	util::{WorldExtensions as _, egui::show_docs},
+	EditorEntity, inspector::{WorldExtensions as _, ui::components::ComponentInfo}, ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui}, util::{WorldExtensions as _, egui::show_docs}
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
+#[require(EditorEntity)]
 pub struct InspectorUi;
 
 impl InspectorUi {

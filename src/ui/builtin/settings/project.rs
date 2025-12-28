@@ -1,5 +1,5 @@
 use crate::{
-	EditorUi, Notification,
+	EditorEntity, EditorUi, Notification,
 	settings::{SaveLayoutOnExitSetting, StartEditorInTestingSetting},
 	ui::{
 		DockExtensions, LayoutManager, LoadLayout, SavedLayout, UiManager, misc::MissingUi, widgets,
@@ -15,6 +15,7 @@ use strum_macros::{Display, EnumIter};
 use uuid::uuid;
 
 #[derive(Component)]
+#[require(EditorEntity)]
 pub struct ProjectSettingsUi {
 	selected_category: Option<ProjectSettingCategory>,
 	save_layout_dialog: widgets::Dialog,

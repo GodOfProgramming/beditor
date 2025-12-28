@@ -1,5 +1,6 @@
 use super::{PanState, UP};
 use crate::{
+	EditorEntity,
 	input::EditorActions,
 	settings::CamStateSetting2d,
 	util::{self, storage::ProjectSettings},
@@ -17,7 +18,7 @@ use serde::{Deserialize, Serialize};
 pub struct View2d;
 
 #[derive(Component, Default)]
-#[require(EditorCamera, Camera2d, CameraSettings)]
+#[require(EditorCamera, EditorEntity, Camera2d, CameraSettings)]
 pub struct EditorCamera2d;
 
 pub fn enable(
@@ -232,6 +233,7 @@ pub struct CameraSaveData {
 }
 
 #[derive(Component, Reflect, Serialize, Deserialize, Clone)]
+#[require(EditorEntity)]
 pub struct CameraSettings {
 	move_speed: f32,
 	zoom_sensitivity: f32,
@@ -249,6 +251,7 @@ impl Default for CameraSettings {
 }
 
 #[derive(Default, Component, Reflect, Serialize, Deserialize, Clone)]
+#[require(EditorEntity)]
 pub struct CameraState {
 	pan_viewport_start: Option<Vec2>,
 }

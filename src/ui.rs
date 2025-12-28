@@ -6,7 +6,7 @@ mod systems;
 pub mod widgets;
 
 use crate::{
-	DataTable, EditorState, PersistentData, ProjectSettings, RuntimeSettings,
+	DataTable, EditorEntity, EditorState, PersistentData, ProjectSettings, RuntimeSettings,
 	inspector::ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
 	settings::CurrentLayoutSetting,
 	ui::{
@@ -25,7 +25,10 @@ use bevy::{
 	camera::visibility::{Layer, RenderLayers},
 	ecs::{
 		component::Mutable,
+		entity_disabling::Disabled,
+		lifecycle::HookContext,
 		system::{SystemParam, SystemState, entity_command},
+		world::DeferredWorld,
 	},
 	picking::pointer::PointerId,
 	platform::collections::HashMap,
@@ -65,10 +68,13 @@ struct EditorUiSystems;
     ..default()
   },
   Camera2d,
-  RenderLayers = RenderLayers::layer(EDITOR_UI_LAYER))]
+  RenderLayers = RenderLayers::layer(EDITOR_UI_LAYER),
+  EditorEntity
+)]
 pub struct EditorUiCamera;
 
 #[derive(Component)]
+#[require(EditorEntity)]
 pub struct EditorUiHitCaptureNode;
 
 pub(crate) struct UiPlugin;
@@ -669,7 +675,12 @@ impl VTable {
 	fn spawn<T: EditorUiBundle>(world: &mut World) -> Entity {
 		info!("Spawning UI component {}", T::NAME);
 		let entity = world
-			.spawn((Name::new(T::NAME), PersistentId(T::ID), UiState::default()))
+			.spawn((
+				Name::new(T::NAME),
+				EditorEntity,
+				PersistentId(T::ID),
+				UiState::default(),
+			))
 			.id();
 
 		let ui_scene = world
@@ -824,6 +835,20 @@ impl Default for InspectorSelection {
 }
 
 impl InspectorSelection {
+	pub fn clear(&mut self) -> Option<SelectedEntitiesChangedEvent> {
+		match self {
+			InspectorSelection::Entities(selected_entities) => Some(selected_entities.scoped_clear()),
+			InspectorSelection::Resource(_, _) => {
+				*self = default();
+				None
+			}
+			InspectorSelection::Asset(_, _, _) => {
+				*self = default();
+				None
+			}
+		}
+	}
+
 	pub fn add_selected(&mut self, entity: Entity, add: bool) -> SelectedEntitiesChangedEvent {
 		if let InspectorSelection::Entities(selected_entities) = self {
 			selected_entities.select_maybe_add(entity, add)
@@ -837,23 +862,23 @@ impl InspectorSelection {
 }
 
 fn handle_click_events(
-	event: On<Pointer<Click>>,
+	mut event: On<Pointer<Click>>,
 	mut commands: Commands,
 	editor_camera_pointer_id: Single<&PointerId, With<EditorCamera>>,
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
 ) {
+	event.propagate(false);
+
 	if event.pointer_id != **editor_camera_pointer_id || event.button != PointerButton::Primary {
 		return;
 	}
 
 	let target = event.event_target();
 
-	let event = selection.add_selected(
-		target,
-		keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight),
-	);
+	let maybe_add = keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
 
+	let event = selection.add_selected(target, maybe_add);
 	commands.trigger(event);
 }
 
@@ -878,6 +903,7 @@ fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 
 /// Component that stores all ui components as children for organization
 #[derive(Component)]
+#[require(EditorEntity)]
 pub struct UiPanels;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States, Default)]

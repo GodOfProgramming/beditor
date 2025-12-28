@@ -15,7 +15,7 @@ use crate::{
 	settings::{
 		EditorSettingsSetting, StartEditorInTestingSetting, WindowMaximizedSetting, WindowSizeSetting,
 	},
-	ui::builtin::managed_view::EditorManagedViewUi,
+	ui::{InspectorSelection, builtin::managed_view::EditorManagedViewUi},
 	util::{
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 		log::LogPlugin,
@@ -41,14 +41,14 @@ use bevy::{
 };
 use bevy_axes_gizmo::AxesGizmoPlugin;
 use bevy_infinite_grid::{InfiniteGrid, InfiniteGridBundle, InfiniteGridPlugin};
-use bevy_mesh_outline::MeshOutlinePlugin;
+use bevy_mesh_outline::{MeshOutline, MeshOutlinePlugin};
 use brefabs::PrefabPlugin;
 use input::InputPlugin;
 use platform_dirs::AppDirs;
 pub use prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::LazyLock};
-use transform_gizmo_bevy::TransformGizmoPlugin;
+use transform_gizmo_bevy::{GizmoTarget, TransformGizmoPlugin};
 use ui::UiPlugin;
 use view::EditorViewPlugin;
 
@@ -57,8 +57,7 @@ pub mod prelude {
 		AppSystems, EditorPlugin,
 		ui::{EditorUi, EditorUiBundle, NoParams, UiManager, notifications::Notification, widgets},
 		util::{
-			AppExtensions, EntityManager, GameEntity, GameRenderLayer, RegisterableType, TypeGroups,
-			TypeList,
+			AppExtensions, RegisterableType, TypeGroups, TypeList,
 			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 			storage::{
 				DataTable, PersistentData, Project, ProjectSettings, SettingChanged, Settings, settings,
@@ -81,6 +80,7 @@ pub struct AppSystems;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States)]
 pub enum EditorState {
 	Editing,
+	SimulationPrep,
 	Simulating(SimulationState),
 	Exiting,
 }
@@ -224,7 +224,6 @@ impl Plugin for EditorPlugin {
 		self
 			.configure(app)
 			.init_resource::<RuntimeSettings>()
-			.init_resource::<GameRenderLayer>()
 			.insert_state(EditorState::Editing)
 			.configure_sets(
 				Update,
@@ -268,16 +267,23 @@ impl Plugin for EditorPlugin {
 			))
 			.add_observer(EnableGameUiEvent::handle)
 			.add_observer(DisableGameUiEvent::handle)
+			.add_observer(on_simulated_entity_spawned)
 			.add_systems(
 				Startup,
-				(configure_windows, load_settings, assets::add_primitives),
+				(
+					configure_windows,
+					load_settings,
+					assets::add_primitives,
+					init_scene,
+				),
 			)
 			.add_systems(PostStartup, show_window)
 			.add_systems(
 				OnEnter(EditorState::Editing),
-				(show_window_cursor, show_infinite_grid),
+				(show_window_cursor, show_infinite_grid, restore_scene),
 			)
 			.add_systems(OnExit(EditorState::Editing), remove_infinite_grid)
+			.add_systems(OnEnter(EditorState::SimulationPrep), on_sim_prep)
 			.add_systems(
 				FixedUpdate,
 				(
@@ -314,6 +320,17 @@ struct EditorGlobalSystems;
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 struct EditingSystems;
+
+#[derive(Component, Reflect, Default, Clone, Copy)]
+#[require(Transform, InheritedVisibility, Children, Pickable = Pickable::IGNORE)]
+#[reflect(Component, Clone, Default)]
+pub struct EditorSceneRoot;
+
+#[derive(Component, Default)]
+struct EditorEntity;
+
+#[derive(Component)]
+struct Simulated;
 
 #[derive(Resource, Reflect, Serialize, Deserialize, Clone)]
 #[reflect(Resource, Default)]
@@ -378,7 +395,7 @@ fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 }
 
 fn show_infinite_grid(mut commands: Commands) {
-	commands.spawn(InfiniteGridBundle::default());
+	commands.spawn((EditorEntity, InfiniteGridBundle::default()));
 }
 
 fn remove_infinite_grid(mut commands: Commands, q_grids: Query<Entity, With<InfiniteGrid>>) {
@@ -478,4 +495,77 @@ fn handle_window_events(
 	}
 
 	Ok(())
+}
+
+fn init_scene(mut commands: Commands) {
+	commands.spawn((Name::new("Scene Root"), EditorSceneRoot));
+}
+
+fn on_simulated_entity_spawned(
+	event: On<Add>,
+	mut commands: Commands,
+	state: Res<State<EditorState>>,
+	q_marked_entities: Query<(), Or<(With<Simulated>, With<EditorEntity>)>>,
+) {
+	if !matches!(state.get(), EditorState::Simulating(_)) {
+		return;
+	}
+
+	if q_marked_entities.contains(event.event_target()) {
+		return;
+	}
+
+	if let Ok(mut entity) = commands.get_entity(event.event_target()) {
+		entity.insert(Simulated);
+	}
+}
+
+fn on_sim_prep(
+	mut commands: Commands,
+	q_scene_roots: Query<Entity, With<EditorSceneRoot>>,
+	mut next_state: ResMut<NextState<EditorState>>,
+	mut selected_entities: ResMut<InspectorSelection>,
+) {
+	for entity in &q_scene_roots {
+		commands
+			.entity(entity)
+			.clone_and_spawn_with_opt_out(|builder| {
+				builder.add_observers(true);
+				builder.linked_cloning(true);
+			})
+			.insert(Simulated);
+
+		commands
+			.entity(entity)
+			.insert_recursive::<Children>(Disabled);
+	}
+
+	next_state.set(EditorState::Simulating(SimulationState::Live));
+
+	if let Some(event) = selected_entities.clear() {
+		commands.trigger(event);
+	}
+}
+
+fn restore_scene(
+	mut commands: Commands,
+	q_simulated_entities: Query<Entity, With<Simulated>>,
+	q_roots: Query<(Entity, Has<Disabled>), (With<EditorSceneRoot>, Allow<Disabled>)>,
+) {
+	for entity in &q_simulated_entities {
+		if let Ok(mut entity) = commands.get_entity(entity) {
+			entity.despawn();
+		}
+	}
+
+	for entity in q_roots
+		.iter()
+		.filter_map(|(entity, disabled)| disabled.then_some(entity))
+	{
+		if let Ok(mut entity) = commands.get_entity(entity) {
+			entity.queue_silenced(move |mut entity: EntityWorldMut| {
+				entity.remove_recursive::<Children, Disabled>();
+			});
+		}
+	}
 }

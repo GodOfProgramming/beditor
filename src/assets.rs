@@ -57,7 +57,8 @@ struct SharedParams<'w> {
 	color_mats: ResMut<'w, Assets<ColorMaterial>>,
 }
 
-#[derive(Bundle, Reflect)]
+#[derive(Bundle, Reflect, Clone)]
+#[reflect(Clone)]
 struct Cube {
 	mesh: Mesh3d,
 	material: MeshMaterial3d<StandardMaterial>,
@@ -84,7 +85,8 @@ impl StaticPrefab for Cube {
 	}
 }
 
-#[derive(Bundle, Reflect)]
+#[derive(Bundle, Reflect, Clone)]
+#[reflect(Clone)]
 struct Square {
 	mesh: Mesh2d,
 	material: MeshMaterial2d<ColorMaterial>,

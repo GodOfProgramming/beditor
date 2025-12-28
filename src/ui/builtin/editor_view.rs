@@ -1,5 +1,5 @@
 use crate::{
-	EditorUi,
+	EditorEntity, EditorSceneRoot, EditorState, EditorUi,
 	ui::{
 		builtin::{
 			BundleDnd,
@@ -7,7 +7,7 @@ use crate::{
 		},
 		misc::UiState,
 	},
-	util::make_singleton,
+	util::{WorldExtensions as _, make_singleton},
 	view::cam::EditorCamera,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -47,8 +47,15 @@ impl EditorUi for EditorViewUi {
 
 		app
 			.add_observer(make_singleton::<TemporaryEntity>)
-			.add_systems(FixedUpdate, detect_enter)
-			.add_systems(Update, move_temporaries);
+			.add_systems(OnExit(EditorState::Editing), despawn_temporaries)
+			.add_systems(
+				FixedUpdate,
+				detect_enter.run_if(in_state(EditorState::Editing)),
+			)
+			.add_systems(
+				Update,
+				move_temporaries.run_if(in_state(EditorState::Editing)),
+			);
 	}
 
 	fn spawn(params: Self::Params<'_, '_>) -> Self {
@@ -137,8 +144,21 @@ impl EditorUi for EditorViewUi {
 
 		let translation = transform.map(|t| t.translation);
 		commands.queue(move |world: &mut World| {
-			let new_entity = world.spawn_empty().id();
+			let Some(new_entity) = world.spawn_stateful_entity() else {
+				return;
+			};
+
 			payload.insert(std::iter::once(new_entity), world);
+
+			'make_child: {
+				let mut query = world.query_filtered::<Entity, With<EditorSceneRoot>>();
+				let Ok(root_entity) = query.query_mut(world).single() else {
+					break 'make_child;
+				};
+
+				world.entity_mut(new_entity).insert(ChildOf(root_entity));
+			}
+
 			let mut entity = world.entity_mut(new_entity);
 
 			let Some((translation, mut new_transform)) = translation.zip(entity.get_mut::<Transform>())
@@ -162,6 +182,10 @@ impl EditorUi for EditorViewUi {
 			.context_menu(ui, params.managed_view_params, surface, node);
 	}
 }
+
+#[derive(Component)]
+#[require(EditorEntity)]
+struct TemporaryEntity;
 
 fn move_temporaries(
 	editor_camera: Single<Entity, With<EditorCamera>>,
@@ -214,5 +238,11 @@ fn detect_enter(
 	}
 }
 
-#[derive(Component)]
-struct TemporaryEntity;
+fn despawn_temporaries(
+	mut commands: Commands,
+	q_temporaries: Query<Entity, With<TemporaryEntity>>,
+) {
+	for entity in &q_temporaries {
+		commands.entity(entity).despawn();
+	}
+}

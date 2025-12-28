@@ -91,10 +91,10 @@ fn view_menu(ui: &mut egui::Ui) {
 fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 	match **params.editor_state {
 		EditorState::Editing => {
-			play_button(ui, params);
+			play_button(ui, params, EditorState::SimulationPrep);
 		}
 		EditorState::Simulating(SimulationState::Idle) => {
-			play_button(ui, params);
+			play_button(ui, params, EditorState::Simulating(SimulationState::Live));
 			stop_button(ui, params);
 		}
 		EditorState::Simulating(SimulationState::Live) => {
@@ -105,11 +105,9 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 	}
 }
 
-fn play_button(ui: &mut egui::Ui, params: &mut Params) {
+fn play_button(ui: &mut egui::Ui, params: &mut Params, target_state: EditorState) {
 	if ui.button(icons::PLAY).clicked() {
-		params
-			.next_editor_state
-			.set(EditorState::Simulating(SimulationState::Live));
+		params.next_editor_state.set(target_state);
 	}
 }
 

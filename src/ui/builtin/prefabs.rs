@@ -1,17 +1,18 @@
 use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 
-use crate::ui::{
+use crate::{EditorEntity, ui::{
 	EditorUiBundle,
 	builtin::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
 	notifications::Notification,
 	widgets::Card,
-};
+}};
 use bevy::prelude::*;
 use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
 use uuid::{Uuid, uuid};
 use vfs::Vfs;
 
 #[derive(Component, Reflect, Default)]
+#[require(EditorEntity)]
 pub struct PrefabsUi;
 
 impl EditorUiBundle for PrefabsUi {

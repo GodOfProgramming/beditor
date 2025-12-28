@@ -1,6 +1,6 @@
 use super::{EditorUi, EditorUiBundle, VTable};
 use crate::{
-	NoParams, UiManager,
+	EditorEntity, NoParams, UiManager,
 	ui::{LayoutInfo, TabState},
 };
 use bevy::{
@@ -117,6 +117,7 @@ where
 	P: SystemParam + 'static;
 
 #[derive(Component, Reflect, Default)]
+#[require(EditorEntity)]
 pub struct MissingUi {
 	message: String,
 	id: PersistentId,

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
+	EditorEntity,
 	inspector::WorldExtensions as _,
 	ui::{
 		EditorUiBundle, InspectorSelection, SelectedEntities,
@@ -15,6 +16,7 @@ use egui_file_dialog::FileDialog;
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
+#[require(EditorEntity)]
 pub struct HierarchyUi;
 
 impl EditorUiBundle for HierarchyUi {
@@ -68,8 +70,12 @@ impl EditorUiBundle for HierarchyUi {
 		_surface: egui_dock::SurfaceIndex,
 		_node: egui_dock::NodeIndex,
 	) {
-		if ui.button("Spawn Empty Entity").clicked() {
-			world.spawn_empty();
+		if ui.button("Spawn New Entity").clicked()
+			&& let Some(entity) = world.spawn_stateful_entity()
+		{
+			let mut inspector_selection = world.resource_mut::<InspectorSelection>();
+			let event = inspector_selection.add_selected(entity, false);
+			world.trigger(event);
 		}
 	}
 }
@@ -250,7 +256,10 @@ fn show_dialogs(
 }
 
 fn dnd_handler(_: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc<BundleDnd>) {
-	let new_entity = world.spawn_empty().id();
+	let Some(new_entity) = world.spawn_stateful_entity() else {
+		return;
+	};
+
 	world.entity_mut(entity).add_child(new_entity);
 	if !payload.insert(std::iter::once(new_entity), world) {
 		world.trigger(Notification::error("Failed to spawn"));

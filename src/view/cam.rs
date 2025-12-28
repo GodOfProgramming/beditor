@@ -1,6 +1,6 @@
 use super::UP;
 use crate::{
-	Notification,
+	EditorEntity, Notification,
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
 	ui::EditorUiHitCaptureNode,
 	util::{make_singleton, storage::ProjectSettings},
@@ -110,6 +110,7 @@ fn on_spawn_editor_camera(
 		});
 	commands.spawn((
 		Name::new("Axis Image"),
+		EditorEntity,
 		Pickable::IGNORE,
 		FocusPolicy::Pass,
 		UiTargetCamera(event.event_target()),
@@ -143,6 +144,7 @@ fn despawn_editor_cameras(mut commands: Commands, q_cams: Query<Entity, With<Edi
 
 #[derive(Default, Component, Reflect, Identifiable)]
 #[require(
+  EditorEntity,
   MeshPickingCamera,
   EditorManagedCamera,
   AxesGizmoSyncCamera = AxesGizmoSyncCamera,

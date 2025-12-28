@@ -8,16 +8,13 @@ pub mod storage;
 pub mod window;
 pub mod world;
 
-use bevy::{
-	camera::visibility::{Layer as CameraLayer, RenderLayers},
-	ecs::{bundle::NoBundleEffect, system::SystemParam, world::CommandQueue},
-	prelude::*,
-	reflect::GetTypeRegistration,
-};
+use bevy::{ecs::world::CommandQueue, prelude::*, reflect::GetTypeRegistration};
 use std::{
 	borrow::{Borrow, BorrowMut},
 	marker::PhantomData,
 };
+
+use crate::{EditorEntity, EditorState, Simulated};
 
 pub fn pretty_type_name<T>() -> String {
 	format!("{:?}", disqualified::ShortName::of::<T>())
@@ -38,41 +35,6 @@ pub fn make_singleton<C: Component>(
 ) {
 	for entity in q_others.iter().filter(|&e| e != event.event_target()) {
 		commands.entity(entity).despawn();
-	}
-}
-
-#[derive(Resource, Reflect, Default)]
-#[reflect(Resource, Default)]
-pub struct GameRenderLayer(CameraLayer);
-
-#[derive(Component)]
-#[require(RenderLayers = RenderLayers::layer(0))]
-pub struct GameEntity;
-
-#[derive(SystemParam)]
-pub struct EntityManager<'w, 's> {
-	commands: Commands<'w, 's>,
-	render_layer: Res<'w, GameRenderLayer>,
-}
-
-impl EntityManager<'_, '_> {
-	pub fn spawn(&mut self, bundle: impl Bundle) -> EntityCommands<'_> {
-		let mut cmds = self
-			.commands
-			.spawn(RenderLayers::layer(self.render_layer.0));
-		cmds.insert(bundle);
-		cmds
-	}
-
-	pub fn spawn_batch<I>(&mut self, batch: I)
-	where
-		I: IntoIterator + Send + Sync + 'static,
-		I::IntoIter: Send + Sync + 'static,
-		I::Item: Bundle<Effect: NoBundleEffect>,
-	{
-		self
-			.commands
-			.spawn_batch(batch.into_iter().map(|bundle| (GameEntity, bundle)));
 	}
 }
 
@@ -110,6 +72,16 @@ pub trait WorldExtensions: BorrowMut<World> {
 		let r = f(world, &mut queue);
 		queue.apply(world);
 		r
+	}
+
+	fn spawn_stateful_entity(&mut self) -> Option<Entity> {
+		let world = self.borrow_mut();
+
+		match world.state::<EditorState>() {
+			EditorState::Editing => Some(world.spawn(EditorEntity).id()),
+			EditorState::SimulationPrep | EditorState::Simulating(_) => Some(world.spawn(Simulated).id()),
+			_ => None,
+		}
 	}
 
 	fn state<S: States>(&self) -> S {

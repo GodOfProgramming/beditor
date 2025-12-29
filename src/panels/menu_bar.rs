@@ -1,10 +1,6 @@
 use crate::{
-	EditorState, SimulationState,
-	scene::PrimaryScene,
-	ui::{
-		builtin::settings::{EditorSettingsUi, ProjectSettingsUi},
-		events::OpenSingleUiMessage,
-	},
+	EditorState, SimulationState, panels::prelude::*, scene::PrimaryScene,
+	ui::events::OpenSingleUiMessage,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use egui_phosphor_icons::icons;

@@ -6,6 +6,7 @@
 mod assets;
 mod input;
 pub mod inspector;
+mod panels;
 mod scene;
 mod ui;
 mod util;
@@ -13,9 +14,9 @@ mod view;
 
 use crate::{
 	inspector::EditorInspectorPlugin,
+	panels::prelude::*,
 	scene::EditorScenePlugin,
 	settings::{EditorSettingsSetting, WindowMaximizedSetting, WindowSizeSetting},
-	ui::builtin::managed_view::EditorManagedViewUi,
 	util::{
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 		log::LogPlugin,

@@ -2,7 +2,8 @@ use super::BundleDnd;
 use crate::{
 	EditorOwned,
 	inspector::{WorldExtensions as _, ui::components::ComponentInfo},
-	ui::{EditorUiBundle, InspectorSelection, builtin::panel_dnd_drop_ui},
+	panels::panel_dnd_drop_ui,
+	ui::{EditorUiBundle, InspectorSelection},
 	util::{WorldExtensions as _, egui::show_docs},
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};

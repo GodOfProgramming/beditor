@@ -160,7 +160,7 @@ impl EditorUi for MissingUi {
 	}
 }
 
-pub(super) trait DockExtensions:
+pub(crate) trait DockExtensions:
 	Borrow<DockState<TabState>> + From<DockState<TabState>>
 {
 	fn decouple(

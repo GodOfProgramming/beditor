@@ -1,7 +1,8 @@
 use super::BundleDnd;
 use crate::{
 	EditorUi,
-	ui::{builtin::SearchableVfs, widgets::Card},
+	panels::SearchableVfs,
+	ui::widgets::Card,
 	util::components::{ComponentRegistry, RegisteredComponent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};

@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crate::{
 	EditorOwned,
 	ui::{EditorUi, TabState, events::ShowUiMessage},
@@ -16,6 +14,7 @@ use bevy_egui::EguiContexts;
 use derive_more::derive::{Deref, DerefMut};
 use derive_new::new;
 use egui_file_dialog::FileDialog;
+use std::time::Duration;
 use uuid::uuid;
 
 #[derive(Component, Default)]
@@ -148,7 +147,7 @@ impl Command for OpenImageViewer {
 
 		let tab = TabState::new::<ImageViewerUi>(world);
 
-		world.entity_mut(tab.entity).insert(ImageViewerUi {
+		world.entity_mut(tab.entity()).insert(ImageViewerUi {
 			image: self.0,
 			tex: tex_id,
 		});

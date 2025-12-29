@@ -1,11 +1,10 @@
 use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 
-use crate::{EditorOwned, ui::{
-	EditorUiBundle,
-	builtin::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
-	notifications::Notification,
-	widgets::Card,
-}};
+use crate::{
+	EditorOwned,
+	panels::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
+	ui::{EditorUiBundle, notifications::Notification, widgets::Card},
+};
 use bevy::prelude::*;
 use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
 use uuid::{Uuid, uuid};

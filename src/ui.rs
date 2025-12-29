@@ -1,4 +1,3 @@
-pub mod builtin;
 pub mod events;
 pub mod misc;
 pub mod notifications;
@@ -8,15 +7,9 @@ pub mod widgets;
 use crate::{
 	DataTable, EditorOwned, EditorState, PersistentData, ProjectSettings, RuntimeSettings,
 	inspector::ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
+	panels::prelude::*,
 	settings::CurrentLayoutSetting,
-	ui::{
-		builtin::{
-			editor_view::EditorViewUi,
-			image_viewer::ImageViewerUi,
-			settings::{EditorSettingsUi, ProjectSettingsUi},
-		},
-		events::{OpenSingleUiMessage, OpenUiMessage, ShowUiMessage},
-	},
+	ui::events::{OpenSingleUiMessage, OpenUiMessage, ShowUiMessage},
 	util::ensure_singleton,
 	view::cam::EditorCamera,
 };
@@ -33,11 +26,6 @@ use bevy::{
 };
 use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
 use bevy_mesh_outline::MeshOutline;
-use builtin::{
-	assets::AssetsUi, components::ComponentsUi, diagnostics::DiagnosticsUi, hierarchy::HierarchyUi,
-	inspector::InspectorUi, logs::LogUi, menu_bar, prefabs::PrefabsUi, resources::ResourcesUi,
-	type_editor::TypeEditorUi,
-};
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
 use events::AppendUiMessage;
@@ -510,14 +498,14 @@ impl UiManager {
 		self.state.decouple(self, q_uuids, q_missing)
 	}
 
-	fn switch_state(&mut self, new_state: DockState<TabState>, world: &mut World) {
+	pub(crate) fn switch_state(&mut self, new_state: DockState<TabState>, world: &mut World) {
 		for (_, tab) in self.state.iter_all_tabs() {
 			(tab.vtable.despawn)(tab.entity, world);
 		}
 		self.state = new_state;
 	}
 
-	fn default_dock_state(&self, world: &mut World) -> DockState<TabState> {
+	pub(crate) fn default_dock_state(&self, world: &mut World) -> DockState<TabState> {
 		let mut state = DockState::new(vec![TabState::new::<EditorViewUi>(world)]);
 
 		let tree = state.main_surface_mut();
@@ -544,7 +532,7 @@ impl UiManager {
 		state
 	}
 
-	fn state(&self) -> &DockState<TabState> {
+	pub(crate) fn state(&self) -> &DockState<TabState> {
 		&self.state
 	}
 }
@@ -556,11 +544,19 @@ pub struct TabState {
 }
 
 impl TabState {
-	fn new<T: EditorUiBundle>(world: &mut World) -> Self {
+	pub(crate) fn new<T: EditorUiBundle>(world: &mut World) -> Self {
 		Self {
 			entity: (T::VTABLE.spawn)(world),
 			vtable: &T::VTABLE,
 		}
+	}
+
+	pub fn entity(&self) -> Entity {
+		self.entity
+	}
+
+	pub fn vtable(&self) -> &'static VTable {
+		self.vtable
 	}
 }
 
@@ -576,6 +572,7 @@ impl DataTable for LayoutsTable {
 	const VALUE_COLUMN: &str = "data";
 }
 
+#[derive(new)]
 pub struct SavedLayout(String);
 
 impl PersistentData for SavedLayout {

@@ -2,13 +2,10 @@ use std::sync::Arc;
 
 use crate::{
 	EditorOwned,
-	inspector::WorldExtensions as _,
+	inspector::{WorldExtensions as _, ui::hierarchy::SelectedEntities},
+	panels::{BundleDnd, image_viewer::OpenImageViewer},
 	scene::serialize_to_scene,
-	ui::{
-		EditorUiBundle, InspectorSelection, SelectedEntities,
-		builtin::{BundleDnd, image_viewer::OpenImageViewer},
-		notifications::Notification,
-	},
+	ui::{EditorUiBundle, InspectorSelection, notifications::Notification},
 	util::WorldExtensions as _,
 	view::cam::{ActiveEditorCamera, EditorManagedCamera, LookAt, MoveTo},
 };

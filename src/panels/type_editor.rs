@@ -201,7 +201,7 @@ impl Command for OpenTypeEditor {
 		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
 			let tab = TabState::new::<TypeEditorUi>(world);
 			world
-				.entity_mut(tab.entity)
+				.entity_mut(tab.entity())
 				.insert(TypeEditorState::new(self.0));
 			ui_manager.add_tab_to_focused(tab);
 		});

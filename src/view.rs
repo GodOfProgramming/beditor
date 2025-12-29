@@ -4,7 +4,8 @@ pub mod view3d;
 
 use crate::{
 	EditorState, input,
-	ui::{builtin::editor_view::EditorViewUi, misc::UiState},
+	panels::prelude::*,
+	ui::misc::UiState,
 	view::cam::{ActiveEditorCamera, EditorCamPlugin},
 };
 use bevy::{prelude::*, reflect::Reflectable};

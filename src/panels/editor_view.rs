@@ -1,13 +1,8 @@
 use crate::{
 	EditorOwned, EditorState, EditorUi,
+	panels::{BundleDnd, managed_view, prelude::*},
 	scene::PrimaryScene,
-	ui::{
-		builtin::{
-			BundleDnd,
-			managed_view::{self, EditorManagedViewUi},
-		},
-		misc::UiState,
-	},
+	ui::misc::UiState,
 	util::{WorldExtensions as _, ensure_singleton},
 	view::cam::EditorCamera,
 };

@@ -2,7 +2,8 @@ use crate::{
 	EditorOwned, EditorUi, Notification,
 	settings::SaveLayoutOnExitSetting,
 	ui::{
-		DockExtensions, LayoutManager, LoadLayout, SavedLayout, UiManager, misc::MissingUi, widgets,
+		LayoutManager, LoadLayout, SavedLayout, UiManager, misc::DockExtensions, misc::MissingUi,
+		widgets,
 	},
 	util::storage::ProjectSettings,
 	view::cam::ActiveEditorCamera,
@@ -221,7 +222,7 @@ impl SaveLayoutMessage {
 			let dock = ui_manager
 				.state()
 				.decouple(&ui_manager, &q_uuids, &q_missing);
-			if settings.set(SavedLayout(msg.0.clone()), dock).is_ok() {
+			if settings.set(SavedLayout::new(msg.0.clone()), dock).is_ok() {
 				layout_manager.insert(msg.0.clone());
 			}
 		}
@@ -239,7 +240,7 @@ impl LoadLayoutMessage {
 	) -> Result {
 		for msg in reader.read() {
 			let layout_name = msg.0.clone();
-			let dock = settings.get(SavedLayout(layout_name))?;
+			let dock = settings.get(SavedLayout::new(layout_name))?;
 			commands.queue(LoadLayout(dock));
 		}
 

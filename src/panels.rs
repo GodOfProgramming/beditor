@@ -1,14 +1,3 @@
-use crate::{ui::widgets, util::components::ComponentRegistry};
-use bevy::prelude::*;
-use brefabs::Prefabs;
-use itertools::Itertools;
-use std::{
-	any::{Any, TypeId},
-	num::NonZeroUsize,
-	sync::Arc,
-};
-use vfs::{Vfs, VfsEntry, VfsNode};
-
 pub mod assets;
 pub mod components;
 pub mod diagnostics;
@@ -23,6 +12,36 @@ pub mod prefabs;
 pub mod resources;
 pub mod settings;
 pub mod type_editor;
+
+pub mod prelude {
+	pub use super::{
+		assets::AssetsUi,
+		components::ComponentsUi,
+		diagnostics::DiagnosticsUi,
+		editor_view::EditorViewUi,
+		hierarchy::HierarchyUi,
+		image_viewer::ImageViewerUi,
+		inspector::InspectorUi,
+		logs::LogUi,
+		managed_view::EditorManagedViewUi,
+		menu_bar,
+		prefabs::PrefabsUi,
+		resources::ResourcesUi,
+		settings::{EditorSettingsUi, ProjectSettingsUi},
+		type_editor::TypeEditorUi,
+	};
+}
+
+use crate::{ui::widgets, util::components::ComponentRegistry};
+use bevy::prelude::*;
+use brefabs::Prefabs;
+use itertools::Itertools;
+use std::{
+	any::{Any, TypeId},
+	num::NonZeroUsize,
+	sync::Arc,
+};
+use vfs::{Vfs, VfsEntry, VfsNode};
 
 pub enum BundleDnd {
 	AddComponent(TypeId),

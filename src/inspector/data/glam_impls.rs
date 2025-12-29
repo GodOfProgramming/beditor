@@ -24,7 +24,7 @@ macro_rules! vec_ui {
             ui.scope(|ui| {
                 ui.columns($count, |ui| match ui {
                     [$($component),*] => {
-                        $(env.ui_for_reflect_readonly(&self.$component, $component);)*
+                        $(env.ui_for_reflect(&self.$component, $component);)*
                     }
                     _ => unreachable!(),
                 });
@@ -51,7 +51,7 @@ macro_rules! vec_ui_mut {
             ui.scope(|ui| {
                 ui.columns($count, |ui| match ui {
                     [$($component),*] => {
-                        $(changed |= env.ui_for_reflect_with_options(&mut self.$component, $component, id.with(stringify!($component)), &options.map(|vec| vec.$component));)*
+                        $(changed |= env.ui_for_reflect_mut_with_options(&mut self.$component, $component, id.with(stringify!($component)), &options.map(|vec| vec.$component));)*
                     }
                     _ => unreachable!(),
                 });
@@ -111,7 +111,7 @@ macro_rules! mat_ui {
       env: &InspectorUi<'_, ImmutableContext<'c>>,
     ) {
       ui.vertical(|ui| {
-        $(env.ui_for_reflect_readonly(&self.$component, ui);)*
+        $(env.ui_for_reflect(&self.$component, ui);)*
       });
     }
   };
@@ -128,7 +128,7 @@ macro_rules! mat_ui_mut {
     ) -> bool {
       let mut changed = false;
       ui.vertical(|ui| {
-        $(changed |= env.ui_for_reflect(&mut self.$component, ui);)*
+        $(changed |= env.ui_for_reflect_mut(&mut self.$component, ui);)*
       });
       changed
     }
@@ -230,7 +230,7 @@ impl From<Euler> for Quat {
 
 impl RotationEdit for Euler {
 	fn ui<'c>(&self, ui: &mut egui::Ui, env: &InspectorUi<'_, ImmutableContext<'c>>) {
-		env.ui_for_reflect_readonly(&self.0, ui);
+		env.ui_for_reflect(&self.0, ui);
 	}
 
 	fn ui_mut<'c>(
@@ -238,7 +238,7 @@ impl RotationEdit for Euler {
 		ui: &mut egui::Ui,
 		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
-		env.ui_for_reflect(&mut self.0, ui)
+		env.ui_for_reflect_mut(&mut self.0, ui)
 	}
 }
 
@@ -332,7 +332,7 @@ impl RotationEdit for AxisAngle {
 		ui.vertical(|ui| {
 			egui::Grid::new("axis-angle quat").show(ui, |ui| {
 				ui.label("Axis");
-				changed |= env.ui_for_reflect(axis, ui);
+				changed |= env.ui_for_reflect_mut(axis, ui);
 				ui.end_row();
 				ui.label("Angle");
 				changed |= ui.drag_angle(angle).changed();
@@ -348,7 +348,7 @@ impl RotationEdit for AxisAngle {
 		ui.vertical(|ui| {
 			egui::Grid::new("axis-angle quat").show(ui, |ui| {
 				ui.label("Axis");
-				env.ui_for_reflect_readonly(axis, ui);
+				env.ui_for_reflect(axis, ui);
 				ui.end_row();
 
 				ui.label(format!("Angle: {angle}"));
@@ -358,7 +358,31 @@ impl RotationEdit for AxisAngle {
 	}
 }
 
-fn quat_ui_kind<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
+fn quat_ui_kind_<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
+	val: &Quat,
+	ui: &mut egui::Ui,
+	env: &InspectorUi<'_, ImmutableContext<'c>>,
+) {
+	let id = ui.id();
+	let mut intermediate = ui.memory_mut(|memory| {
+		*memory
+			.data
+			.get_temp_mut_or_insert_with(id, || T::from(*val))
+	});
+
+	let externally_changed = !intermediate.into().abs_diff_eq(*val, f32::EPSILON);
+	if externally_changed {
+		intermediate = T::from(*val);
+	}
+
+	intermediate.ui(ui, env);
+
+	if externally_changed {
+		ui.memory_mut(|memory| memory.data.insert_temp(id, intermediate));
+	}
+}
+
+fn quat_ui_kind_mut<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
 	val: &mut Quat,
 	ui: &mut egui::Ui,
 	env: &mut InspectorUi<'_, MutableContext<'c>>,
@@ -385,30 +409,6 @@ fn quat_ui_kind<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
 	changed
 }
 
-fn quat_ui_kind_readonly<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
-	val: &Quat,
-	ui: &mut egui::Ui,
-	env: &InspectorUi<'_, ImmutableContext<'c>>,
-) {
-	let id = ui.id();
-	let mut intermediate = ui.memory_mut(|memory| {
-		*memory
-			.data
-			.get_temp_mut_or_insert_with(id, || T::from(*val))
-	});
-
-	let externally_changed = !intermediate.into().abs_diff_eq(*val, f32::EPSILON);
-	if externally_changed {
-		intermediate = T::from(*val);
-	}
-
-	intermediate.ui(ui, env);
-
-	if externally_changed {
-		ui.memory_mut(|memory| memory.data.insert_temp(id, intermediate));
-	}
-}
-
 impl InspectorPrimitive for Quat {
 	fn ui<'c>(
 		&self,
@@ -425,11 +425,11 @@ impl InspectorPrimitive for Quat {
 		ui.vertical(|ui| match options.display {
 			QuatDisplay::Raw => {
 				let vec4 = Vec4::from(*self);
-				env.ui_for_reflect_readonly(&vec4, ui);
+				env.ui_for_reflect(&vec4, ui);
 			}
-			QuatDisplay::Euler => quat_ui_kind_readonly::<Euler>(self, ui, env),
-			QuatDisplay::YawPitchRoll => quat_ui_kind_readonly::<YawPitchRoll>(self, ui, env),
-			QuatDisplay::AxisAngle => quat_ui_kind_readonly::<AxisAngle>(self, ui, env),
+			QuatDisplay::Euler => quat_ui_kind_::<Euler>(self, ui, env),
+			QuatDisplay::YawPitchRoll => quat_ui_kind_::<YawPitchRoll>(self, ui, env),
+			QuatDisplay::AxisAngle => quat_ui_kind_::<AxisAngle>(self, ui, env),
 		});
 	}
 
@@ -448,15 +448,15 @@ impl InspectorPrimitive for Quat {
 		ui.vertical(|ui| match options.display {
 			QuatDisplay::Raw => {
 				let mut vec4 = Vec4::from(*self);
-				let changed = env.ui_for_reflect(&mut vec4, ui);
+				let changed = env.ui_for_reflect_mut(&mut vec4, ui);
 				if changed {
 					*self = Quat::from_vec4(vec4).normalize();
 				}
 				changed
 			}
-			QuatDisplay::Euler => quat_ui_kind::<Euler>(self, ui, env),
-			QuatDisplay::YawPitchRoll => quat_ui_kind::<YawPitchRoll>(self, ui, env),
-			QuatDisplay::AxisAngle => quat_ui_kind::<AxisAngle>(self, ui, env),
+			QuatDisplay::Euler => quat_ui_kind_mut::<Euler>(self, ui, env),
+			QuatDisplay::YawPitchRoll => quat_ui_kind_mut::<YawPitchRoll>(self, ui, env),
+			QuatDisplay::AxisAngle => quat_ui_kind_mut::<AxisAngle>(self, ui, env),
 		})
 		.inner
 	}

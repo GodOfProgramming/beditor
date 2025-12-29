@@ -173,61 +173,30 @@ pub fn down_button(ui: &mut egui::Ui) -> egui::Response {
 	IconButton::new(ui).down_button()
 }
 
-pub fn maybe_grid(
+pub fn maybe_grid<R>(
 	i: usize,
 	ui: &mut egui::Ui,
 	id: egui::Id,
-	mut f: impl FnMut(&mut egui::Ui, bool) -> bool,
-) -> bool {
+	mut f: impl FnMut(&mut egui::Ui, bool) -> R,
+) -> Option<egui::InnerResponse<R>> {
 	match i {
-		0 => false,
-		1 => f(ui, false),
-		_ => egui::Grid::new(id).show(ui, |ui| f(ui, true)).inner,
+		0 => None,
+		1 => Some(ui.scope(|ui| f(ui, false))),
+		_ => Some(egui::Grid::new(id).show(ui, |ui| f(ui, true))),
 	}
 }
 
-pub fn maybe_grid_label_if(
+pub fn maybe_grid_label_if<R>(
 	i: usize,
 	ui: &mut egui::Ui,
 	id: egui::Id,
 	always_show_label: bool,
-	mut f: impl FnMut(&mut egui::Ui, bool) -> bool,
-) -> bool {
+	mut f: impl FnMut(&mut egui::Ui, bool) -> R,
+) -> Option<egui::InnerResponse<R>> {
 	match i {
-		0 => false,
-		1 if !always_show_label => f(ui, false),
-		_ => egui::Grid::new(id).show(ui, |ui| f(ui, true)).inner,
-	}
-}
-
-pub fn maybe_grid_readonly(
-	i: usize,
-	ui: &mut egui::Ui,
-	id: egui::Id,
-	mut f: impl FnMut(&mut egui::Ui, bool),
-) {
-	match i {
-		0 => {}
-		1 => f(ui, false),
-		_ => {
-			egui::Grid::new(id).show(ui, |ui| f(ui, true));
-		}
-	}
-}
-
-pub fn maybe_grid_readonly_label_if(
-	i: usize,
-	ui: &mut egui::Ui,
-	id: egui::Id,
-	always_show_label: bool,
-	mut f: impl FnMut(&mut egui::Ui, bool),
-) {
-	match i {
-		0 => {}
-		1 if !always_show_label => f(ui, false),
-		_ => {
-			egui::Grid::new(id).show(ui, |ui| f(ui, true));
-		}
+		0 => None,
+		1 if !always_show_label => Some(ui.scope(|ui| f(ui, false))),
+		_ => Some(egui::Grid::new(id).show(ui, |ui| f(ui, true))),
 	}
 }
 

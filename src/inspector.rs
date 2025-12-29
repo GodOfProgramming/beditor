@@ -82,7 +82,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 
 			let ctx = ImmutableContext::new(world, queue);
 			let env = InspectorUi::new(&type_registry, &ctx);
-			env.ui_for_reflect_readonly(value, ui);
+			env.ui_for_reflect(value, ui);
 		});
 	}
 
@@ -93,7 +93,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 
 			let mut ctx = MutableContext::new(world, queue);
 			let mut env = InspectorUi::new(&type_registry, &mut ctx);
-			env.ui_for_reflect(value, ui)
+			env.ui_for_reflect_mut(value, ui)
 		})
 	}
 
@@ -168,7 +168,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let mut ctx = MutableContext::from_world_view(world_view, queue);
 			let mut env = InspectorUi::new(&type_registry, &mut ctx);
 
-			if env.ui_for_reflect(resource.bypass_change_detection(), ui) {
+			if env.ui_for_reflect_mut(resource.bypass_change_detection(), ui) {
 				resource.set_changed();
 			}
 		});
@@ -195,7 +195,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 					Err(err) => return errors::show_error(err, ui, name_of_type),
 				};
 
-			let changed = env.ui_for_reflect(
+			let changed = env.ui_for_reflect_mut(
 				resource.bypass_change_detection().as_partial_reflect_mut(),
 				ui,
 			);
@@ -249,7 +249,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let id = egui::Id::new(asset_id);
 
 			let mut env = InspectorUi::new(type_registry, &mut ctx);
-			env.ui_for_reflect_with_options(asset_value.as_partial_reflect_mut(), ui, id, &())
+			env.ui_for_reflect_mut_with_options(asset_value.as_partial_reflect_mut(), ui, id, &())
 		})
 	}
 }

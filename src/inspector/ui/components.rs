@@ -153,7 +153,7 @@ pub fn ui_for_entity_components(
 					let mut env = InspectorUi::new(type_registry, &mut ctx);
 					let id = id.with(component_id);
 					let options = &();
-					let changed = env.ui_for_reflect_with_options(
+					let changed = env.ui_for_reflect_mut_with_options(
 						value.bypass_change_detection().as_partial_reflect_mut(),
 						ui,
 						id,
@@ -173,7 +173,7 @@ pub fn ui_for_entity_components(
 					let id = id.with(component_id);
 					let options = &();
 
-					env.ui_for_reflect_readonly_with_options(value.as_partial_reflect(), ui, id, options);
+					env.ui_for_reflect_with_options(value.as_partial_reflect(), ui, id, options);
 					false
 				}
 			}
@@ -276,7 +276,7 @@ pub fn ui_for_entities_with_shared_components(
 					.map(|value| value.bypass_change_detection().as_partial_reflect_mut())
 					.collect();
 
-				let changed = env.ui_for_reflect_many_with_options(
+				let changed = env.ui_for_reflect_mut_multiedit_with_options(
 					type_id,
 					&name,
 					ui,

@@ -10,8 +10,7 @@ use crate::{
 	util::{
 		self,
 		egui::{
-			add_button, down_button, maybe_grid, maybe_grid_label_if, maybe_grid_readonly,
-			maybe_grid_readonly_label_if, remove_button, show_docs, up_button,
+			add_button, down_button, maybe_grid, maybe_grid_label_if, remove_button, show_docs, up_button,
 		},
 		entity, or,
 		world::{ImmutableWorldView, MutableWorldView, RestrictedWorldView},
@@ -184,8 +183,8 @@ where
 
 impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 	/// Draws the inspector UI for the given value in a read-only way.
-	pub fn ui_for_reflect_readonly(&self, value: &dyn PartialReflect, ui: &mut egui::Ui) {
-		self.ui_for_reflect_readonly_with_options(value, ui, egui::Id::NULL, &());
+	pub fn ui_for_reflect(&self, value: &dyn PartialReflect, ui: &mut egui::Ui) {
+		self.ui_for_reflect_with_options(value, ui, egui::Id::NULL, &());
 	}
 
 	/// Draws the inspector UI for the given value with some options in a read-only way.
@@ -193,7 +192,7 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 	/// The options can be [`struct@InspectorOptions`] for structs or enums with nested options for their fields,
 	/// or other structs like [`NumberOptions`](crate::inspector_options::std_options::NumberOptions) which are interpreted
 	/// by leaf types like `f32` or `Vec3`,
-	pub fn ui_for_reflect_readonly_with_options(
+	pub fn ui_for_reflect_with_options(
 		&self,
 		value: &dyn PartialReflect,
 		ui: &mut egui::Ui,
@@ -213,29 +212,29 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		let reason = match value.try_as_reflect() {
 			Some(value) => match get_type_data(self.type_registry, value) {
 				Ok(ui_impl) => {
-					return ui_impl.execute_readonly(value.as_any(), ui, options, id, self);
+					return ui_impl.execute(value.as_any(), ui, options, id, self);
 				}
 				Err(e) => e,
 			},
 			None => TypeDataError::NotFullyReflected,
 		};
 
-		if let Some(()) = self.short_circuit_readonly(value, ui, id, options) {
+		if let Some(()) = self.short_circuit(value, ui, id, options) {
 			return;
 		}
 
 		match value.reflect_ref() {
-			ReflectRef::Struct(value) => self.ui_for_struct_readonly(value, ui, id, options),
-			ReflectRef::TupleStruct(value) => self.ui_for_tuple_struct_readonly(value, ui, id, options),
-			ReflectRef::Tuple(value) => self.ui_for_tuple_readonly(value, ui, id, options),
-			ReflectRef::List(value) => self.ui_for_list_readonly(value, ui, id, options),
-			ReflectRef::Array(value) => self.ui_for_array_readonly(value, ui, id, options),
-			ReflectRef::Map(value) => self.ui_for_reflect_map_readonly(value, ui, id, options),
-			ReflectRef::Enum(value) => self.ui_for_enum_readonly(value, ui, id, options),
+			ReflectRef::Struct(value) => self.ui_for_struct(value, ui, id, options),
+			ReflectRef::TupleStruct(value) => self.ui_for_tuple_struct(value, ui, id, options),
+			ReflectRef::Tuple(value) => self.ui_for_tuple(value, ui, id, options),
+			ReflectRef::List(value) => self.ui_for_list(value, ui, id, options),
+			ReflectRef::Array(value) => self.ui_for_array(value, ui, id, options),
+			ReflectRef::Map(value) => self.ui_for_map(value, ui, id, options),
+			ReflectRef::Enum(value) => self.ui_for_enum(value, ui, id, options),
 			ReflectRef::Opaque(value) => {
 				errors::reflect::reflect_value_no_impl(ui, reason, value.reflect_short_type_path())
 			}
-			ReflectRef::Set(value) => self.ui_for_set_readonly(value, ui, id, options),
+			ReflectRef::Set(value) => self.ui_for_set(value, ui, id, options),
 			#[cfg_attr(not(feature = "validate"), allow(unreachable_patterns))]
 			_ => {
 				ui.label("unsupported");
@@ -246,8 +245,8 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 
 impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 	/// Draws the inspector UI for the given value.
-	pub fn ui_for_reflect(&mut self, value: &mut dyn PartialReflect, ui: &mut egui::Ui) -> bool {
-		self.ui_for_reflect_with_options(value, ui, egui::Id::NULL, &())
+	pub fn ui_for_reflect_mut(&mut self, value: &mut dyn PartialReflect, ui: &mut egui::Ui) -> bool {
+		self.ui_for_reflect_mut_with_options(value, ui, egui::Id::NULL, &())
 	}
 
 	/// Draws the inspector UI for the given value with some options.
@@ -255,7 +254,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 	/// The options can be [`struct@InspectorOptions`] for structs or enums with nested options for their fields,
 	/// or other structs like [`NumberOptions`](crate::inspector_options::std_options::NumberOptions) which are interpreted
 	/// by leaf types like `f32` or `Vec3`,
-	pub fn ui_for_reflect_with_options(
+	pub fn ui_for_reflect_mut_with_options(
 		&mut self,
 		value: &mut dyn PartialReflect,
 		ui: &mut egui::Ui,
@@ -274,30 +273,30 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		let reason = match value.try_as_reflect_mut() {
 			Some(value) => match get_type_data(self.type_registry, value) {
 				Ok(ui_impl) => {
-					return ui_impl.execute(value.as_any_mut(), ui, options, id, self);
+					return ui_impl.execute_mut(value.as_any_mut(), ui, options, id, self);
 				}
 				Err(e) => e,
 			},
 			None => TypeDataError::NotFullyReflected,
 		};
 
-		if let Some(changed) = self.short_circuit(value, ui, id, options) {
+		if let Some(changed) = self.short_circuit_mut(value, ui, id, options) {
 			return changed;
 		}
 
 		match value.reflect_mut() {
-			ReflectMut::Struct(value) => self.ui_for_struct(value, ui, id, options),
-			ReflectMut::TupleStruct(value) => self.ui_for_tuple_struct(value, ui, id, options),
-			ReflectMut::Tuple(value) => self.ui_for_tuple(value, ui, id, options),
-			ReflectMut::List(value) => self.ui_for_list(value, ui, id, options),
-			ReflectMut::Array(value) => self.ui_for_array(value, ui, id, options),
-			ReflectMut::Map(value) => self.ui_for_reflect_map(value, ui, id, options),
-			ReflectMut::Enum(value) => self.ui_for_enum(value, ui, id, options),
+			ReflectMut::Struct(value) => self.ui_for_struct_mut(value, ui, id, options),
+			ReflectMut::TupleStruct(value) => self.ui_for_tuple_struct_mut(value, ui, id, options),
+			ReflectMut::Tuple(value) => self.ui_for_tuple_mut(value, ui, id, options),
+			ReflectMut::List(value) => self.ui_for_list_mut(value, ui, id, options),
+			ReflectMut::Array(value) => self.ui_for_array_mut(value, ui, id, options),
+			ReflectMut::Map(value) => self.ui_for_map_mut(value, ui, id, options),
+			ReflectMut::Enum(value) => self.ui_for_enum_mut(value, ui, id, options),
 			ReflectMut::Opaque(value) => {
 				errors::reflect::reflect_value_no_impl(ui, reason, value.reflect_short_type_path());
 				false
 			}
-			ReflectMut::Set(value) => self.ui_for_set(value, ui, id, options),
+			ReflectMut::Set(value) => self.ui_for_set_mut(value, ui, id, options),
 			#[cfg_attr(not(feature = "validate"), allow(unreachable_patterns))]
 			_ => {
 				ui.label("unsupported");
@@ -306,7 +305,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		}
 	}
 
-	pub fn ui_for_reflect_many(
+	pub fn ui_for_reflect_mut_multiedit(
 		&mut self,
 		type_id: TypeId,
 		name: &str,
@@ -315,10 +314,10 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		values: &mut [&mut dyn PartialReflect],
 		projector: &dyn ProjectorReflect,
 	) -> bool {
-		self.ui_for_reflect_many_with_options(type_id, name, ui, id, &(), values, projector)
+		self.ui_for_reflect_mut_multiedit_with_options(type_id, name, ui, id, &(), values, projector)
 	}
 
-	pub fn ui_for_reflect_many_with_options(
+	pub fn ui_for_reflect_mut_multiedit_with_options(
 		&mut self,
 		type_id: TypeId,
 		name: &str,
@@ -357,17 +356,22 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			return s.execute_many(ui, options, id, self, values, projector);
 		}
 
-		if let Some(changed) = self.short_circuit_many(type_id, ui, id, options, values, projector) {
+		if let Some(changed) = self.short_circuit_multiedit(type_id, ui, id, options, values, projector)
+		{
 			return changed;
 		}
 
 		match info {
-			TypeInfo::Struct(info) => self.ui_for_struct_many(info, ui, id, options, values, projector),
-			TypeInfo::TupleStruct(info) => {
-				self.ui_for_tuple_struct_many(info, ui, id, options, values, projector)
+			TypeInfo::Struct(info) => {
+				self.ui_for_struct_mut_multiedit(info, ui, id, options, values, projector)
 			}
-			TypeInfo::Tuple(info) => self.ui_for_tuple_many(info, ui, id, options, values, projector),
-			TypeInfo::List(info) => self.ui_for_list_many(info, ui, id, options, values, projector),
+			TypeInfo::TupleStruct(info) => {
+				self.ui_for_tuple_struct_mut_multiedit(info, ui, id, options, values, projector)
+			}
+			TypeInfo::Tuple(info) => {
+				self.ui_for_tuple_multiedit(info, ui, id, options, values, projector)
+			}
+			TypeInfo::List(info) => self.ui_for_list_multiedit(info, ui, id, options, values, projector),
 			TypeInfo::Array(info) => {
 				errors::reflect::no_multiedit(ui, &util::pretty_type_name_str(info.type_path()));
 				false
@@ -376,24 +380,20 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				errors::reflect::no_multiedit(ui, &util::pretty_type_name_str(info.type_path()));
 				false
 			}
-			TypeInfo::Enum(info) => self.ui_for_enum_many(info, ui, id, options, values, projector),
+			TypeInfo::Enum(info) => self.ui_for_enum_multiedit(info, ui, id, options, values, projector),
 			TypeInfo::Opaque(info) => {
 				errors::reflect::reflect_value_no_impl(ui, reason, info.type_path());
 				false
 			}
-			TypeInfo::Set(info) => self.ui_for_set_many(info, ui, id, options, values, projector),
+			TypeInfo::Set(info) => {
+				self.ui_for_set_mut_multiedit(info, ui, id, options, values, projector)
+			}
 		}
 	}
 }
 
 impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
-	fn ui_for_struct_readonly(
-		&self,
-		value: &dyn Struct,
-		ui: &mut egui::Ui,
-		id: egui::Id,
-		options: &dyn Any,
-	) {
+	fn ui_for_struct(&self, value: &dyn Struct, ui: &mut egui::Ui, id: egui::Id, options: &dyn Any) {
 		let Some(TypeInfo::Struct(type_info)) = value.get_represented_type_info() else {
 			return;
 		};
@@ -407,7 +407,7 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 				show_docs(self.type_registry, field_info.type_id(), response);
 
 				let field = value.field_at(i).unwrap();
-				self.ui_for_reflect_readonly_with_options(
+				self.ui_for_reflect_with_options(
 					field,
 					ui,
 					id.with(i),
@@ -418,44 +418,20 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		});
 	}
 
-	fn ui_for_tuple_struct_readonly(
+	fn ui_for_tuple_struct(
 		&self,
 		value: &dyn TupleStruct,
 		ui: &mut egui::Ui,
 		id: egui::Id,
 		options: &dyn Any,
 	) {
-		maybe_grid_readonly(value.field_len(), ui, id, |ui, label| {
+		maybe_grid(value.field_len(), ui, id, |ui, label| {
 			for i in 0..value.field_len() {
 				if label {
 					ui.label(i.to_string());
 				}
 				let field = value.field(i).unwrap();
-				self.ui_for_reflect_readonly_with_options(
-					field,
-					ui,
-					id.with(i),
-					inspector_options_struct_field(options, i),
-				);
-				ui.end_row();
-			}
-		})
-	}
-
-	fn ui_for_tuple_readonly(
-		&self,
-		value: &dyn Tuple,
-		ui: &mut egui::Ui,
-		id: egui::Id,
-		options: &dyn Any,
-	) {
-		maybe_grid_readonly(value.field_len(), ui, id, |ui, label| {
-			for i in 0..value.field_len() {
-				if label {
-					ui.label(i.to_string());
-				}
-				let field = value.field(i).unwrap();
-				self.ui_for_reflect_readonly_with_options(
+				self.ui_for_reflect_with_options(
 					field,
 					ui,
 					id.with(i),
@@ -466,20 +442,30 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		});
 	}
 
-	fn ui_for_list_readonly(
-		&self,
-		list: &dyn List,
-		ui: &mut egui::Ui,
-		id: egui::Id,
-		options: &dyn Any,
-	) {
+	fn ui_for_tuple(&self, value: &dyn Tuple, ui: &mut egui::Ui, id: egui::Id, options: &dyn Any) {
+		maybe_grid(value.field_len(), ui, id, |ui, label| {
+			for i in 0..value.field_len() {
+				if label {
+					ui.label(i.to_string());
+				}
+				let field = value.field(i).unwrap();
+				self.ui_for_reflect_with_options(
+					field,
+					ui,
+					id.with(i),
+					inspector_options_struct_field(options, i),
+				);
+				ui.end_row();
+			}
+		});
+	}
+
+	fn ui_for_list(&self, list: &dyn List, ui: &mut egui::Ui, id: egui::Id, options: &dyn Any) {
 		ui.vertical(|ui| {
 			let len = list.len();
 			for i in 0..len {
 				let val = list.get(i).unwrap();
-				ui.horizontal_top(|ui| {
-					self.ui_for_reflect_readonly_with_options(val, ui, id.with(i), options)
-				});
+				ui.horizontal_top(|ui| self.ui_for_reflect_with_options(val, ui, id.with(i), options));
 
 				if i != len - 1 {
 					ui.separator();
@@ -488,30 +474,22 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		});
 	}
 
-	fn ui_for_reflect_map_readonly(
-		&self,
-		map: &dyn Map,
-		ui: &mut egui::Ui,
-		id: egui::Id,
-		_options: &dyn Any,
-	) {
+	fn ui_for_map(&self, map: &dyn Map, ui: &mut egui::Ui, id: egui::Id, _options: &dyn Any) {
 		egui::Grid::new(id).show(ui, |ui| {
 			for (i, (key, value)) in map.iter().enumerate() {
 				let ui_id = id.with(i);
-				self.ui_for_reflect_readonly_with_options(key, ui, ui_id, &());
-				self.ui_for_reflect_readonly_with_options(value, ui, ui_id, &());
+				self.ui_for_reflect_with_options(key, ui, ui_id, &());
+				self.ui_for_reflect_with_options(value, ui, ui_id, &());
 				ui.end_row();
 			}
 		});
 	}
 
-	fn ui_for_set_readonly(&self, set: &dyn Set, ui: &mut egui::Ui, id: egui::Id, options: &dyn Any) {
+	fn ui_for_set(&self, set: &dyn Set, ui: &mut egui::Ui, id: egui::Id, options: &dyn Any) {
 		let len = set.len();
 		ui.vertical(|ui| {
 			for (i, val) in set.iter().enumerate() {
-				ui.horizontal_top(|ui| {
-					self.ui_for_reflect_readonly_with_options(val, ui, id.with(i), options)
-				});
+				ui.horizontal_top(|ui| self.ui_for_reflect_with_options(val, ui, id.with(i), options));
 
 				if i != len - 1 {
 					ui.separator();
@@ -520,19 +498,13 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		});
 	}
 
-	fn ui_for_array_readonly(
-		&self,
-		array: &dyn Array,
-		ui: &mut egui::Ui,
-		id: egui::Id,
-		options: &dyn Any,
-	) {
+	fn ui_for_array(&self, array: &dyn Array, ui: &mut egui::Ui, id: egui::Id, options: &dyn Any) {
 		ui.vertical(|ui| {
 			let len = array.len();
 			for i in 0..len {
 				let val = array.get(i).unwrap();
 				ui.horizontal_top(|ui| {
-					self.ui_for_reflect_readonly_with_options(val, ui, id.with(i), options);
+					self.ui_for_reflect_with_options(val, ui, id.with(i), options);
 				});
 
 				if i != len - 1 {
@@ -542,13 +514,7 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		});
 	}
 
-	fn ui_for_enum_readonly(
-		&self,
-		value: &dyn Enum,
-		ui: &mut egui::Ui,
-		id: egui::Id,
-		options: &dyn Any,
-	) {
+	fn ui_for_enum(&self, value: &dyn Enum, ui: &mut egui::Ui, id: egui::Id, options: &dyn Any) {
 		ui.vertical(|ui| {
 			let active_variant = value.variant_name();
 			ui.add_enabled_ui(false, |ui| {
@@ -558,7 +524,7 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 			});
 
 			let always_show_label = matches!(value.variant_type(), VariantType::Struct);
-			maybe_grid_readonly_label_if(value.field_len(), ui, id, always_show_label, |ui, label| {
+			maybe_grid_label_if(value.field_len(), ui, id, always_show_label, |ui, label| {
 				for i in 0..value.field_len() {
 					if label {
 						if let Some(name) = value.name_at(i) {
@@ -568,7 +534,7 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 						}
 					}
 					let field_value = value.field_at(i).expect("invalid reflect impl: field len");
-					self.ui_for_reflect_readonly_with_options(
+					self.ui_for_reflect_with_options(
 						field_value,
 						ui,
 						id.with(i),
@@ -580,7 +546,7 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 		});
 	}
 
-	pub fn short_circuit_readonly(
+	pub fn short_circuit(
 		&self,
 		value: &dyn PartialReflect,
 		ui: &mut egui::Ui,
@@ -639,14 +605,14 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 			}
 		}
 
-		self.ui_for_reflect_readonly_with_options(asset_value, ui, id.with("asset"), options);
+		self.ui_for_reflect_with_options(asset_value, ui, id.with("asset"), options);
 
 		Some(())
 	}
 }
 
 impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
-	fn ui_for_struct(
+	fn ui_for_struct_mut(
 		&mut self,
 		value: &mut dyn Struct,
 		ui: &mut egui::Ui,
@@ -667,7 +633,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				show_docs(self.type_registry, field_info.type_id(), response);
 
 				let field = value.field_at_mut(i).unwrap();
-				changed |= self.ui_for_reflect_with_options(
+				changed |= self.ui_for_reflect_mut_with_options(
 					field,
 					ui,
 					id.with(i),
@@ -679,7 +645,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed
 	}
 
-	fn ui_for_struct_many(
+	fn ui_for_struct_mut_multiedit(
 		&mut self,
 		info: &StructInfo,
 		ui: &mut egui::Ui,
@@ -695,7 +661,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 
 				show_docs(self.type_registry, field.type_id(), response);
 
-				changed |= self.ui_for_reflect_many_with_options(
+				changed |= self.ui_for_reflect_mut_multiedit_with_options(
 					field.type_id(),
 					field.type_path(),
 					ui,
@@ -713,21 +679,21 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed
 	}
 
-	fn ui_for_tuple_struct(
+	fn ui_for_tuple_struct_mut(
 		&mut self,
 		value: &mut dyn TupleStruct,
 		ui: &mut egui::Ui,
 		id: egui::Id,
 		options: &dyn Any,
 	) -> bool {
-		maybe_grid(value.field_len(), ui, id, |ui, label| {
+		let Some(response) = maybe_grid(value.field_len(), ui, id, |ui, label| {
 			(0..value.field_len())
 				.map(|i| {
 					if label {
 						ui.label(i.to_string());
 					}
 					let field = value.field_mut(i).unwrap();
-					let changed = self.ui_for_reflect_with_options(
+					let changed = self.ui_for_reflect_mut_with_options(
 						field,
 						ui,
 						id.with(i),
@@ -737,10 +703,14 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					changed
 				})
 				.fold(false, or)
-		})
+		}) else {
+			return false;
+		};
+
+		response.inner
 	}
 
-	fn ui_for_tuple_struct_many(
+	fn ui_for_tuple_struct_mut_multiedit(
 		&mut self,
 		info: &TupleStructInfo,
 		ui: &mut egui::Ui,
@@ -749,7 +719,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		values: &mut [&mut dyn PartialReflect],
 		projector: impl ProjectorReflect,
 	) -> bool {
-		maybe_grid(info.field_len(), ui, id, |ui, label| {
+		let Some(response) = maybe_grid(info.field_len(), ui, id, |ui, label| {
 			info
 				.iter()
 				.enumerate()
@@ -757,7 +727,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					if label {
 						ui.label(i.to_string());
 					}
-					let changed = self.ui_for_reflect_many_with_options(
+					let changed = self.ui_for_reflect_mut_multiedit_with_options(
 						field.type_id(),
 						field.type_path(),
 						ui,
@@ -773,24 +743,28 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					changed
 				})
 				.fold(false, or)
-		})
+		}) else {
+			return false;
+		};
+
+		response.inner
 	}
 
-	fn ui_for_tuple(
+	fn ui_for_tuple_mut(
 		&mut self,
 		value: &mut dyn Tuple,
 		ui: &mut egui::Ui,
 		id: egui::Id,
 		options: &dyn Any,
 	) -> bool {
-		maybe_grid(value.field_len(), ui, id, |ui, label| {
+		let Some(response) = maybe_grid(value.field_len(), ui, id, |ui, label| {
 			(0..value.field_len())
 				.map(|i| {
 					if label {
 						ui.label(i.to_string());
 					}
 					let field = value.field_mut(i).unwrap();
-					let changed = self.ui_for_reflect_with_options(
+					let changed = self.ui_for_reflect_mut_with_options(
 						field,
 						ui,
 						id.with(i),
@@ -800,10 +774,14 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					changed
 				})
 				.fold(false, or)
-		})
+		}) else {
+			return false;
+		};
+
+		response.inner
 	}
 
-	fn ui_for_tuple_many(
+	fn ui_for_tuple_multiedit(
 		&mut self,
 		info: &TupleInfo,
 		ui: &mut egui::Ui,
@@ -812,7 +790,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		values: &mut [&mut dyn PartialReflect],
 		projector: impl ProjectorReflect,
 	) -> bool {
-		maybe_grid(info.field_len(), ui, id, |ui, label| {
+		let Some(response) = maybe_grid(info.field_len(), ui, id, |ui, label| {
 			info
 				.iter()
 				.enumerate()
@@ -820,7 +798,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					if label {
 						ui.label(i.to_string());
 					}
-					let changed = self.ui_for_reflect_many_with_options(
+					let changed = self.ui_for_reflect_mut_multiedit_with_options(
 						field.type_id(),
 						field.type_path(),
 						ui,
@@ -836,10 +814,14 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					changed
 				})
 				.fold(false, or)
-		})
+		}) else {
+			return false;
+		};
+
+		response.inner
 	}
 
-	fn ui_for_list(
+	fn ui_for_list_mut(
 		&mut self,
 		list: &mut dyn List,
 		ui: &mut egui::Ui,
@@ -860,7 +842,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					ui.label(i.to_string());
 					let val = list.get_mut(i).unwrap();
 					ui.horizontal_top(|ui| {
-						changed |= self.ui_for_reflect_with_options(val, ui, id.with(i), options);
+						changed |= self.ui_for_reflect_mut_with_options(val, ui, id.with(i), options);
 					});
 					ui.end_row();
 
@@ -897,7 +879,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed
 	}
 
-	fn ui_for_list_many(
+	fn ui_for_list_multiedit(
 		&mut self,
 		info: &ListInfo,
 		ui: &mut egui::Ui,
@@ -943,7 +925,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				egui::Grid::new((id, i)).show(ui, |ui| {
 					ui.label(i.to_string());
 					ui.horizontal_top(|ui| {
-						changed |= self.ui_for_reflect_many_with_options(
+						changed |= self.ui_for_reflect_mut_multiedit_with_options(
 							info.item_ty().id(),
 							info.type_path(),
 							ui,
@@ -987,7 +969,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed
 	}
 
-	fn ui_for_reflect_map(
+	fn ui_for_map_mut(
 		&mut self,
 		map: &mut dyn Map,
 		ui: &mut egui::Ui,
@@ -1011,10 +993,10 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
 					let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
 					let env = InspectorUi::new(self.type_registry, &ctx);
-					env.ui_for_reflect_readonly_with_options(key, ui, ui_id, &());
+					env.ui_for_reflect_with_options(key, ui, ui_id, &());
 				}
 
-				changed |= self.ui_for_reflect_with_options(value, ui, ui_id, &());
+				changed |= self.ui_for_reflect_mut_with_options(value, ui, ui_id, &());
 				let delete = remove_button(ui).on_hover_text("Remove element").clicked();
 				ui.end_row();
 				!delete
@@ -1050,8 +1032,8 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					Some(MapDraftElement { mut key, mut value }) => {
 						ui.end_row();
 						// Show controls for editing our draft element.
-						let key_changed = self.ui_for_reflect_with_options(key.as_mut(), ui, id, &());
-						let value_changed = self.ui_for_reflect_with_options(value.as_mut(), ui, id, &());
+						let key_changed = self.ui_for_reflect_mut_with_options(key.as_mut(), ui, id, &());
+						let value_changed = self.ui_for_reflect_mut_with_options(value.as_mut(), ui, id, &());
 
 						// If the clone changed, update the data in UI state.
 						if key_changed || value_changed {
@@ -1086,7 +1068,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed
 	}
 
-	fn ui_for_set(
+	fn ui_for_set_mut(
 		&mut self,
 		set: &mut dyn Set,
 		ui: &mut egui::Ui,
@@ -1111,7 +1093,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 						let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
 						let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
 						let env = InspectorUi::new(self.type_registry, &ctx);
-						env.ui_for_reflect_readonly_with_options(val, ui, id.with(i), options);
+						env.ui_for_reflect_with_options(val, ui, id.with(i), options);
 					});
 					ui.horizontal_top(|ui| {
 						if remove_button(ui).on_hover_text("Remove element").clicked() {
@@ -1193,7 +1175,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					ui.end_row();
 					// Show controls for editing our draft element.
 					// FIXME: is the id passed here correct?
-					let value_changed = self.ui_for_reflect_with_options(v.as_mut(), ui, id, options);
+					let value_changed = self.ui_for_reflect_mut_with_options(v.as_mut(), ui, id, options);
 
 					// If the clone changed, update the data in UI state.
 					if value_changed {
@@ -1225,7 +1207,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		op
 	}
 
-	fn ui_for_set_many(
+	fn ui_for_set_mut_multiedit(
 		&mut self,
 		info: &SetInfo,
 		ui: &mut egui::Ui,
@@ -1289,7 +1271,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 							let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
 							let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
 							let env = InspectorUi::new(self.type_registry, &ctx);
-							env.ui_for_reflect_readonly_with_options(
+							env.ui_for_reflect_with_options(
 								value_to_check.borrow(),
 								ui,
 								// FIXME: is the id passed here correct?
@@ -1339,7 +1321,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed
 	}
 
-	fn ui_for_array(
+	fn ui_for_array_mut(
 		&mut self,
 		array: &mut dyn Array,
 		ui: &mut egui::Ui,
@@ -1353,7 +1335,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			for i in 0..len {
 				let val = array.get_mut(i).unwrap();
 				ui.horizontal_top(|ui| {
-					changed |= self.ui_for_reflect_with_options(val, ui, id.with(i), options);
+					changed |= self.ui_for_reflect_mut_with_options(val, ui, id.with(i), options);
 				});
 
 				if i != len - 1 {
@@ -1365,7 +1347,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed
 	}
 
-	fn ui_for_enum(
+	fn ui_for_enum_mut(
 		&mut self,
 		value: &mut dyn Enum,
 		ui: &mut egui::Ui,
@@ -1384,8 +1366,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		let mut changed = false;
 
 		ui.vertical(|ui| {
-			let changed_variant =
-				self.ui_for_enum_variant_select(id, ui, value.variant_index(), type_info);
+			let changed_variant = self.ui_for_enum_variant_mut(id, ui, value.variant_index(), type_info);
 			if let Some((_new_variant, dynamic_enum)) = changed_variant {
 				changed = true;
 				value.apply(&dynamic_enum);
@@ -1408,7 +1389,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 						let field_value = value
 							.field_at_mut(i)
 							.expect("invalid reflect impl: field len");
-						let changed = self.ui_for_reflect_with_options(
+						let changed = self.ui_for_reflect_mut_with_options(
 							field_value,
 							ui,
 							id.with(i),
@@ -1418,13 +1399,15 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 						changed
 					})
 					.fold(false, or)
-			});
+			})
+			.map(|r| r.inner)
+			.unwrap_or(false);
 		});
 
 		changed
 	}
 
-	fn ui_for_enum_many(
+	fn ui_for_enum_multiedit(
 		&mut self,
 		info: &EnumInfo,
 		ui: &mut egui::Ui,
@@ -1449,7 +1432,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			let mut variant = info.variant_at(variant_index).unwrap();
 
 			ui.vertical(|ui| {
-				let variant_changed = self.ui_for_enum_variant_select(id, ui, variant_index, info);
+				let variant_changed = self.ui_for_enum_variant_mut(id, ui, variant_index, info);
 				if let Some((new_variant_idx, dynamic_enum)) = variant_changed {
 					changed = true;
 					variant = info.variant_at(new_variant_idx).unwrap();
@@ -1481,7 +1464,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 							})
 							.collect();
 
-						self.ui_for_reflect_many_with_options(
+						self.ui_for_reflect_mut_multiedit_with_options(
 							field_type_id,
 							field_type_name,
 							ui,
@@ -1525,7 +1508,9 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 							.fold(false, or),
 						VariantInfo::Unit(_) => false,
 					}
-				});
+				})
+				.map(|r| r.inner)
+				.unwrap_or(false);
 			});
 		} else {
 			ui.label("enums have different selected variants, cannot multiedit");
@@ -1534,7 +1519,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed
 	}
 
-	fn ui_for_enum_variant_select(
+	fn ui_for_enum_variant_mut(
 		&mut self,
 		id: egui::Id,
 		ui: &mut egui::Ui,
@@ -1567,16 +1552,6 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 								});
 							}
 
-							/*let res = variant_label_response.on_hover_ui(|ui| {
-									if !unconstructable_variants.is_empty() {
-											errors::unconstructable_variants(
-													ui,
-													info.type_name(),
-													&unconstructable_variants,
-											);
-									}
-							});*/
-
 							if variant_label_response.clicked()
 								&& let Ok(dynamic_enum) = self.construct_default_variant(variant, ui)
 							{
@@ -1592,7 +1567,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		changed_variant
 	}
 
-	pub fn short_circuit(
+	fn short_circuit_mut(
 		&mut self,
 		value: &mut dyn PartialReflect,
 		ui: &mut egui::Ui,
@@ -1648,7 +1623,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		let mut ctx = MutableContext::copy_from(&world, queue);
 		let mut restricted_env = InspectorUi::new(self.type_registry, &mut ctx);
 
-		Some(restricted_env.ui_for_reflect_with_options(
+		Some(restricted_env.ui_for_reflect_mut_with_options(
 			asset_value.as_partial_reflect_mut(),
 			ui,
 			id.with("asset"),
@@ -1656,7 +1631,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		))
 	}
 
-	pub fn short_circuit_many(
+	fn short_circuit_multiedit(
 		&mut self,
 		type_id: TypeId,
 		ui: &mut egui::Ui,
@@ -1726,7 +1701,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		let mut ctx = MutableContext::copy_from(&world, queue);
 		let mut restricted_env = InspectorUi::new(self.type_registry, &mut ctx);
 
-		Some(restricted_env.ui_for_reflect_many_with_options(
+		Some(restricted_env.ui_for_reflect_mut_multiedit_with_options(
 			reflect_handle.asset_type_id(),
 			"",
 			ui,
@@ -1790,31 +1765,7 @@ impl InspectorUiVTable {
 		}
 	}
 
-	/// Create a new [`InspectorEguiImpl`] from functions displaying a type
-	pub fn new_raw(
-		fn_readonly: InspectorUiFn,
-		fn_mut: InspectorUiFnMut,
-		fn_many: InspectorUiFnMany,
-	) -> Self {
-		InspectorUiVTable {
-			ui: fn_readonly,
-			ui_mut: fn_mut,
-			ui_mut_multiedit: fn_many,
-		}
-	}
-
 	pub fn execute<'a, 'c: 'a>(
-		&'a self,
-		value: &mut dyn Any,
-		ui: &mut egui::Ui,
-		options: &dyn Any,
-		id: egui::Id,
-		env: &mut InspectorUi<'_, MutableContext<'c>>,
-	) -> bool {
-		(self.ui_mut)(value, ui, options, id, env)
-	}
-
-	pub fn execute_readonly<'a, 'c: 'a>(
 		&'a self,
 		value: &dyn Any,
 		ui: &mut egui::Ui,
@@ -1823,6 +1774,17 @@ impl InspectorUiVTable {
 		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		(self.ui)(value, ui, options, id, env)
+	}
+
+	pub fn execute_mut<'a, 'c: 'a>(
+		&'a self,
+		value: &mut dyn Any,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool {
+		(self.ui_mut)(value, ui, options, id, env)
 	}
 
 	pub fn execute_many<'a, 'c: 'a, 'e>(

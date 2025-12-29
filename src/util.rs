@@ -29,12 +29,6 @@ pub fn pretty_type_name_str(val: &str) -> String {
 	format!("{:?}", disqualified::ShortName(val))
 }
 
-pub fn type_path_of(type_registry: &TypeRegistry, type_id: TypeId) -> Option<&'static str> {
-	type_registry
-		.get_type_info(type_id)
-		.map(|info| info.type_path())
-}
-
 // Replace this when || becomes an operator
 pub fn or(a: bool, b: bool) -> bool {
 	a || b

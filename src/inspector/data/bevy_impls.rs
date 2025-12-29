@@ -506,9 +506,9 @@ impl InspectorPrimitive for GizmoConfigStore {
 			CollapsingHeader::new(name)
 				.id_salt(id.with(ty))
 				.show(ui, |ui| {
-					env.ui_for_reflect(group, ui);
+					env.ui_for_reflect_mut(group, ui);
 					ui.separator();
-					env.ui_for_reflect_with_options(value, ui, egui::Id::new("data"), &());
+					env.ui_for_reflect_mut_with_options(value, ui, egui::Id::new("data"), &());
 				});
 		}
 
@@ -533,9 +533,9 @@ impl InspectorPrimitive for GizmoConfigStore {
 			CollapsingHeader::new(name)
 				.id_salt(id.with(ty))
 				.show(ui, |ui| {
-					env.ui_for_reflect_readonly(group, ui);
+					env.ui_for_reflect(group, ui);
 					ui.separator();
-					env.ui_for_reflect_readonly_with_options(value, ui, egui::Id::new("data"), &());
+					env.ui_for_reflect_with_options(value, ui, egui::Id::new("data"), &());
 				});
 		}
 	}

@@ -18,20 +18,6 @@ macro_rules! impl_many_for_numerics {
   ($($ty:ty),*) => {
     $(
       impl InspectorPrimitiveMultiedit for $ty {
-        fn ui_mut<'c>(
-          &mut self,
-          ui: &mut egui::Ui,
-          options: &dyn Any,
-          _: egui::Id,
-          _: &mut InspectorUi<MutableContext>,
-        ) -> bool {
-          let options = options
-            .downcast_ref::<NumberOptions<Self>>()
-            .cloned()
-            .unwrap_or_default();
-          display_number(self, &options, ui, 0.1)
-        }
-
         fn ui(
           &self,
           ui: &mut egui::Ui,
@@ -59,6 +45,21 @@ macro_rules! impl_many_for_numerics {
           );
         }
 
+
+        fn ui_mut<'c>(
+          &mut self,
+          ui: &mut egui::Ui,
+          options: &dyn Any,
+          _: egui::Id,
+          _: &mut InspectorUi<MutableContext>,
+        ) -> bool {
+          let options = options
+            .downcast_ref::<NumberOptions<Self>>()
+            .cloned()
+            .unwrap_or_default();
+          display_number(self, &options, ui, 0.1)
+        }
+
         fn ui_mut_multiedit<'s, 'c>(
           ui: &mut egui::Ui,
           options: &dyn Any,
@@ -79,21 +80,6 @@ macro_rules! impl_many_for_numerics {
 impl_many_for_numerics!(f32, f64, i8, u8, i16, u16, i32, u32, i64, u64, isize, usize);
 
 pub fn number_ui<T: egui::emath::Numeric>(
-	value: &mut dyn Any,
-	ui: &mut egui::Ui,
-	options: &dyn Any,
-	_: egui::Id,
-	_: &mut InspectorUi<MutableContext>,
-) -> bool {
-	let value = value.downcast_mut::<T>().unwrap();
-	let options = options
-		.downcast_ref::<NumberOptions<T>>()
-		.cloned()
-		.unwrap_or_default();
-	display_number(value, &options, ui, 0.1)
-}
-
-pub fn number_ui_readonly<T: egui::emath::Numeric>(
 	value: &dyn Any,
 	ui: &mut egui::Ui,
 	options: &dyn Any,
@@ -119,6 +105,21 @@ pub fn number_ui_readonly<T: egui::emath::Numeric>(
 		.truncate()
 		.sense(egui::Sense::hover()),
 	);
+}
+
+pub fn number_ui_mut<T: egui::emath::Numeric>(
+	value: &mut dyn Any,
+	ui: &mut egui::Ui,
+	options: &dyn Any,
+	_: egui::Id,
+	_: &mut InspectorUi<MutableContext>,
+) -> bool {
+	let value = value.downcast_mut::<T>().unwrap();
+	let options = options
+		.downcast_ref::<NumberOptions<T>>()
+		.cloned()
+		.unwrap_or_default();
+	display_number(value, &options, ui, 0.1)
 }
 
 fn display_number<T: egui::emath::Numeric>(
@@ -290,7 +291,7 @@ impl InspectorPrimitive for Duration {
 			..Default::default()
 		};
 
-		let changed = env.ui_for_reflect_with_options(&mut seconds, ui, id, &options);
+		let changed = env.ui_for_reflect_mut_with_options(&mut seconds, ui, id, &options);
 		if changed {
 			*self = Duration::from_secs_f64(seconds);
 		}
@@ -310,7 +311,7 @@ impl InspectorPrimitive for Duration {
 			suffix: "s".to_string(),
 			..Default::default()
 		};
-		env.ui_for_reflect_readonly_with_options(&seconds, ui, id, &options);
+		env.ui_for_reflect_with_options(&seconds, ui, id, &options);
 	}
 }
 
@@ -356,7 +357,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		let std::ops::Range { start, end } = self;
-		display_range::<T>(ui, options, id, env, "..", Some(start), Some(end))
+		display_range_mut::<T>(ui, options, id, env, "..", Some(start), Some(end))
 	}
 
 	fn ui<'c>(
@@ -367,11 +368,37 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		let std::ops::Range { start, end } = self;
-		display_range_readonly::<T>(ui, options, id, env, "..", Some(start), Some(end));
+		display_range::<T>(ui, options, id, env, "..", Some(start), Some(end));
 	}
 }
 
 fn display_range<'c, T: egui::emath::Numeric + InspectorOptionsType>(
+	ui: &mut egui::Ui,
+	options: &dyn Any,
+	id: egui::Id,
+	env: &InspectorUi<'_, ImmutableContext<'c>>,
+
+	symbol: &'static str,
+	start: Option<&T>,
+	end: Option<&T>,
+) {
+	let options = options.downcast_ref::<RangeOptions<T>>();
+
+	let start_options = options.map(|a| &a.start as &dyn Any).unwrap_or(&());
+	let end_options = options.as_ref().map(|a| &a.end as &dyn Any).unwrap_or(&());
+
+	ui.horizontal(|ui| {
+		if let Some(start) = start {
+			number_ui::<T>(start, ui, start_options, id, env);
+		}
+		ui.label(symbol);
+		if let Some(end) = end {
+			number_ui::<T>(end, ui, end_options, id, env);
+		}
+	});
+}
+
+fn display_range_mut<'c, T: egui::emath::Numeric + InspectorOptionsType>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
@@ -390,41 +417,15 @@ fn display_range<'c, T: egui::emath::Numeric + InspectorOptionsType>(
 	let mut changed = false;
 	ui.horizontal(|ui| {
 		if let Some(start) = start {
-			changed |= number_ui::<T>(start, ui, start_options, id, env);
+			changed |= number_ui_mut::<T>(start, ui, start_options, id, env);
 		}
 		ui.label(symbol);
 		if let Some(end) = end {
-			changed |= number_ui::<T>(end, ui, end_options, id, env);
+			changed |= number_ui_mut::<T>(end, ui, end_options, id, env);
 		}
 	});
 
 	changed
-}
-
-fn display_range_readonly<'c, T: egui::emath::Numeric + InspectorOptionsType>(
-	ui: &mut egui::Ui,
-	options: &dyn Any,
-	id: egui::Id,
-	env: &InspectorUi<'_, ImmutableContext<'c>>,
-
-	symbol: &'static str,
-	start: Option<&T>,
-	end: Option<&T>,
-) {
-	let options = options.downcast_ref::<RangeOptions<T>>();
-
-	let start_options = options.map(|a| &a.start as &dyn Any).unwrap_or(&());
-	let end_options = options.as_ref().map(|a| &a.end as &dyn Any).unwrap_or(&());
-
-	ui.horizontal(|ui| {
-		if let Some(start) = start {
-			number_ui_readonly::<T>(start, ui, start_options, id, env);
-		}
-		ui.label(symbol);
-		if let Some(end) = end {
-			number_ui_readonly::<T>(end, ui, end_options, id, env);
-		}
-	});
 }
 
 impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> InspectorPrimitive
@@ -440,7 +441,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		let mut start = *self.start();
 		let mut end = *self.end();
 
-		let changed = display_range::<T>(
+		let changed = display_range_mut::<T>(
 			ui,
 			options,
 			id,
@@ -464,7 +465,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		id: egui::Id,
 		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
-		display_range_readonly::<T>(
+		display_range::<T>(
 			ui,
 			options,
 			id,

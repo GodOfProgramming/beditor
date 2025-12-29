@@ -74,18 +74,7 @@ impl Plugin for EditorInspectorPlugin {
 }
 
 pub trait WorldExtensions: BorrowMut<World> {
-	fn ui_for_value(&mut self, ui: &mut egui::Ui, value: &mut dyn PartialReflect) -> bool {
-		self.borrow_mut().queue(|world, queue| {
-			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
-			let type_registry = type_registry.read();
-
-			let mut ctx = MutableContext::new(world, queue);
-			let mut env = InspectorUi::new(&type_registry, &mut ctx);
-			env.ui_for_reflect(value, ui)
-		})
-	}
-
-	fn ui_for_value_readonly(&mut self, ui: &mut egui::Ui, value: &dyn PartialReflect) {
+	fn ui_for_value(&mut self, ui: &mut egui::Ui, value: &dyn PartialReflect) {
 		let world = self.borrow_mut();
 		world.queue(|world, queue| {
 			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
@@ -95,6 +84,17 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let env = InspectorUi::new(&type_registry, &ctx);
 			env.ui_for_reflect_readonly(value, ui);
 		});
+	}
+
+	fn ui_for_value_mut(&mut self, ui: &mut egui::Ui, value: &mut dyn PartialReflect) -> bool {
+		self.borrow_mut().queue(|world, queue| {
+			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
+			let type_registry = type_registry.read();
+
+			let mut ctx = MutableContext::new(world, queue);
+			let mut env = InspectorUi::new(&type_registry, &mut ctx);
+			env.ui_for_reflect(value, ui)
+		})
 	}
 
 	fn hierarchy_ui<QF: QueryFilter, P>(

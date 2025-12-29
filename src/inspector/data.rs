@@ -400,147 +400,147 @@ fn register_std_impls(type_registry: &mut TypeRegistry) {
 fn register_glam_impls(type_registry: &mut TypeRegistry) {
 	add_raw::<Vec2>(
 		type_registry,
+		glam_impls::vec2_ui_mut,
 		glam_impls::vec2_ui,
-		glam_impls::vec2_ui_readonly,
 		glam_impls::vec2_ui_many,
 	);
 	add_raw::<Vec3>(
 		type_registry,
+		glam_impls::vec3_ui_mut,
 		glam_impls::vec3_ui,
-		glam_impls::vec3_ui_readonly,
 		glam_impls::vec3_ui_many,
 	);
 	add_raw::<Vec3A>(
 		type_registry,
+		glam_impls::vec3a_ui_mut,
 		glam_impls::vec3a_ui,
-		glam_impls::vec3a_ui_readonly,
 		glam_impls::vec3a_ui_many,
 	);
 	add_raw::<Vec4>(
 		type_registry,
+		glam_impls::vec4_ui_mut,
 		glam_impls::vec4_ui,
-		glam_impls::vec4_ui_readonly,
 		glam_impls::vec4_ui_many,
 	);
 	add_raw::<UVec2>(
 		type_registry,
+		glam_impls::uvec2_ui_mut,
 		glam_impls::uvec2_ui,
-		glam_impls::uvec2_ui_readonly,
 		glam_impls::uvec2_ui_many,
 	);
 	add_raw::<UVec3>(
 		type_registry,
+		glam_impls::uvec3_ui_mut,
 		glam_impls::uvec3_ui,
-		glam_impls::uvec3_ui_readonly,
 		glam_impls::uvec3_ui_many,
 	);
 	add_raw::<UVec4>(
 		type_registry,
+		glam_impls::uvec4_ui_mut,
 		glam_impls::uvec4_ui,
-		glam_impls::uvec4_ui_readonly,
 		glam_impls::uvec4_ui_many,
 	);
 	add_raw::<IVec2>(
 		type_registry,
+		glam_impls::ivec2_ui_mut,
 		glam_impls::ivec2_ui,
-		glam_impls::ivec2_ui_readonly,
 		glam_impls::ivec2_ui_many,
 	);
 	add_raw::<IVec3>(
 		type_registry,
+		glam_impls::ivec3_ui_mut,
 		glam_impls::ivec3_ui,
-		glam_impls::ivec3_ui_readonly,
 		glam_impls::ivec3_ui_many,
 	);
 	add_raw::<IVec4>(
 		type_registry,
+		glam_impls::ivec4_ui_mut,
 		glam_impls::ivec4_ui,
-		glam_impls::ivec4_ui_readonly,
 		glam_impls::ivec4_ui_many,
 	);
 	add_raw::<DVec2>(
 		type_registry,
+		glam_impls::dvec2_ui_mut,
 		glam_impls::dvec2_ui,
-		glam_impls::dvec2_ui_readonly,
 		glam_impls::dvec2_ui_many,
 	);
 	add_raw::<DVec3>(
 		type_registry,
+		glam_impls::dvec3_ui_mut,
 		glam_impls::dvec3_ui,
-		glam_impls::dvec3_ui_readonly,
 		glam_impls::dvec3_ui_many,
 	);
 	add_raw::<DVec4>(
 		type_registry,
+		glam_impls::dvec4_ui_mut,
 		glam_impls::dvec4_ui,
-		glam_impls::dvec4_ui_readonly,
 		glam_impls::dvec4_ui_many,
 	);
 	add_raw::<BVec2>(
 		type_registry,
+		glam_impls::bvec2_ui_mut,
 		glam_impls::bvec2_ui,
-		glam_impls::bvec2_ui_readonly,
 		many_unimplemented::<BVec2>,
 	);
 	add_raw::<BVec3>(
 		type_registry,
+		glam_impls::bvec3_ui_mut,
 		glam_impls::bvec3_ui,
-		glam_impls::bvec3_ui_readonly,
 		many_unimplemented::<BVec3>,
 	);
 	add_raw::<BVec4>(
 		type_registry,
+		glam_impls::bvec4_ui_mut,
 		glam_impls::bvec4_ui,
-		glam_impls::bvec4_ui_readonly,
 		many_unimplemented::<BVec4>,
 	);
 	add_raw::<Mat2>(
 		type_registry,
+		glam_impls::mat2_ui_mut,
 		glam_impls::mat2_ui,
-		glam_impls::mat2_ui_readonly,
 		many_unimplemented::<Mat2>,
 	);
 	add_raw::<Mat3>(
 		type_registry,
+		glam_impls::mat3_ui_mut,
 		glam_impls::mat3_ui,
-		glam_impls::mat3_ui_readonly,
 		many_unimplemented::<Mat3>,
 	);
 	add_raw::<Mat3A>(
 		type_registry,
+		glam_impls::mat3a_ui_mut,
 		glam_impls::mat3a_ui,
-		glam_impls::mat3a_ui_readonly,
 		many_unimplemented::<Mat3A>,
 	);
 	add_raw::<Mat4>(
 		type_registry,
+		glam_impls::mat4_ui_mut,
 		glam_impls::mat4_ui,
-		glam_impls::mat4_ui_readonly,
 		many_unimplemented::<Mat4>,
 	);
 	add_raw::<DMat2>(
 		type_registry,
+		glam_impls::dmat2_ui_mut,
 		glam_impls::dmat2_ui,
-		glam_impls::dmat2_ui_readonly,
 		many_unimplemented::<DMat2>,
 	);
 	add_raw::<DMat3>(
 		type_registry,
+		glam_impls::dmat3_ui_mut,
 		glam_impls::dmat3_ui,
-		glam_impls::dmat3_ui_readonly,
 		many_unimplemented::<DMat3>,
 	);
 	add_raw::<DMat4>(
 		type_registry,
+		glam_impls::dmat4_ui_mut,
 		glam_impls::dmat4_ui,
-		glam_impls::dmat4_ui_readonly,
 		many_unimplemented::<DMat4>,
 	);
 
 	add_raw::<Quat>(
 		type_registry,
+		glam_impls::quat::quat_ui_mut,
 		glam_impls::quat::quat_ui,
-		glam_impls::quat::quat_ui_readonly,
 		glam_impls::quat::quat_ui_many,
 	);
 }
@@ -565,16 +565,16 @@ fn register_bevy_impls(type_registry: &mut TypeRegistry) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-type InspectorEguiImplFn = for<'c> fn(
+type InspectorEguiImplFn =
+	for<'c> fn(&dyn Any, &mut egui::Ui, &dyn Any, egui::Id, &InspectorUi<'_, ImmutableContext<'c>>);
+
+type InspectorEguiImplFnMut = for<'c> fn(
 	&mut dyn Any,
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
 	&mut InspectorUi<'_, MutableContext<'c>>,
 ) -> bool;
-
-type InspectorEguiImplFnReadonly =
-	for<'c> fn(&dyn Any, &mut egui::Ui, &dyn Any, egui::Id, &InspectorUi<'_, ImmutableContext<'c>>);
 
 type InspectorEguiImplFnMany = for<'c, 'a> fn(
 	&mut egui::Ui,
@@ -587,20 +587,20 @@ type InspectorEguiImplFnMany = for<'c, 'a> fn(
 
 pub trait InspectorPrimitive: Reflect {
 	fn ui<'c>(
-		&mut self,
-		ui: &mut egui::Ui,
-		options: &dyn Any,
-		id: egui::Id,
-		env: &mut InspectorUi<'_, MutableContext<'c>>,
-	) -> bool;
-
-	fn ui_readonly<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		id: egui::Id,
 		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	);
+
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool;
 }
 
 fn add<T: InspectorPrimitive + TypePath>(type_registry: &mut TypeRegistry) {
@@ -619,8 +619,8 @@ fn add_of_with_many<T: InspectorPrimitive>(
 
 fn add_raw<T: 'static>(
 	type_registry: &mut TypeRegistry,
-	fn_mut: InspectorEguiImplFn,
-	fn_readonly: InspectorEguiImplFnReadonly,
+	fn_mut: InspectorEguiImplFnMut,
+	fn_readonly: InspectorEguiImplFn,
 	fn_many: InspectorEguiImplFnMany,
 ) {
 	type_registry

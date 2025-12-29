@@ -104,7 +104,7 @@ impl EditorUiBundle for TypeEditorUi {
 
 		ui.separator();
 
-		world.ui_for_value(ui, &mut **value);
+		world.ui_for_value_mut(ui, &mut **value);
 
 		if let Some(msg) = message {
 			world.write_message(msg);

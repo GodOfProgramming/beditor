@@ -20,7 +20,7 @@ use egui::{Widget, load::SizedTexture};
 use std::any::Any;
 
 impl InspectorPrimitive for uuid::Uuid {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -31,7 +31,7 @@ impl InspectorPrimitive for uuid::Uuid {
 		false
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -43,7 +43,7 @@ impl InspectorPrimitive for uuid::Uuid {
 }
 
 impl InspectorPrimitive for Entity {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -96,7 +96,7 @@ impl InspectorPrimitive for Entity {
 		false
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -108,7 +108,7 @@ impl InspectorPrimitive for Entity {
 }
 
 impl InspectorPrimitive for Handle<Mesh> {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -159,7 +159,7 @@ impl InspectorPrimitive for Handle<Mesh> {
 		)
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -186,7 +186,7 @@ impl InspectorPrimitive for Handle<Mesh> {
 }
 
 impl InspectorPrimitive for Handle<Image> {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -221,7 +221,7 @@ impl InspectorPrimitive for Handle<Image> {
 		)
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -247,7 +247,7 @@ impl InspectorPrimitive for Handle<Image> {
 }
 
 impl InspectorPrimitive for Color {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -341,7 +341,7 @@ impl InspectorPrimitive for Color {
 		false
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -405,7 +405,7 @@ impl InspectorPrimitive for Color {
 }
 
 impl InspectorPrimitive for RenderLayers {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -442,7 +442,7 @@ impl InspectorPrimitive for RenderLayers {
 		}
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -456,7 +456,7 @@ impl InspectorPrimitive for RenderLayers {
 }
 
 impl InspectorPrimitive for Name {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -464,7 +464,7 @@ impl InspectorPrimitive for Name {
 		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
 		let mut value = self.to_string();
-		if value.ui(ui, options, id, env) {
+		if value.ui_mut(ui, options, id, env) {
 			self.set(value);
 			true
 		} else {
@@ -472,7 +472,7 @@ impl InspectorPrimitive for Name {
 		}
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -488,7 +488,7 @@ impl InspectorPrimitive for Name {
 }
 
 impl InspectorPrimitive for GizmoConfigStore {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -514,7 +514,7 @@ impl InspectorPrimitive for GizmoConfigStore {
 
 		false
 	}
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,

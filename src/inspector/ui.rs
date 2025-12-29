@@ -2079,7 +2079,7 @@ fn ui_vtable<'c, T: InspectorPrimitive>(
 	env: &mut InspectorUi<'_, MutableContext<'c>>,
 ) -> bool {
 	let val = val.downcast_mut::<T>().unwrap();
-	T::ui(val, ui, options, id, env)
+	T::ui_mut(val, ui, options, id, env)
 }
 
 fn ui_readonly_vtable<'c, T: InspectorPrimitive>(
@@ -2090,7 +2090,7 @@ fn ui_readonly_vtable<'c, T: InspectorPrimitive>(
 	env: &InspectorUi<'_, ImmutableContext<'c>>,
 ) {
 	let val = val.downcast_ref::<T>().unwrap();
-	T::ui_readonly(val, ui, options, id, env)
+	T::ui(val, ui, options, id, env)
 }
 
 fn ui_many_vtable<'c, T: Reflect + PartialEq + Clone + Default + InspectorPrimitive>(
@@ -2108,7 +2108,7 @@ fn ui_many_vtable<'c, T: Reflect + PartialEq + Clone + Default + InspectorPrimit
 	}));
 
 	let mut temp = same.cloned().unwrap_or_default();
-	if T::ui(&mut temp, ui, options, id, env) {
+	if T::ui_mut(&mut temp, ui, options, id, env) {
 		for value in values.iter_mut() {
 			let value = projector(*value)
 				.try_downcast_mut::<T>()

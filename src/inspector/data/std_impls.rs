@@ -25,7 +25,7 @@ macro_rules! impl_num {
 impl_num!(f32, f64, i8, u8, i16, u16, i32, u32, i64, u64, isize, usize);
 
 impl<T: Reflect + Num> InspectorPrimitive for T {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -39,7 +39,7 @@ impl<T: Reflect + Num> InspectorPrimitive for T {
 		display_number(self, &options, ui, 0.1)
 	}
 
-	fn ui_readonly(
+	fn ui(
 		&self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -200,7 +200,7 @@ where
 }
 
 impl InspectorPrimitive for bool {
-	fn ui(
+	fn ui_mut(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -210,13 +210,7 @@ impl InspectorPrimitive for bool {
 		ui.checkbox(self, "").changed()
 	}
 
-	fn ui_readonly(
-		&self,
-		ui: &mut egui::Ui,
-		_: &dyn Any,
-		_: egui::Id,
-		_: &InspectorUi<ImmutableContext>,
-	) {
+	fn ui(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: &InspectorUi<ImmutableContext>) {
 		let mut copy = *self;
 		ui.add_enabled_ui(false, |ui| {
 			ui.checkbox(&mut copy, "");
@@ -225,7 +219,7 @@ impl InspectorPrimitive for bool {
 }
 
 impl InspectorPrimitive for String {
-	fn ui(
+	fn ui_mut(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -239,13 +233,7 @@ impl InspectorPrimitive for String {
 		}
 	}
 
-	fn ui_readonly(
-		&self,
-		ui: &mut egui::Ui,
-		_: &dyn Any,
-		_: egui::Id,
-		_: &InspectorUi<ImmutableContext>,
-	) {
+	fn ui(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: &InspectorUi<ImmutableContext>) {
 		if self.contains('\n') {
 			ui.text_edit_multiline(&mut self.as_str());
 		} else {
@@ -255,7 +243,7 @@ impl InspectorPrimitive for String {
 }
 
 impl InspectorPrimitive for Cow<'static, str> {
-	fn ui(
+	fn ui_mut(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -276,13 +264,7 @@ impl InspectorPrimitive for Cow<'static, str> {
 		changed
 	}
 
-	fn ui_readonly(
-		&self,
-		ui: &mut egui::Ui,
-		_: &dyn Any,
-		_: egui::Id,
-		_: &InspectorUi<ImmutableContext>,
-	) {
+	fn ui(&self, ui: &mut egui::Ui, _: &dyn Any, _: egui::Id, _: &InspectorUi<ImmutableContext>) {
 		if self.contains('\n') {
 			ui.text_edit_multiline(&mut self.as_str());
 		} else {
@@ -292,7 +274,7 @@ impl InspectorPrimitive for Cow<'static, str> {
 }
 
 impl InspectorPrimitive for Duration {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -313,7 +295,7 @@ impl InspectorPrimitive for Duration {
 		changed
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -331,7 +313,7 @@ impl InspectorPrimitive for Duration {
 }
 
 impl InspectorPrimitive for Instant {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -346,7 +328,7 @@ impl InspectorPrimitive for Instant {
 		false
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -364,7 +346,7 @@ impl InspectorPrimitive for Instant {
 impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> InspectorPrimitive
 	for std::ops::Range<T>
 {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -375,7 +357,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		display_range::<T>(ui, options, id, env, "..", Some(start), Some(end))
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -446,7 +428,7 @@ fn display_range_readonly<'c, T: egui::emath::Numeric + InspectorOptionsType>(
 impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> InspectorPrimitive
 	for std::ops::RangeInclusive<T>
 {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -473,7 +455,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 		changed
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -493,7 +475,7 @@ impl<T: Reflect + TypePath + egui::emath::Numeric + InspectorOptionsType> Inspec
 }
 
 impl InspectorPrimitive for PathBuf {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -510,7 +492,7 @@ impl InspectorPrimitive for PathBuf {
 		changed
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -522,7 +504,7 @@ impl InspectorPrimitive for PathBuf {
 }
 
 impl InspectorPrimitive for TypeId {
-	fn ui<'c>(
+	fn ui_mut<'c>(
 		&mut self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
@@ -534,7 +516,7 @@ impl InspectorPrimitive for TypeId {
 		false
 	}
 
-	fn ui_readonly<'c>(
+	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,

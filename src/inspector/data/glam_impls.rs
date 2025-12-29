@@ -143,22 +143,22 @@ macro_rules! mat_ui {
     };
 }
 
-vec_ui!(vec2_ui vec2_ui_readonly Vec2: 2 x y);
-vec_ui!(vec3_ui vec3_ui_readonly Vec3: 3 x y z);
-vec_ui!(vec3a_ui vec3a_ui_readonly Vec3A: 3 x y z);
-vec_ui!(vec4_ui vec4_ui_readonly Vec4: 4 x y z w);
-vec_ui!(uvec2_ui uvec2_ui_readonly UVec2: 2 x y);
-vec_ui!(uvec3_ui uvec3_ui_readonly UVec3: 3 x y z);
-vec_ui!(uvec4_ui uvec4_ui_readonly UVec4: 4 x y z w);
-vec_ui!(ivec2_ui ivec2_ui_readonly IVec2: 2 x y);
-vec_ui!(ivec3_ui ivec3_ui_readonly IVec3: 3 x y z);
-vec_ui!(ivec4_ui ivec4_ui_readonly IVec4: 4 x y z w);
-vec_ui!(dvec2_ui dvec2_ui_readonly DVec2: 2 x y);
-vec_ui!(dvec3_ui dvec3_ui_readonly DVec3: 3 x y z);
-vec_ui!(dvec4_ui dvec4_ui_readonly DVec4: 4 x y z w);
-vec_ui!(bvec2_ui bvec2_ui_readonly BVec2: 2 x y);
-vec_ui!(bvec3_ui bvec3_ui_readonly BVec3: 3 x y z);
-vec_ui!(bvec4_ui bvec4_ui_readonly BVec4: 4 x y z w);
+vec_ui!(vec2_ui_mut vec2_ui Vec2: 2 x y);
+vec_ui!(vec3_ui_mut vec3_ui Vec3: 3 x y z);
+vec_ui!(vec3a_ui_mut vec3a_ui Vec3A: 3 x y z);
+vec_ui!(vec4_ui_mut vec4_ui Vec4: 4 x y z w);
+vec_ui!(uvec2_ui_mut uvec2_ui UVec2: 2 x y);
+vec_ui!(uvec3_ui_mut uvec3_ui UVec3: 3 x y z);
+vec_ui!(uvec4_ui_mut uvec4_ui UVec4: 4 x y z w);
+vec_ui!(ivec2_ui_mut ivec2_ui IVec2: 2 x y);
+vec_ui!(ivec3_ui_mut ivec3_ui IVec3: 3 x y z);
+vec_ui!(ivec4_ui_mut ivec4_ui IVec4: 4 x y z w);
+vec_ui!(dvec2_ui_mut dvec2_ui DVec2: 2 x y);
+vec_ui!(dvec3_ui_mut dvec3_ui DVec3: 3 x y z);
+vec_ui!(dvec4_ui_mut dvec4_ui DVec4: 4 x y z w);
+vec_ui!(bvec2_ui_mut bvec2_ui BVec2: 2 x y);
+vec_ui!(bvec3_ui_mut bvec3_ui BVec3: 3 x y z);
+vec_ui!(bvec4_ui_mut bvec4_ui BVec4: 4 x y z w);
 vec_ui_many!(vec2_ui_many Vec2>f32: 2 x y);
 vec_ui_many!(vec3_ui_many Vec3>f32: 3 x y z);
 vec_ui_many!(vec3a_ui_many Vec3A>f32: 3 x y z);
@@ -173,13 +173,13 @@ vec_ui_many!(dvec2_ui_many DVec2>f64: 2 x y);
 vec_ui_many!(dvec3_ui_many DVec3>f64: 3 x y z);
 vec_ui_many!(dvec4_ui_many DVec4>f64: 4 x y z w);
 
-mat_ui!(mat2_ui mat2_ui_readonly Mat2: x_axis y_axis);
-mat_ui!(mat3_ui mat3_ui_readonly Mat3: x_axis y_axis z_axis);
-mat_ui!(mat3a_ui mat3a_ui_readonly Mat3A: x_axis y_axis z_axis);
-mat_ui!(mat4_ui mat4_ui_readonly Mat4: x_axis y_axis z_axis w_axis);
-mat_ui!(dmat2_ui dmat2_ui_readonly DMat2: x_axis y_axis);
-mat_ui!(dmat3_ui dmat3_ui_readonly DMat3: x_axis y_axis z_axis);
-mat_ui!(dmat4_ui dmat4_ui_readonly DMat4: x_axis y_axis z_axis w_axis);
+mat_ui!(mat2_ui_mut mat2_ui Mat2: x_axis y_axis);
+mat_ui!(mat3_ui_mut mat3_ui Mat3: x_axis y_axis z_axis);
+mat_ui!(mat3a_ui_mut mat3a_ui Mat3A: x_axis y_axis z_axis);
+mat_ui!(mat4_ui_mut mat4_ui Mat4: x_axis y_axis z_axis w_axis);
+mat_ui!(dmat2_ui_mut dmat2_ui DMat2: x_axis y_axis);
+mat_ui!(dmat3_ui_mut dmat3_ui DMat3: x_axis y_axis z_axis);
+mat_ui!(dmat4_ui_mut dmat4_ui DMat4: x_axis y_axis z_axis w_axis);
 
 pub mod quat {
 	use std::any::Any;
@@ -205,11 +205,7 @@ pub mod quat {
 		fn from_quat(quat: Quat) -> Self;
 		fn to_quat(self) -> Quat;
 
-		fn ui<'c>(
-			&mut self,
-			ui: &mut egui::Ui,
-			env: &mut InspectorUi<'_, MutableContext<'c>>,
-		) -> bool;
+		fn ui<'c>(&mut self, ui: &mut egui::Ui, env: &mut InspectorUi<'_, MutableContext<'c>>) -> bool;
 
 		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, env: &InspectorUi<'_, ImmutableContext<'c>>);
 	}
@@ -223,11 +219,7 @@ pub mod quat {
 			Quat::from_euler(EulerRot::XYZ, self.0.x, self.0.y, self.0.z)
 		}
 
-		fn ui<'c>(
-			&mut self,
-			ui: &mut egui::Ui,
-			env: &mut InspectorUi<'_, MutableContext<'c>>,
-		) -> bool {
+		fn ui<'c>(&mut self, ui: &mut egui::Ui, env: &mut InspectorUi<'_, MutableContext<'c>>) -> bool {
 			env.ui_for_reflect(&mut self.0, ui)
 		}
 
@@ -305,11 +297,7 @@ pub mod quat {
 			}
 		}
 
-		fn ui<'c>(
-			&mut self,
-			ui: &mut egui::Ui,
-			env: &mut InspectorUi<'_, MutableContext<'c>>,
-		) -> bool {
+		fn ui<'c>(&mut self, ui: &mut egui::Ui, env: &mut InspectorUi<'_, MutableContext<'c>>) -> bool {
 			let (axis, angle) = &mut self.0;
 
 			let mut changed = false;
@@ -393,7 +381,7 @@ pub mod quat {
 		}
 	}
 
-	pub fn quat_ui<'c>(
+	pub fn quat_ui_mut<'c>(
 		value: &mut dyn Any,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -423,7 +411,7 @@ pub mod quat {
 		.inner
 	}
 
-	pub fn quat_ui_readonly<'c>(
+	pub fn quat_ui<'c>(
 		value: &dyn Any,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
@@ -451,5 +439,5 @@ pub mod quat {
 		});
 	}
 
-	many_ui!(quat_ui_many quat_ui Quat);
+	many_ui!(quat_ui_many quat_ui_mut Quat);
 }

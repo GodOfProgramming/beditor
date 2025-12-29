@@ -6,7 +6,6 @@ use crate::{
 	util::{
 		self, WorldExtensions,
 		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
-		pretty_type_name_str, type_path_of,
 		world::{MutableWorldView, ReflectBorrow, RestrictedWorldView, WorldView},
 	},
 };

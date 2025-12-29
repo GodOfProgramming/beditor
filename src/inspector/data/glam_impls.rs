@@ -1,72 +1,47 @@
+use super::{InspectorPrimitive, InspectorPrimitiveMultiedit};
 use crate::inspector::{
-	options::NumberOptions,
-	ui::{ImmutableContext, InspectorUi, MutableContext, ProjectorReflect},
+	options::{NumberOptions, QuatDisplay, QuatOptions},
+	ui::{ImmutableContext, InspectorUi, MutableContext, get_one_if_all_equal},
 };
 use bevy::{
 	math::{DMat2, DMat3, DMat4, DVec2, DVec3, DVec4},
 	prelude::*,
 };
+use derive_more::derive::Deref;
+use derive_new::new;
+use smallvec::SmallVec;
 use std::any::Any;
 
-macro_rules! vec_ui_many {
-    ($name_many:ident $ty:ty>$elem_ty:ty: $count:literal $($component:ident)*) => {
-        pub fn $name_many<'c>(
+macro_rules! vec_ui {
+    ($ty:ty: $count:literal $($component:ident)*) => {
+        fn ui<'c>(
+            &self,
             ui: &mut egui::Ui,
             _: &dyn Any,
-            id: egui::Id,
-            _env: &mut InspectorUi<'_, MutableContext<'c>>,
-            values: &mut [&mut dyn PartialReflect],
-            projector: &dyn ProjectorReflect,
-        ) -> bool {
-            let mut changed = false;
+            _: egui::Id,
+             env: &InspectorUi<'_, ImmutableContext<'c>>,
+        ) {
             ui.scope(|ui| {
-                ui.style_mut().spacing.item_spacing = egui::Vec2::new(4.0, 0.);
-
                 ui.columns($count, |ui| match ui {
                     [$($component),*] => {
-                        $(
-
-                            let same = crate::inspector::ui::iter_all_eq(values.iter_mut().map(|value| {
-                                // FIXME: scary to change a macro
-                                projector(*value).try_downcast_ref::<$ty>().unwrap().$component
-                            }));
-
-                            let id = id.with(stringify!($component));
-                            changed |= crate::inspector::ui::change_slider($component, id, same, |change, overwrite| {
-                                for value in values.iter_mut() {
-                                    let value = projector(*value);
-                                    let value = value.try_downcast_mut::<$ty>().unwrap();
-
-                                    if false { value.$component = change };
-                                    if overwrite {
-                                        value.$component = change;
-                                    } else {
-                                        value.$component += change;
-                                    }
-
-                                }
-                            });
-                        )*
+                        $(env.ui_for_reflect_readonly(&self.$component, $component);)*
                     }
                     _ => unreachable!(),
                 });
             });
-            changed
         }
-    };
+    }
 }
 
-macro_rules! vec_ui {
-    ($name:ident $name_readonly:ident $ty:ty: $count:literal $($component:ident)*) => {
-        pub fn $name<'c>(
-            value: &mut dyn Any,
+macro_rules! vec_ui_mut {
+    ($ty:ty: $count:literal $($component:ident)*) => {
+        fn ui_mut<'c>(
+            &mut self,
             ui: &mut egui::Ui,
             options: &dyn Any,
             id: egui::Id,
             env: &mut InspectorUi<'_, MutableContext<'c>>,
         ) -> bool {
-            let value = value.downcast_mut::<$ty>().unwrap();
-
             let options = options
                 .downcast_ref::<NumberOptions<$ty>>()
                 .cloned()
@@ -74,322 +49,374 @@ macro_rules! vec_ui {
 
             let mut changed = false;
             ui.scope(|ui| {
-                ui.style_mut().spacing.item_spacing = egui::Vec2::new(4.0, 0.);
-
                 ui.columns($count, |ui| match ui {
                     [$($component),*] => {
-                        $(changed |= env.ui_for_reflect_with_options(&mut value.$component, $component, id.with(stringify!($component)), &options.map(|vec| vec.$component));)*
+                        $(changed |= env.ui_for_reflect_with_options(&mut self.$component, $component, id.with(stringify!($component)), &options.map(|vec| vec.$component));)*
                     }
                     _ => unreachable!(),
                 });
             });
             changed
         }
-
-        pub fn $name_readonly<'c>(
-            value: &dyn Any,
-            ui: &mut egui::Ui,
-            _: &dyn Any,
-            _: egui::Id,
-             env: &InspectorUi<'_, ImmutableContext<'c>>,
-        ) {
-            let value = value.downcast_ref::<$ty>().unwrap();
-
-            ui.scope(|ui| {
-                ui.style_mut().spacing.item_spacing = egui::Vec2::new(4.0, 0.);
-
-                ui.columns($count, |ui| match ui {
-                    [$($component),*] => {
-                        $(env.ui_for_reflect_readonly(&value.$component, $component);)*
-                    }
-                    _ => unreachable!(),
-                });
-            });
-        }
     };
+}
+
+macro_rules! vec_ui_many {
+  ($ty:ty>$elem_ty:ty: $count:literal $($component:ident)*) => {
+    fn ui_mut_multiedit<'s, 'c>(
+        ui: &mut egui::Ui,
+        _: &dyn Any,
+        id: egui::Id,
+        _env: &mut InspectorUi<'_, MutableContext<'c>>,
+        values: impl Iterator<Item = &'s mut Self>,
+    ) -> bool {
+      let mut changed = false;
+      let mut values = values.collect::<SmallVec<[_; 8]>>();
+
+      ui.scope(|ui| {
+        ui.columns($count, |ui| match ui {
+          [$($component),*] => {
+            $(
+              let same = get_one_if_all_equal(values.iter().map(|v| v.$component));
+
+              let id = id.with(stringify!($component));
+              changed |= crate::inspector::ui::change_slider($component, id, same, |change, overwrite| {
+                for value in values.iter_mut() {
+                  if false { value.$component = change };
+                  if overwrite {
+                    value.$component = change;
+                  } else {
+                    value.$component += change;
+                  }
+
+                }
+              });
+            )*
+          }
+          _ => unreachable!(),
+        });
+      });
+      changed
+    }
+  };
 }
 
 macro_rules! mat_ui {
-    ($name:ident $name_readonly:ident $ty:ty: $($component:ident)*) => {
-        pub fn $name<'c>(
-            value: &mut dyn Any,
-            ui: &mut egui::Ui,
-            _: &dyn Any,
-            _: egui::Id,
-            env: &mut InspectorUi<'_, MutableContext<'c>>,
-        ) -> bool {
-            let value = value.downcast_mut::<$ty>().unwrap();
-
-            let mut changed = false;
-            ui.vertical(|ui| {
-                $(changed |= env.ui_for_reflect(&mut value.$component, ui);)*
-            });
-            changed
-        }
-
-        pub fn $name_readonly<'c>(
-            value: &dyn Any,
-            ui: &mut egui::Ui,
-            _: &dyn Any,
-            _: egui::Id,
-            env: &InspectorUi<'_, ImmutableContext<'c>>,
-        ) {
-            let value = value.downcast_ref::<$ty>().unwrap();
-
-            ui.vertical(|ui| {
-                $(env.ui_for_reflect_readonly(&value.$component, ui);)*
-            });
-        }
-    };
+  ($ty:ty: $($component:ident)*) => {
+    fn ui<'c>(
+      &self,
+      ui: &mut egui::Ui,
+      _: &dyn Any,
+      _: egui::Id,
+      env: &InspectorUi<'_, ImmutableContext<'c>>,
+    ) {
+      ui.vertical(|ui| {
+        $(env.ui_for_reflect_readonly(&self.$component, ui);)*
+      });
+    }
+  };
 }
 
-vec_ui!(vec2_ui_mut vec2_ui Vec2: 2 x y);
-vec_ui!(vec3_ui_mut vec3_ui Vec3: 3 x y z);
-vec_ui!(vec3a_ui_mut vec3a_ui Vec3A: 3 x y z);
-vec_ui!(vec4_ui_mut vec4_ui Vec4: 4 x y z w);
-vec_ui!(uvec2_ui_mut uvec2_ui UVec2: 2 x y);
-vec_ui!(uvec3_ui_mut uvec3_ui UVec3: 3 x y z);
-vec_ui!(uvec4_ui_mut uvec4_ui UVec4: 4 x y z w);
-vec_ui!(ivec2_ui_mut ivec2_ui IVec2: 2 x y);
-vec_ui!(ivec3_ui_mut ivec3_ui IVec3: 3 x y z);
-vec_ui!(ivec4_ui_mut ivec4_ui IVec4: 4 x y z w);
-vec_ui!(dvec2_ui_mut dvec2_ui DVec2: 2 x y);
-vec_ui!(dvec3_ui_mut dvec3_ui DVec3: 3 x y z);
-vec_ui!(dvec4_ui_mut dvec4_ui DVec4: 4 x y z w);
-vec_ui!(bvec2_ui_mut bvec2_ui BVec2: 2 x y);
-vec_ui!(bvec3_ui_mut bvec3_ui BVec3: 3 x y z);
-vec_ui!(bvec4_ui_mut bvec4_ui BVec4: 4 x y z w);
-vec_ui_many!(vec2_ui_many Vec2>f32: 2 x y);
-vec_ui_many!(vec3_ui_many Vec3>f32: 3 x y z);
-vec_ui_many!(vec3a_ui_many Vec3A>f32: 3 x y z);
-vec_ui_many!(vec4_ui_many Vec4>f32: 4 x y z w);
-vec_ui_many!(uvec2_ui_many UVec2>u32: 2 x y);
-vec_ui_many!(uvec3_ui_many UVec3>u32: 3 x y z);
-vec_ui_many!(uvec4_ui_many UVec4>u32: 4 x y z w);
-vec_ui_many!(ivec2_ui_many IVec2>i32: 2 x y);
-vec_ui_many!(ivec3_ui_many IVec3>i32: 3 x y z);
-vec_ui_many!(ivec4_ui_many IVec4>i32: 4 x y z w);
-vec_ui_many!(dvec2_ui_many DVec2>f64: 2 x y);
-vec_ui_many!(dvec3_ui_many DVec3>f64: 3 x y z);
-vec_ui_many!(dvec4_ui_many DVec4>f64: 4 x y z w);
+macro_rules! mat_ui_mut {
+  ($ty:ty: $($component:ident)*) => {
+    fn ui_mut<'c>(
+      &mut self,
+      ui: &mut egui::Ui,
+      _: &dyn Any,
+      _: egui::Id,
+      env: &mut InspectorUi<'_, MutableContext<'c>>,
+    ) -> bool {
+      let mut changed = false;
+      ui.vertical(|ui| {
+        $(changed |= env.ui_for_reflect(&mut self.$component, ui);)*
+      });
+      changed
+    }
+  };
+}
 
-mat_ui!(mat2_ui_mut mat2_ui Mat2: x_axis y_axis);
-mat_ui!(mat3_ui_mut mat3_ui Mat3: x_axis y_axis z_axis);
-mat_ui!(mat3a_ui_mut mat3a_ui Mat3A: x_axis y_axis z_axis);
-mat_ui!(mat4_ui_mut mat4_ui Mat4: x_axis y_axis z_axis w_axis);
-mat_ui!(dmat2_ui_mut dmat2_ui DMat2: x_axis y_axis);
-mat_ui!(dmat3_ui_mut dmat3_ui DMat3: x_axis y_axis z_axis);
-mat_ui!(dmat4_ui_mut dmat4_ui DMat4: x_axis y_axis z_axis w_axis);
+macro_rules! impl_vec_primitive {
+	($ty:ty: $count:literal $($component:ident)*) => {
+    impl InspectorPrimitive for $ty {
+      vec_ui!($ty: $count $($component)*);
 
-pub mod quat {
-	use std::any::Any;
-
-	use bevy::prelude::*;
-
-	use crate::{
-		inspector::{
-			options::{QuatDisplay, QuatOptions},
-			ui::{ImmutableContext, InspectorUi, MutableContext},
-		},
-		many_ui,
+      vec_ui_mut!($ty: $count $($component)*);
+    }
 	};
+}
 
-	#[derive(Clone, Copy)]
-	struct Euler(Vec3);
-	#[derive(Clone, Copy)]
-	struct YawPitchRoll((f32, f32, f32));
-	#[derive(Clone, Copy)]
-	struct AxisAngle((Vec3, f32));
+macro_rules! impl_vec_primitive_many {
+  ($ty:ty>$elem_ty:ty: $count:literal $($component:ident)*) => {
+    impl InspectorPrimitiveMultiedit for $ty {
+      vec_ui!($ty: $count $($component)*);
 
-	trait RotationEdit {
-		fn from_quat(quat: Quat) -> Self;
-		fn to_quat(self) -> Quat;
+      vec_ui_mut!($ty: $count $($component)*);
 
-		fn ui<'c>(&mut self, ui: &mut egui::Ui, env: &mut InspectorUi<'_, MutableContext<'c>>) -> bool;
+      vec_ui_many!($ty>$elem_ty: $count $($component)*);
+    }
+  }
+}
 
-		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, env: &InspectorUi<'_, ImmutableContext<'c>>);
+macro_rules! impl_mat_primitive {
+  ($ty:ty: $($component:ident)*) => {
+    impl InspectorPrimitive for $ty {
+      mat_ui!($ty: $($component)*);
+
+      mat_ui_mut!($ty: $($component)*);
+    }
+  };
+}
+
+impl_vec_primitive!(BVec2: 2 x y);
+impl_vec_primitive!(BVec3: 3 x y z);
+impl_vec_primitive!(BVec4: 4 x y z w);
+impl_vec_primitive_many!(Vec2>f32: 2 x y);
+impl_vec_primitive_many!(Vec3>f32: 3 x y z);
+impl_vec_primitive_many!(Vec3A>f32: 3 x y z);
+impl_vec_primitive_many!(Vec4>f32: 4 x y z w);
+impl_vec_primitive_many!(UVec2>u32: 2 x y);
+impl_vec_primitive_many!(UVec3>u32: 3 x y z);
+impl_vec_primitive_many!(UVec4>u32: 4 x y z w);
+impl_vec_primitive_many!(IVec2>i32: 2 x y);
+impl_vec_primitive_many!(IVec3>i32: 3 x y z);
+impl_vec_primitive_many!(IVec4>i32: 4 x y z w);
+impl_vec_primitive_many!(DVec2>f64: 2 x y);
+impl_vec_primitive_many!(DVec3>f64: 3 x y z);
+impl_vec_primitive_many!(DVec4>f64: 4 x y z w);
+
+impl_mat_primitive!(Mat2: x_axis y_axis);
+impl_mat_primitive!(Mat3: x_axis y_axis z_axis);
+impl_mat_primitive!(Mat3A: x_axis y_axis z_axis);
+impl_mat_primitive!(Mat4: x_axis y_axis z_axis w_axis);
+impl_mat_primitive!(DMat2: x_axis y_axis);
+impl_mat_primitive!(DMat3: x_axis y_axis z_axis);
+impl_mat_primitive!(DMat4: x_axis y_axis z_axis w_axis);
+
+#[derive(Clone, Copy, Deref, DerefMut)]
+struct Euler(Vec3);
+#[derive(new, Clone, Copy)]
+struct YawPitchRoll {
+	yaw: f32,
+	pitch: f32,
+	roll: f32,
+}
+#[derive(new, Clone, Copy)]
+struct AxisAngle {
+	axis: Vec3,
+	angle: f32,
+}
+
+trait RotationEdit: From<Quat> + Into<Quat> {
+	fn ui<'c>(&self, ui: &mut egui::Ui, env: &InspectorUi<'_, ImmutableContext<'c>>);
+
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool;
+}
+
+impl From<Quat> for Euler {
+	fn from(value: Quat) -> Self {
+		Self(value.to_euler(EulerRot::XYZ).into())
+	}
+}
+
+impl From<Euler> for Quat {
+	fn from(value: Euler) -> Self {
+		Self::from_euler(EulerRot::XYZ, value.0.x, value.0.y, value.0.z)
+	}
+}
+
+impl RotationEdit for Euler {
+	fn ui<'c>(&self, ui: &mut egui::Ui, env: &InspectorUi<'_, ImmutableContext<'c>>) {
+		env.ui_for_reflect_readonly(&self.0, ui);
 	}
 
-	impl RotationEdit for Euler {
-		fn from_quat(quat: Quat) -> Self {
-			Euler(quat.to_euler(EulerRot::XYZ).into())
-		}
-
-		fn to_quat(self) -> Quat {
-			Quat::from_euler(EulerRot::XYZ, self.0.x, self.0.y, self.0.z)
-		}
-
-		fn ui<'c>(&mut self, ui: &mut egui::Ui, env: &mut InspectorUi<'_, MutableContext<'c>>) -> bool {
-			env.ui_for_reflect(&mut self.0, ui)
-		}
-
-		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, env: &InspectorUi<'_, ImmutableContext<'c>>) {
-			env.ui_for_reflect_readonly(&self.0, ui);
-		}
-	}
-
-	impl RotationEdit for YawPitchRoll {
-		fn from_quat(quat: Quat) -> Self {
-			YawPitchRoll(quat.to_euler(EulerRot::YXZ))
-		}
-
-		fn to_quat(self) -> Quat {
-			let (y, p, r) = self.0;
-			Quat::from_euler(EulerRot::YXZ, y, p, r)
-		}
-
-		fn ui<'c>(
-			&mut self,
-			ui: &mut egui::Ui,
-			_env: &mut InspectorUi<'_, MutableContext<'c>>,
-		) -> bool {
-			let (yaw, pitch, roll) = &mut self.0;
-
-			let mut changed = false;
-			ui.vertical(|ui| {
-				egui::Grid::new("ypr grid").show(ui, |ui| {
-					ui.label("Yaw");
-					changed |= ui.drag_angle(yaw).changed();
-					ui.end_row();
-
-					ui.label("Pitch");
-					changed |= ui.drag_angle(pitch).changed();
-					ui.end_row();
-
-					ui.label("Roll");
-					changed |= ui.drag_angle(roll).changed();
-					ui.end_row();
-				});
-			});
-			changed
-		}
-
-		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, _env: &InspectorUi<'_, ImmutableContext<'c>>) {
-			let (yaw, pitch, roll) = self.0;
-
-			ui.vertical(|ui| {
-				egui::Grid::new("ypr grid").show(ui, |ui| {
-					ui.label(format!("Yaw: {yaw}"));
-					ui.end_row();
-
-					ui.label(format!("Pitch: {pitch}"));
-					ui.end_row();
-
-					ui.label(format!("Roll: {roll}"));
-					ui.end_row();
-				});
-			});
-		}
-	}
-
-	impl RotationEdit for AxisAngle {
-		fn from_quat(quat: Quat) -> Self {
-			AxisAngle(quat.to_axis_angle())
-		}
-
-		fn to_quat(self) -> Quat {
-			let (axis, angle) = self.0;
-			let axis = axis.normalize();
-			if axis.is_nan() {
-				Quat::IDENTITY
-			} else {
-				Quat::from_axis_angle(axis.normalize(), angle)
-			}
-		}
-
-		fn ui<'c>(&mut self, ui: &mut egui::Ui, env: &mut InspectorUi<'_, MutableContext<'c>>) -> bool {
-			let (axis, angle) = &mut self.0;
-
-			let mut changed = false;
-			ui.vertical(|ui| {
-				egui::Grid::new("axis-angle quat").show(ui, |ui| {
-					ui.label("Axis");
-					changed |= env.ui_for_reflect(axis, ui);
-					ui.end_row();
-					ui.label("Angle");
-					changed |= ui.drag_angle(angle).changed();
-					ui.end_row();
-				});
-			});
-			changed
-		}
-
-		fn ui_readonly<'c>(&self, ui: &mut egui::Ui, env: &InspectorUi<'_, ImmutableContext<'c>>) {
-			let (axis, angle) = self.0;
-
-			ui.vertical(|ui| {
-				egui::Grid::new("axis-angle quat").show(ui, |ui| {
-					ui.label("Axis");
-					env.ui_for_reflect_readonly(&axis, ui);
-					ui.end_row();
-
-					ui.label(format!("Angle: {angle}"));
-					ui.end_row();
-				});
-			});
-		}
-	}
-
-	fn quat_ui_kind<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
-		val: &mut Quat,
+	fn ui_mut<'c>(
+		&mut self,
 		ui: &mut egui::Ui,
 		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
-		let id = ui.id();
-		let mut intermediate = ui.memory_mut(|memory| {
-			*memory
-				.data
-				.get_temp_mut_or_insert_with(id, || T::from_quat(*val))
+		env.ui_for_reflect(&mut self.0, ui)
+	}
+}
+
+impl From<Quat> for YawPitchRoll {
+	fn from(value: Quat) -> Self {
+		let (x, y, z) = value.to_euler(EulerRot::YXZ);
+		Self::new(x, y, z)
+	}
+}
+
+impl From<YawPitchRoll> for Quat {
+	fn from(value: YawPitchRoll) -> Self {
+		let YawPitchRoll { yaw, pitch, roll } = value;
+		Self::from_euler(EulerRot::YXZ, yaw, pitch, roll)
+	}
+}
+
+impl RotationEdit for YawPitchRoll {
+	fn ui<'c>(&self, ui: &mut egui::Ui, _env: &InspectorUi<'_, ImmutableContext<'c>>) {
+		let Self { yaw, pitch, roll } = self;
+
+		ui.vertical(|ui| {
+			egui::Grid::new("ypr grid").show(ui, |ui| {
+				ui.label(format!("Yaw: {yaw}"));
+				ui.end_row();
+
+				ui.label(format!("Pitch: {pitch}"));
+				ui.end_row();
+
+				ui.label(format!("Roll: {roll}"));
+				ui.end_row();
+			});
 		});
+	}
 
-		let externally_changed = !intermediate.to_quat().abs_diff_eq(*val, f32::EPSILON);
-		if externally_changed {
-			intermediate = T::from_quat(*val);
-		}
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		_env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool {
+		let Self { yaw, pitch, roll } = self;
 
-		let changed = intermediate.ui(ui, env);
+		let mut changed = false;
+		ui.vertical(|ui| {
+			egui::Grid::new("ypr grid").show(ui, |ui| {
+				ui.label("Yaw");
+				changed |= ui.drag_angle(yaw).changed();
+				ui.end_row();
 
-		if changed || externally_changed {
-			*val = intermediate.to_quat();
-			ui.memory_mut(|memory| memory.data.insert_temp(id, intermediate));
-		}
+				ui.label("Pitch");
+				changed |= ui.drag_angle(pitch).changed();
+				ui.end_row();
 
+				ui.label("Roll");
+				changed |= ui.drag_angle(roll).changed();
+				ui.end_row();
+			});
+		});
+		changed
+	}
+}
+
+impl From<Quat> for AxisAngle {
+	fn from(value: Quat) -> Self {
+		let (axis, angle) = value.to_axis_angle();
+		Self { axis, angle }
+	}
+}
+
+impl From<AxisAngle> for Quat {
+	fn from(value: AxisAngle) -> Self {
+		let AxisAngle { axis, angle } = value;
+
+		let Some(axis) = axis.try_normalize() else {
+			return Quat::IDENTITY;
+		};
+
+		Self::from_axis_angle(axis, angle)
+	}
+}
+
+impl RotationEdit for AxisAngle {
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool {
+		let Self { axis, angle } = self;
+
+		let mut changed = false;
+		ui.vertical(|ui| {
+			egui::Grid::new("axis-angle quat").show(ui, |ui| {
+				ui.label("Axis");
+				changed |= env.ui_for_reflect(axis, ui);
+				ui.end_row();
+				ui.label("Angle");
+				changed |= ui.drag_angle(angle).changed();
+				ui.end_row();
+			});
+		});
 		changed
 	}
 
-	fn quat_ui_kind_readonly<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
-		val: &Quat,
-		ui: &mut egui::Ui,
-		env: &InspectorUi<'_, ImmutableContext<'c>>,
-	) {
-		let id = ui.id();
-		let mut intermediate = ui.memory_mut(|memory| {
-			*memory
-				.data
-				.get_temp_mut_or_insert_with(id, || T::from_quat(*val))
+	fn ui<'c>(&self, ui: &mut egui::Ui, env: &InspectorUi<'_, ImmutableContext<'c>>) {
+		let Self { axis, angle } = self;
+
+		ui.vertical(|ui| {
+			egui::Grid::new("axis-angle quat").show(ui, |ui| {
+				ui.label("Axis");
+				env.ui_for_reflect_readonly(axis, ui);
+				ui.end_row();
+
+				ui.label(format!("Angle: {angle}"));
+				ui.end_row();
+			});
 		});
+	}
+}
 
-		let externally_changed = !intermediate.to_quat().abs_diff_eq(*val, f32::EPSILON);
-		if externally_changed {
-			intermediate = T::from_quat(*val);
-		}
+fn quat_ui_kind<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
+	val: &mut Quat,
+	ui: &mut egui::Ui,
+	env: &mut InspectorUi<'_, MutableContext<'c>>,
+) -> bool {
+	let id = ui.id();
+	let mut intermediate = ui.memory_mut(|memory| {
+		*memory
+			.data
+			.get_temp_mut_or_insert_with(id, || T::from(*val))
+	});
 
-		intermediate.ui_readonly(ui, env);
-
-		if externally_changed {
-			ui.memory_mut(|memory| memory.data.insert_temp(id, intermediate));
-		}
+	let externally_changed = !intermediate.into().abs_diff_eq(*val, f32::EPSILON);
+	if externally_changed {
+		intermediate = T::from(*val);
 	}
 
-	pub fn quat_ui_mut<'c>(
-		value: &mut dyn Any,
+	let changed = intermediate.ui_mut(ui, env);
+
+	if changed || externally_changed {
+		*val = intermediate.into();
+		ui.memory_mut(|memory| memory.data.insert_temp(id, intermediate));
+	}
+
+	changed
+}
+
+fn quat_ui_kind_readonly<'c, T: Send + Sync + 'static + Copy + RotationEdit>(
+	val: &Quat,
+	ui: &mut egui::Ui,
+	env: &InspectorUi<'_, ImmutableContext<'c>>,
+) {
+	let id = ui.id();
+	let mut intermediate = ui.memory_mut(|memory| {
+		*memory
+			.data
+			.get_temp_mut_or_insert_with(id, || T::from(*val))
+	});
+
+	let externally_changed = !intermediate.into().abs_diff_eq(*val, f32::EPSILON);
+	if externally_changed {
+		intermediate = T::from(*val);
+	}
+
+	intermediate.ui(ui, env);
+
+	if externally_changed {
+		ui.memory_mut(|memory| memory.data.insert_temp(id, intermediate));
+	}
+}
+
+impl InspectorPrimitive for Quat {
+	fn ui<'c>(
+		&self,
 		ui: &mut egui::Ui,
 		options: &dyn Any,
 		_: egui::Id,
-		env: &mut InspectorUi<'_, MutableContext<'c>>,
-	) -> bool {
-		let value = value.downcast_mut::<Quat>().unwrap();
-
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
+	) {
 		let options = options
 			.downcast_ref::<QuatOptions>()
 			.cloned()
@@ -397,47 +424,40 @@ pub mod quat {
 
 		ui.vertical(|ui| match options.display {
 			QuatDisplay::Raw => {
-				let mut vec4 = Vec4::from(*value);
-				let changed = env.ui_for_reflect(&mut vec4, ui);
-				if changed {
-					*value = Quat::from_vec4(vec4).normalize();
-				}
-				changed
+				let vec4 = Vec4::from(*self);
+				env.ui_for_reflect_readonly(&vec4, ui);
 			}
-			QuatDisplay::Euler => quat_ui_kind::<Euler>(value, ui, env),
-			QuatDisplay::YawPitchRoll => quat_ui_kind::<YawPitchRoll>(value, ui, env),
-			QuatDisplay::AxisAngle => quat_ui_kind::<AxisAngle>(value, ui, env),
-		})
-		.inner
-	}
-
-	pub fn quat_ui<'c>(
-		value: &dyn Any,
-		ui: &mut egui::Ui,
-		options: &dyn Any,
-		_id: egui::Id,
-		env: &InspectorUi<'_, ImmutableContext<'c>>,
-	) {
-		ui.add_enabled_ui(false, |ui| {
-			let value = value.downcast_ref::<Quat>().unwrap();
-
-			let options = options
-				.downcast_ref::<QuatOptions>()
-				.cloned()
-				.unwrap_or_default();
-
-			ui.vertical(|ui| match options.display {
-				QuatDisplay::Raw => {
-					let vec4 = Vec4::from(*value);
-					env.ui_for_reflect_readonly(&vec4, ui);
-				}
-				QuatDisplay::Euler => quat_ui_kind_readonly::<Euler>(value, ui, env),
-				QuatDisplay::YawPitchRoll => quat_ui_kind_readonly::<YawPitchRoll>(value, ui, env),
-				QuatDisplay::AxisAngle => quat_ui_kind_readonly::<AxisAngle>(value, ui, env),
-			})
-			.inner
+			QuatDisplay::Euler => quat_ui_kind_readonly::<Euler>(self, ui, env),
+			QuatDisplay::YawPitchRoll => quat_ui_kind_readonly::<YawPitchRoll>(self, ui, env),
+			QuatDisplay::AxisAngle => quat_ui_kind_readonly::<AxisAngle>(self, ui, env),
 		});
 	}
 
-	many_ui!(quat_ui_many quat_ui_mut Quat);
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		_: egui::Id,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool {
+		let options = options
+			.downcast_ref::<QuatOptions>()
+			.cloned()
+			.unwrap_or_default();
+
+		ui.vertical(|ui| match options.display {
+			QuatDisplay::Raw => {
+				let mut vec4 = Vec4::from(*self);
+				let changed = env.ui_for_reflect(&mut vec4, ui);
+				if changed {
+					*self = Quat::from_vec4(vec4).normalize();
+				}
+				changed
+			}
+			QuatDisplay::Euler => quat_ui_kind::<Euler>(self, ui, env),
+			QuatDisplay::YawPitchRoll => quat_ui_kind::<YawPitchRoll>(self, ui, env),
+			QuatDisplay::AxisAngle => quat_ui_kind::<AxisAngle>(self, ui, env),
+		})
+		.inner
+	}
 }

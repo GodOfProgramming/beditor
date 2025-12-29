@@ -1,71 +1,82 @@
-use bevy::{platform::time::Instant, prelude::*};
-use egui::{DragValue, RichText, TextBuffer};
-use std::{any::TypeId, borrow::Cow, ops::AddAssign, path::PathBuf};
-
 use crate::inspector::{
-	data::InspectorPrimitive,
+	data::{InspectorPrimitive, InspectorPrimitiveMultiedit},
 	options::{InspectorOptionsType, NumberDisplay, NumberOptions, RangeOptions},
-	ui::{
-		ImmutableContext, InspectorUi, MutableContext, ProjectorReflect, change_slider, iter_all_eq,
-	},
+	ui::{ImmutableContext, InspectorUi, MutableContext, change_slider, get_one_if_all_equal},
 };
+use bevy::{platform::time::Instant, prelude::*};
+use egui::{DragValue, RichText, TextBuffer, emath::Numeric};
+use smallvec::SmallVec;
 use std::{any::Any, time::Duration};
+use std::{
+	any::TypeId,
+	borrow::Cow,
+	ops::{AddAssign, Sub},
+	path::PathBuf,
+};
 
-// just for orphan rules
-trait Num: egui::emath::Numeric {}
+macro_rules! impl_many_for_numerics {
+  ($($ty:ty),*) => {
+    $(
+      impl InspectorPrimitiveMultiedit for $ty {
+        fn ui_mut<'c>(
+          &mut self,
+          ui: &mut egui::Ui,
+          options: &dyn Any,
+          _: egui::Id,
+          _: &mut InspectorUi<MutableContext>,
+        ) -> bool {
+          let options = options
+            .downcast_ref::<NumberOptions<Self>>()
+            .cloned()
+            .unwrap_or_default();
+          display_number(self, &options, ui, 0.1)
+        }
 
-macro_rules! impl_num {
-    ($($ty:ty),*) => {
-        $(
-            impl Num for $ty {}
-        )*
-    };
+        fn ui(
+          &self,
+          ui: &mut egui::Ui,
+          options: &dyn Any,
+          _: egui::Id,
+          _: &InspectorUi<ImmutableContext>,
+        ) {
+          let options = options
+            .downcast_ref::<NumberOptions<Self>>()
+            .cloned()
+            .unwrap_or_default();
+          let decimal_range = 0..=1usize;
+          ui.add(
+            egui::Button::new(
+              RichText::new(format!(
+                "{}{}{}",
+                options.prefix,
+                egui::emath::format_with_decimals_in_range(self.to_f64(), decimal_range),
+                options.suffix
+              ))
+              .monospace(),
+            )
+            .truncate()
+            .sense(egui::Sense::hover()),
+          );
+        }
+
+        fn ui_mut_multiedit<'s, 'c>(
+          ui: &mut egui::Ui,
+          options: &dyn Any,
+          id: egui::Id,
+          env: &mut InspectorUi<'_, MutableContext<'c>>,
+          values: impl Iterator<Item = &'s mut Self>,
+        ) -> bool
+        where
+          Self: 's,
+        {
+          number_ui_many(ui, options, id, env, values)
+        }
+      }
+    )*
+  };
 }
 
-impl_num!(f32, f64, i8, u8, i16, u16, i32, u32, i64, u64, isize, usize);
-
-impl<T: Reflect + Num> InspectorPrimitive for T {
-	fn ui_mut<'c>(
-		&mut self,
-		ui: &mut egui::Ui,
-		options: &dyn Any,
-		_: egui::Id,
-		_: &mut InspectorUi<MutableContext>,
-	) -> bool {
-		let options = options
-			.downcast_ref::<NumberOptions<T>>()
-			.cloned()
-			.unwrap_or_default();
-		display_number(self, &options, ui, 0.1)
-	}
-
-	fn ui(
-		&self,
-		ui: &mut egui::Ui,
-		options: &dyn Any,
-		_: egui::Id,
-		_: &InspectorUi<ImmutableContext>,
-	) {
-		let options = options
-			.downcast_ref::<NumberOptions<T>>()
-			.cloned()
-			.unwrap_or_default();
-		let decimal_range = 0..=1usize;
-		ui.add(
-			egui::Button::new(
-				RichText::new(format!(
-					"{}{}{}",
-					options.prefix,
-					egui::emath::format_with_decimals_in_range(self.to_f64(), decimal_range),
-					options.suffix
-				))
-				.monospace(),
-			)
-			.truncate()
-			.sense(egui::Sense::hover()),
-		);
-	}
-}
+impl_many_for_numerics!(f32, f64, i8, u8, i16, u16, i32, u32, i64, u64, isize, usize);
 
 pub fn number_ui<T: egui::emath::Numeric>(
 	value: &mut dyn Any,
@@ -166,30 +177,21 @@ fn display_number<T: egui::emath::Numeric>(
 	changed
 }
 
-pub fn number_ui_many<T>(
+pub fn number_ui_many<'s, T>(
 	ui: &mut egui::Ui,
 	_: &dyn Any,
 	id: egui::Id,
 	_env: &mut InspectorUi<MutableContext>,
-	values: &mut [&mut dyn PartialReflect],
-	projector: &dyn ProjectorReflect,
+	values: impl Iterator<Item = &'s mut T>,
 ) -> bool
 where
-	T: Reflect + egui::emath::Numeric + AddAssign<T>,
+	T: Reflect + egui::emath::Numeric + AddAssign<T> + Sub<Output = T> + Default,
 {
-	let same = iter_all_eq(
-		values
-			.iter_mut()
-			.map(|value| *projector(*value).try_downcast_ref::<T>().unwrap()),
-	)
-	.map(T::to_f64);
+	let values = values.collect::<SmallVec<[_; 8]>>();
+	let same = get_one_if_all_equal(values.iter()).map(|v| **v);
 
 	change_slider(ui, id, same, |change, overwrite| {
-		for value in values.iter_mut() {
-			let value = projector(*value)
-				.try_downcast_mut::<T>()
-				.expect("non-fully-reflected value passed to number_ui_many");
-			let change = T::from_f64(change);
+		for value in values.into_iter() {
 			if overwrite {
 				*value = change;
 			} else {

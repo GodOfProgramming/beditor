@@ -3,7 +3,7 @@ pub mod hierarchy;
 
 use crate::{
 	inspector::{
-		data::{InspectorPrimitive, many_unimplemented},
+		data::{InspectorPrimitive, InspectorPrimitiveMultiedit, many_unimplemented},
 		errors::{self, name_of_type, reflect::TypeDataError},
 		options::{InspectorOptions, ReflectInspectorOptions, Target},
 	},
@@ -23,8 +23,8 @@ use bevy::{
 	prelude::*,
 	reflect::{
 		Array, DynamicEnum, DynamicStruct, DynamicTuple, DynamicTyped, DynamicVariant, Enum, EnumInfo,
-		FromType, List, ListInfo, Map, ReflectMut, ReflectRef, Set, SetInfo, StructInfo, Tuple,
-		TupleInfo, TupleStructInfo, TypeInfo, TypeRegistry, VariantInfo, VariantType,
+		List, ListInfo, Map, ReflectMut, ReflectRef, Set, SetInfo, StructInfo, Tuple, TupleInfo,
+		TupleStructInfo, TypeInfo, TypeRegistry, VariantInfo, VariantType,
 	},
 };
 use derive_new::new;
@@ -909,12 +909,15 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		use ListOp::*;
 		let mut changed = false;
 
-		let same_len = iter_all_eq(values.iter_mut().map(
-			|value| match projector(*value).reflect_mut() {
-				ReflectMut::List(l) => l.len(),
-				_ => unreachable!(),
-			},
-		));
+		let same_len =
+			get_one_if_all_equal(
+				values
+					.iter_mut()
+					.map(|value| match projector(*value).reflect_mut() {
+						ReflectMut::List(l) => l.len(),
+						_ => unreachable!(),
+					}),
+			);
 
 		let Some(len) = same_len else {
 			ui.label("lists have different sizes, cannot multiedit");
@@ -1234,12 +1237,15 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		use SetOp::*;
 		let mut changed = false;
 
-		let same_len = iter_all_eq(values.iter_mut().map(
-			|value| match projector(*value).reflect_mut() {
-				ReflectMut::List(l) => l.len(),
-				_ => unreachable!(),
-			},
-		));
+		let same_len =
+			get_one_if_all_equal(
+				values
+					.iter_mut()
+					.map(|value| match projector(*value).reflect_mut() {
+						ReflectMut::List(l) => l.len(),
+						_ => unreachable!(),
+					}),
+			);
 
 		let Some(len) = same_len else {
 			ui.label("lists have different sizes, cannot multiedit");
@@ -1430,7 +1436,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		let mut changed = false;
 
 		let same_variant =
-			iter_all_eq(
+			get_one_if_all_equal(
 				values
 					.iter_mut()
 					.map(|value| match projector(*value).reflect_mut() {
@@ -1756,27 +1762,36 @@ type InspectorUiFnMany = for<'c> fn(
 pub struct InspectorUiVTable {
 	ui: InspectorUiFn,
 	ui_mut: InspectorUiFnMut,
-	ui_many: InspectorUiFnMany,
+	ui_mut_multiedit: InspectorUiFnMany,
 }
 
 impl InspectorUiVTable {
-	pub fn of<T: InspectorPrimitive + PartialEq + Clone + Default>() -> Self {
+	pub fn new<T: InspectorPrimitive + Default + Clone + PartialEq>() -> Self {
 		InspectorUiVTable {
-			ui: ui_vtable::<T>,
-			ui_mut: ui_mut_vtable::<T>,
-			ui_many: ui_many_vtable::<T>,
+			ui: primitive_ui_fn::<T>,
+			ui_mut: primitive_ui_mut_fn::<T>,
+			ui_mut_multiedit: primitive_ui_mut_many_fn::<T>,
 		}
 	}
-	pub fn of_with_many<T: InspectorPrimitive>(fn_many: InspectorUiFnMany) -> Self {
+
+	pub fn new_single<T: InspectorPrimitive>() -> Self {
 		InspectorUiVTable {
-			ui: ui_vtable::<T>,
-			ui_mut: ui_mut_vtable::<T>,
-			ui_many: fn_many,
+			ui: primitive_ui_fn::<T>,
+			ui_mut: primitive_ui_mut_fn::<T>,
+			ui_mut_multiedit: many_unimplemented::<T>,
+		}
+	}
+
+	pub fn new_many<T: InspectorPrimitiveMultiedit>() -> Self {
+		InspectorUiVTable {
+			ui: primitive_ui_fn::<T>,
+			ui_mut: primitive_ui_mut_fn::<T>,
+			ui_mut_multiedit: primitive_ui_mut_many_fn_for::<T>,
 		}
 	}
 
 	/// Create a new [`InspectorEguiImpl`] from functions displaying a type
-	pub fn new(
+	pub fn new_raw(
 		fn_readonly: InspectorUiFn,
 		fn_mut: InspectorUiFnMut,
 		fn_many: InspectorUiFnMany,
@@ -1784,7 +1799,7 @@ impl InspectorUiVTable {
 		InspectorUiVTable {
 			ui: fn_readonly,
 			ui_mut: fn_mut,
-			ui_many: fn_many,
+			ui_mut_multiedit: fn_many,
 		}
 	}
 
@@ -1819,13 +1834,7 @@ impl InspectorUiVTable {
 		values: &mut [&mut dyn PartialReflect],
 		projector: &dyn ProjectorReflect,
 	) -> bool {
-		(self.ui_many)(ui, options, id, env, values, projector)
-	}
-}
-
-impl<T: InspectorPrimitive> FromType<T> for InspectorUiVTable {
-	fn from_type() -> Self {
-		InspectorUiVTable::of_with_many::<T>(many_unimplemented::<T>)
+		(self.ui_mut_multiedit)(ui, options, id, env, values, projector)
 	}
 }
 
@@ -1997,7 +2006,7 @@ pub(crate) fn change_slider<T>(
 	ui: &mut egui::Ui,
 	id: egui::Id,
 	same: Option<T>,
-	f: impl FnOnce(T, bool),
+	on_change: impl FnOnce(T, bool),
 ) -> bool
 where
 	T: egui::emath::Numeric + std::ops::Sub<Output = T> + Default + Send + Sync + 'static,
@@ -2010,7 +2019,7 @@ where
 
 			let changed = ui.add(widget).changed();
 			if changed {
-				f(same, true);
+				on_change(same, true);
 			}
 
 			changed
@@ -2025,7 +2034,7 @@ where
 
 			let changed = ui.add(widget).changed();
 			if changed {
-				f(change - old_change, false);
+				on_change(change - old_change, false);
 			}
 
 			ui.memory_mut(|memory| *memory.data.get_temp_mut_or_default(id) = change);
@@ -2034,55 +2043,12 @@ where
 	}
 }
 
-pub(crate) fn iter_all_eq<T: PartialEq>(mut iter: impl Iterator<Item = T>) -> Option<T> {
+pub(crate) fn get_one_if_all_equal<T: PartialEq>(mut iter: impl Iterator<Item = T>) -> Option<T> {
 	let first = iter.next()?;
 	iter.all(|elem| elem == first).then_some(first)
 }
 
-#[macro_export]
-#[doc(hidden)]
-macro_rules! many_ui {
-	($name:ident $inner:ident $ty:ty) => {
-		pub fn $name<'c>(
-			ui: &mut egui::Ui,
-			options: &dyn Any,
-			id: egui::Id,
-			env: &mut InspectorUi<'_, MutableContext<'c>>,
-			values: &mut [&mut dyn bevy::reflect::PartialReflect],
-			projector: &dyn $crate::inspector::ui::ProjectorReflect,
-		) -> bool {
-			let same = $crate::inspector::ui::iter_all_eq(
-				values
-					.iter_mut()
-					.map(|value| projector(*value).try_downcast_ref::<$ty>().unwrap()),
-			);
-
-			let mut temp = same.cloned().unwrap_or_default();
-			if $inner(&mut temp, ui, options, id, env) {
-				for value in values.iter_mut() {
-					let value = projector(*value).try_downcast_mut::<$ty>().unwrap();
-					*value = temp.clone();
-				}
-
-				return true;
-			}
-			false
-		}
-	};
-}
-
-fn ui_mut_vtable<'c, T: InspectorPrimitive>(
-	val: &mut dyn Any,
-	ui: &mut egui::Ui,
-	options: &dyn Any,
-	id: egui::Id,
-	env: &mut InspectorUi<'_, MutableContext<'c>>,
-) -> bool {
-	let val = val.downcast_mut::<T>().unwrap();
-	T::ui_mut(val, ui, options, id, env)
-}
-
-fn ui_vtable<'c, T: InspectorPrimitive>(
+fn primitive_ui_fn<'c, T: InspectorPrimitive>(
 	val: &dyn Any,
 	ui: &mut egui::Ui,
 	options: &dyn Any,
@@ -2093,7 +2059,18 @@ fn ui_vtable<'c, T: InspectorPrimitive>(
 	T::ui(val, ui, options, id, env)
 }
 
-fn ui_many_vtable<'c, T: Reflect + PartialEq + Clone + Default + InspectorPrimitive>(
+fn primitive_ui_mut_fn<'c, T: InspectorPrimitive>(
+	val: &mut dyn Any,
+	ui: &mut egui::Ui,
+	options: &dyn Any,
+	id: egui::Id,
+	env: &mut InspectorUi<'_, MutableContext<'c>>,
+) -> bool {
+	let val = val.downcast_mut::<T>().unwrap();
+	T::ui_mut(val, ui, options, id, env)
+}
+
+fn primitive_ui_mut_many_fn<'c, T: InspectorPrimitive + Default + Clone + PartialEq>(
 	ui: &mut egui::Ui,
 	options: &dyn Any,
 	id: egui::Id,
@@ -2101,7 +2078,7 @@ fn ui_many_vtable<'c, T: Reflect + PartialEq + Clone + Default + InspectorPrimit
 	values: &mut [&mut dyn PartialReflect],
 	projector: &dyn ProjectorReflect,
 ) -> bool {
-	let same = iter_all_eq(values.iter_mut().map(|value| {
+	let same = get_one_if_all_equal(values.iter_mut().map(|value| {
 		projector(*value)
 			.try_downcast_mut::<T>()
 			.expect("non-fully-reflected value passed to ui_many_vtable")
@@ -2119,6 +2096,23 @@ fn ui_many_vtable<'c, T: Reflect + PartialEq + Clone + Default + InspectorPrimit
 		return true;
 	}
 	false
+}
+
+fn primitive_ui_mut_many_fn_for<'c, T: InspectorPrimitiveMultiedit>(
+	ui: &mut egui::Ui,
+	options: &dyn Any,
+	id: egui::Id,
+	env: &mut InspectorUi<'_, MutableContext<'c>>,
+	values: &mut [&mut dyn PartialReflect],
+	projector: &dyn ProjectorReflect,
+) -> bool {
+	let iter = values.iter_mut().map(|value| {
+		projector(*value)
+			.try_downcast_mut::<T>()
+			.expect("non-fully-reflected value passed to ui_many_vtable")
+	});
+
+	T::ui_mut_multiedit(ui, options, id, env, iter)
 }
 
 fn ui_for_empty_collection(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>) -> bool {

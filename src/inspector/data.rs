@@ -2,13 +2,10 @@ mod bevy_impls;
 mod glam_impls;
 mod std_impls;
 
-use crate::{
-	inspector::{
-		errors::reflect::no_multiedit,
-		options::{NumberOptions, insert_options_enum, insert_options_struct},
-		ui::{ImmutableContext, InspectorUi, InspectorUiVTable, MutableContext, ProjectorReflect},
-	},
-	util,
+use crate::inspector::{
+	errors::reflect::no_multiedit,
+	options::{NumberOptions, insert_options_enum, insert_options_struct},
+	ui::{ImmutableContext, InspectorUi, InspectorUiVTable, MutableContext, ProjectorReflect},
 };
 use bevy::{
 	camera::{Camera3dDepthLoadOp, visibility::RenderLayers},
@@ -21,7 +18,7 @@ use bevy::{
 };
 use nameof::name_of;
 use std::{
-	any::{Any, TypeId},
+	any::{Any, TypeId, type_name},
 	borrow::Cow,
 	path::PathBuf,
 	time::Instant,
@@ -358,18 +355,18 @@ fn register_default_options(type_registry: &mut TypeRegistry) {
 }
 
 fn register_std_impls(type_registry: &mut TypeRegistry) {
-	add_of_with_many::<f32>(type_registry, std_impls::number_ui_many::<f32>);
-	add_of_with_many::<f64>(type_registry, std_impls::number_ui_many::<f64>);
-	add_of_with_many::<i8>(type_registry, std_impls::number_ui_many::<i8>);
-	add_of_with_many::<i16>(type_registry, std_impls::number_ui_many::<i16>);
-	add_of_with_many::<i32>(type_registry, std_impls::number_ui_many::<i32>);
-	add_of_with_many::<i64>(type_registry, std_impls::number_ui_many::<i64>);
-	add_of_with_many::<isize>(type_registry, std_impls::number_ui_many::<isize>);
-	add_of_with_many::<u8>(type_registry, std_impls::number_ui_many::<u8>);
-	add_of_with_many::<u16>(type_registry, std_impls::number_ui_many::<u16>);
-	add_of_with_many::<u32>(type_registry, std_impls::number_ui_many::<u32>);
-	add_of_with_many::<u64>(type_registry, std_impls::number_ui_many::<u64>);
-	add_of_with_many::<usize>(type_registry, std_impls::number_ui_many::<usize>);
+	add_multiedit::<f32>(type_registry);
+	add_multiedit::<f64>(type_registry);
+	add_multiedit::<i8>(type_registry);
+	add_multiedit::<i16>(type_registry);
+	add_multiedit::<i32>(type_registry);
+	add_multiedit::<i64>(type_registry);
+	add_multiedit::<isize>(type_registry);
+	add_multiedit::<u8>(type_registry);
+	add_multiedit::<u16>(type_registry);
+	add_multiedit::<u32>(type_registry);
+	add_multiedit::<u64>(type_registry);
+	add_multiedit::<usize>(type_registry);
 	add::<bool>(type_registry);
 	add::<String>(type_registry);
 
@@ -386,177 +383,56 @@ fn register_std_impls(type_registry: &mut TypeRegistry) {
 	add::<std::ops::Range<f64>>(type_registry);
 
 	type_registry.register::<std::ops::RangeInclusive<f32>>();
-	add::<std::ops::RangeInclusive<f32>>(type_registry);
+	add_single::<std::ops::RangeInclusive<f32>>(type_registry);
 
 	type_registry.register::<std::ops::RangeInclusive<f64>>();
-	add::<std::ops::RangeInclusive<f64>>(type_registry);
+	add_single::<std::ops::RangeInclusive<f64>>(type_registry);
 
-	add::<TypeId>(type_registry);
+	add_single::<TypeId>(type_registry);
 
 	add::<std::time::Duration>(type_registry);
-	add_of_with_many::<Instant>(type_registry, many_unimplemented::<Instant>);
+	add_single::<Instant>(type_registry);
 }
 
 fn register_glam_impls(type_registry: &mut TypeRegistry) {
-	add_raw::<Vec2>(
-		type_registry,
-		glam_impls::vec2_ui,
-		glam_impls::vec2_ui_mut,
-		glam_impls::vec2_ui_many,
-	);
-	add_raw::<Vec3>(
-		type_registry,
-		glam_impls::vec3_ui,
-		glam_impls::vec3_ui_mut,
-		glam_impls::vec3_ui_many,
-	);
-	add_raw::<Vec3A>(
-		type_registry,
-		glam_impls::vec3a_ui,
-		glam_impls::vec3a_ui_mut,
-		glam_impls::vec3a_ui_many,
-	);
-	add_raw::<Vec4>(
-		type_registry,
-		glam_impls::vec4_ui,
-		glam_impls::vec4_ui_mut,
-		glam_impls::vec4_ui_many,
-	);
-	add_raw::<UVec2>(
-		type_registry,
-		glam_impls::uvec2_ui,
-		glam_impls::uvec2_ui_mut,
-		glam_impls::uvec2_ui_many,
-	);
-	add_raw::<UVec3>(
-		type_registry,
-		glam_impls::uvec3_ui,
-		glam_impls::uvec3_ui_mut,
-		glam_impls::uvec3_ui_many,
-	);
-	add_raw::<UVec4>(
-		type_registry,
-		glam_impls::uvec4_ui,
-		glam_impls::uvec4_ui_mut,
-		glam_impls::uvec4_ui_many,
-	);
-	add_raw::<IVec2>(
-		type_registry,
-		glam_impls::ivec2_ui,
-		glam_impls::ivec2_ui_mut,
-		glam_impls::ivec2_ui_many,
-	);
-	add_raw::<IVec3>(
-		type_registry,
-		glam_impls::ivec3_ui,
-		glam_impls::ivec3_ui_mut,
-		glam_impls::ivec3_ui_many,
-	);
-	add_raw::<IVec4>(
-		type_registry,
-		glam_impls::ivec4_ui,
-		glam_impls::ivec4_ui_mut,
-		glam_impls::ivec4_ui_many,
-	);
-	add_raw::<DVec2>(
-		type_registry,
-		glam_impls::dvec2_ui,
-		glam_impls::dvec2_ui_mut,
-		glam_impls::dvec2_ui_many,
-	);
-	add_raw::<DVec3>(
-		type_registry,
-		glam_impls::dvec3_ui,
-		glam_impls::dvec3_ui_mut,
-		glam_impls::dvec3_ui_many,
-	);
-	add_raw::<DVec4>(
-		type_registry,
-		glam_impls::dvec4_ui,
-		glam_impls::dvec4_ui_mut,
-		glam_impls::dvec4_ui_many,
-	);
-	add_raw::<BVec2>(
-		type_registry,
-		glam_impls::bvec2_ui,
-		glam_impls::bvec2_ui_mut,
-		many_unimplemented::<BVec2>,
-	);
-	add_raw::<BVec3>(
-		type_registry,
-		glam_impls::bvec3_ui,
-		glam_impls::bvec3_ui_mut,
-		many_unimplemented::<BVec3>,
-	);
-	add_raw::<BVec4>(
-		type_registry,
-		glam_impls::bvec4_ui,
-		glam_impls::bvec4_ui_mut,
-		many_unimplemented::<BVec4>,
-	);
-	add_raw::<Mat2>(
-		type_registry,
-		glam_impls::mat2_ui,
-		glam_impls::mat2_ui_mut,
-		many_unimplemented::<Mat2>,
-	);
-	add_raw::<Mat3>(
-		type_registry,
-		glam_impls::mat3_ui,
-		glam_impls::mat3_ui_mut,
-		many_unimplemented::<Mat3>,
-	);
-	add_raw::<Mat3A>(
-		type_registry,
-		glam_impls::mat3a_ui,
-		glam_impls::mat3a_ui_mut,
-		many_unimplemented::<Mat3A>,
-	);
-	add_raw::<Mat4>(
-		type_registry,
-		glam_impls::mat4_ui,
-		glam_impls::mat4_ui_mut,
-		many_unimplemented::<Mat4>,
-	);
-	add_raw::<DMat2>(
-		type_registry,
-		glam_impls::dmat2_ui,
-		glam_impls::dmat2_ui_mut,
-		many_unimplemented::<DMat2>,
-	);
-	add_raw::<DMat3>(
-		type_registry,
-		glam_impls::dmat3_ui,
-		glam_impls::dmat3_ui_mut,
-		many_unimplemented::<DMat3>,
-	);
-	add_raw::<DMat4>(
-		type_registry,
-		glam_impls::dmat4_ui,
-		glam_impls::dmat4_ui_mut,
-		many_unimplemented::<DMat4>,
-	);
-
-	add_raw::<Quat>(
-		type_registry,
-		glam_impls::quat::quat_ui,
-		glam_impls::quat::quat_ui_mut,
-		glam_impls::quat::quat_ui_many,
-	);
+	add_multiedit::<Vec2>(type_registry);
+	add_multiedit::<Vec3>(type_registry);
+	add::<Vec3A>(type_registry);
+	add::<Vec4>(type_registry);
+	add::<UVec2>(type_registry);
+	add::<UVec3>(type_registry);
+	add::<UVec4>(type_registry);
+	add::<IVec2>(type_registry);
+	add::<IVec3>(type_registry);
+	add::<IVec4>(type_registry);
+	add::<DVec2>(type_registry);
+	add::<DVec3>(type_registry);
+	add::<DVec4>(type_registry);
+	add::<BVec2>(type_registry);
+	add_single::<BVec3>(type_registry);
+	add_single::<BVec4>(type_registry);
+	add_single::<Mat2>(type_registry);
+	add_single::<Mat3>(type_registry);
+	add_single::<Mat3A>(type_registry);
+	add_single::<Mat4>(type_registry);
+	add_single::<DMat2>(type_registry);
+	add_single::<DMat3>(type_registry);
+	add_single::<DMat4>(type_registry);
+	add::<Quat>(type_registry);
 }
 
 fn register_bevy_impls(type_registry: &mut TypeRegistry) {
-	add_of_with_many::<Entity>(type_registry, many_unimplemented::<Entity>);
+	add_single::<Entity>(type_registry);
 
 	add::<Color>(type_registry);
 
-	add_of_with_many::<Handle<Mesh>>(type_registry, many_unimplemented::<Handle<Mesh>>);
+	add::<Handle<Mesh>>(type_registry);
 
 	add::<RenderLayers>(type_registry);
 
-	add_of_with_many::<Handle<Image>>(type_registry, many_unimplemented::<Handle<Image>>);
+	add_single::<Handle<Image>>(type_registry);
 
-	add::<GizmoConfigStore>(type_registry);
+	add_single::<GizmoConfigStore>(type_registry);
 
 	add::<uuid::Uuid>(type_registry);
 
@@ -564,26 +440,6 @@ fn register_bevy_impls(type_registry: &mut TypeRegistry) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
-type InspectorEguiImplFn =
-	for<'c> fn(&dyn Any, &mut egui::Ui, &dyn Any, egui::Id, &InspectorUi<'_, ImmutableContext<'c>>);
-
-type InspectorEguiImplFnMut = for<'c> fn(
-	&mut dyn Any,
-	&mut egui::Ui,
-	&dyn Any,
-	egui::Id,
-	&mut InspectorUi<'_, MutableContext<'c>>,
-) -> bool;
-
-type InspectorEguiImplFnMany = for<'c, 'a> fn(
-	&mut egui::Ui,
-	&dyn Any,
-	egui::Id,
-	&mut InspectorUi<'_, MutableContext<'c>>,
-	&mut [&mut dyn PartialReflect],
-	&dyn ProjectorReflect,
-) -> bool;
 
 pub trait InspectorPrimitive: Reflect {
 	fn ui<'c>(
@@ -603,40 +459,90 @@ pub trait InspectorPrimitive: Reflect {
 	) -> bool;
 }
 
-fn add<T: InspectorPrimitive + TypePath>(type_registry: &mut TypeRegistry) {
-	type_registry.register_type_data::<T, InspectorUiVTable>();
+pub trait InspectorPrimitiveMultiedit: Reflect {
+	fn ui<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
+	);
+
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool;
+
+	fn ui_mut_multiedit<'s, 'c>(
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+		values: impl Iterator<Item = &'s mut Self>,
+	) -> bool
+	where
+		Self: 's;
 }
 
-fn add_of_with_many<T: InspectorPrimitive>(
+impl<T> InspectorPrimitive for T
+where
+	Self: InspectorPrimitiveMultiedit,
+{
+	fn ui<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
+	) {
+		<Self as InspectorPrimitiveMultiedit>::ui(self, ui, options, id, env);
+	}
+
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool {
+		<Self as InspectorPrimitiveMultiedit>::ui_mut(self, ui, options, id, env)
+	}
+}
+
+fn add<T: InspectorPrimitive + TypePath + PartialEq + Clone + Default>(
 	type_registry: &mut TypeRegistry,
-	fn_many: InspectorEguiImplFnMany,
 ) {
 	type_registry
 		.get_mut(TypeId::of::<T>())
 		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
-		.insert(InspectorUiVTable::of_with_many::<T>(fn_many));
+		.insert(InspectorUiVTable::new::<T>());
 }
 
-fn add_raw<T: 'static>(
-	type_registry: &mut TypeRegistry,
-	ui: InspectorEguiImplFn,
-	ui_mut: InspectorEguiImplFnMut,
-	ui_many: InspectorEguiImplFnMany,
-) {
+fn add_single<T: InspectorPrimitive>(type_registry: &mut TypeRegistry) {
 	type_registry
 		.get_mut(TypeId::of::<T>())
 		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
-		.insert(InspectorUiVTable::new(ui, ui_mut, ui_many));
+		.insert(InspectorUiVTable::new_single::<T>());
 }
 
-pub fn many_unimplemented<T: Any>(
+fn add_multiedit<T: InspectorPrimitiveMultiedit + TypePath>(type_registry: &mut TypeRegistry) {
+	type_registry
+		.get_mut(TypeId::of::<T>())
+		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
+		.insert(InspectorUiVTable::new_many::<T>());
+}
+
+pub fn many_unimplemented<T>(
 	ui: &mut egui::Ui,
-	_options: &dyn Any,
-	_id: egui::Id,
-	_env: &mut InspectorUi<'_, MutableContext<'_>>,
-	_values: &mut [&mut dyn PartialReflect],
-	_projector: &dyn ProjectorReflect,
+	_: &dyn Any,
+	_: egui::Id,
+	_: &mut InspectorUi<MutableContext>,
+	_: &mut [&mut dyn PartialReflect],
+	_: &dyn ProjectorReflect,
 ) -> bool {
-	no_multiedit(ui, &util::pretty_type_name::<T>());
+	no_multiedit(ui, type_name::<T>());
 	false
 }

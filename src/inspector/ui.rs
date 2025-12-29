@@ -343,7 +343,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			options = &data.0;
 		}
 
-		let reason = match registration.data::<InspectorEguiImpl>() {
+		let reason = match registration.data::<InspectorUiVTable>() {
 			Some(ui_impl) => {
 				return ui_impl.execute_many(ui, options, id, self, values, projector);
 			}
@@ -352,7 +352,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 
 		if let Some(s) = self
 			.type_registry
-			.get_type_data::<InspectorEguiImpl>(type_id)
+			.get_type_data::<InspectorUiVTable>(type_id)
 		{
 			return s.execute_many(ui, options, id, self, values, projector);
 		}
@@ -1732,7 +1732,10 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 	}
 }
 
-type InspectorEguiImplFn = for<'c> fn(
+type InspectorUiFn =
+	for<'c> fn(&dyn Any, &mut egui::Ui, &dyn Any, egui::Id, &InspectorUi<'_, ImmutableContext<'c>>);
+
+type InspectorUiFnMut = for<'c> fn(
 	&mut dyn Any,
 	&mut egui::Ui,
 	&dyn Any,
@@ -1740,10 +1743,7 @@ type InspectorEguiImplFn = for<'c> fn(
 	&mut InspectorUi<'_, MutableContext<'c>>,
 ) -> bool;
 
-type InspectorEguiImplFnReadonly =
-	for<'c> fn(&dyn Any, &mut egui::Ui, &dyn Any, egui::Id, &InspectorUi<'_, ImmutableContext<'c>>);
-
-type InspectorEguiImplFnMany = for<'c> fn(
+type InspectorUiFnMany = for<'c> fn(
 	&mut egui::Ui,
 	&dyn Any,
 	egui::Id,
@@ -1753,38 +1753,38 @@ type InspectorEguiImplFnMany = for<'c> fn(
 ) -> bool;
 
 #[derive(Clone)]
-pub struct InspectorEguiImpl {
-	fn_mut: InspectorEguiImplFn,
-	fn_readonly: InspectorEguiImplFnReadonly,
-	fn_many: InspectorEguiImplFnMany,
+pub struct InspectorUiVTable {
+	ui: InspectorUiFn,
+	ui_mut: InspectorUiFnMut,
+	ui_many: InspectorUiFnMany,
 }
 
-impl InspectorEguiImpl {
+impl InspectorUiVTable {
 	pub fn of<T: InspectorPrimitive + PartialEq + Clone + Default>() -> Self {
-		InspectorEguiImpl {
-			fn_mut: ui_vtable::<T>,
-			fn_readonly: ui_readonly_vtable::<T>,
-			fn_many: ui_many_vtable::<T>,
+		InspectorUiVTable {
+			ui: ui_vtable::<T>,
+			ui_mut: ui_mut_vtable::<T>,
+			ui_many: ui_many_vtable::<T>,
 		}
 	}
-	pub fn of_with_many<T: InspectorPrimitive>(fn_many: InspectorEguiImplFnMany) -> Self {
-		InspectorEguiImpl {
-			fn_mut: ui_vtable::<T>,
-			fn_readonly: ui_readonly_vtable::<T>,
-			fn_many,
+	pub fn of_with_many<T: InspectorPrimitive>(fn_many: InspectorUiFnMany) -> Self {
+		InspectorUiVTable {
+			ui: ui_vtable::<T>,
+			ui_mut: ui_mut_vtable::<T>,
+			ui_many: fn_many,
 		}
 	}
 
 	/// Create a new [`InspectorEguiImpl`] from functions displaying a type
 	pub fn new(
-		fn_mut: InspectorEguiImplFn,
-		fn_readonly: InspectorEguiImplFnReadonly,
-		fn_many: InspectorEguiImplFnMany,
+		fn_readonly: InspectorUiFn,
+		fn_mut: InspectorUiFnMut,
+		fn_many: InspectorUiFnMany,
 	) -> Self {
-		InspectorEguiImpl {
-			fn_mut,
-			fn_readonly,
-			fn_many,
+		InspectorUiVTable {
+			ui: fn_readonly,
+			ui_mut: fn_mut,
+			ui_many: fn_many,
 		}
 	}
 
@@ -1796,7 +1796,7 @@ impl InspectorEguiImpl {
 		id: egui::Id,
 		env: &mut InspectorUi<'_, MutableContext<'c>>,
 	) -> bool {
-		(self.fn_mut)(value, ui, options, id, env)
+		(self.ui_mut)(value, ui, options, id, env)
 	}
 
 	pub fn execute_readonly<'a, 'c: 'a>(
@@ -1807,7 +1807,7 @@ impl InspectorEguiImpl {
 		id: egui::Id,
 		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
-		(self.fn_readonly)(value, ui, options, id, env)
+		(self.ui)(value, ui, options, id, env)
 	}
 
 	pub fn execute_many<'a, 'c: 'a, 'e>(
@@ -1819,13 +1819,13 @@ impl InspectorEguiImpl {
 		values: &mut [&mut dyn PartialReflect],
 		projector: &dyn ProjectorReflect,
 	) -> bool {
-		(self.fn_many)(ui, options, id, env, values, projector)
+		(self.ui_many)(ui, options, id, env, values, projector)
 	}
 }
 
-impl<T: InspectorPrimitive> FromType<T> for InspectorEguiImpl {
+impl<T: InspectorPrimitive> FromType<T> for InspectorUiVTable {
 	fn from_type() -> Self {
-		InspectorEguiImpl::of_with_many::<T>(many_unimplemented::<T>)
+		InspectorUiVTable::of_with_many::<T>(many_unimplemented::<T>)
 	}
 }
 
@@ -2071,7 +2071,7 @@ macro_rules! many_ui {
 	};
 }
 
-fn ui_vtable<'c, T: InspectorPrimitive>(
+fn ui_mut_vtable<'c, T: InspectorPrimitive>(
 	val: &mut dyn Any,
 	ui: &mut egui::Ui,
 	options: &dyn Any,
@@ -2082,7 +2082,7 @@ fn ui_vtable<'c, T: InspectorPrimitive>(
 	T::ui_mut(val, ui, options, id, env)
 }
 
-fn ui_readonly_vtable<'c, T: InspectorPrimitive>(
+fn ui_vtable<'c, T: InspectorPrimitive>(
 	val: &dyn Any,
 	ui: &mut egui::Ui,
 	options: &dyn Any,
@@ -2197,12 +2197,12 @@ fn inspector_options_enum_variant_field(
 fn get_type_data<'a>(
 	type_registry: &'a TypeRegistry,
 	type_id: &dyn DynamicTyped,
-) -> Result<&'a InspectorEguiImpl, TypeDataError> {
+) -> Result<&'a InspectorUiVTable, TypeDataError> {
 	let registration = type_registry
 		.get(type_id.reflect_type_info().type_id())
 		.ok_or(TypeDataError::NotRegistered)?;
 	let data = registration
-		.data::<InspectorEguiImpl>()
+		.data::<InspectorUiVTable>()
 		.ok_or(TypeDataError::NoTypeData)?;
 	Ok(data)
 }

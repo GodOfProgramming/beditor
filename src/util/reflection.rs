@@ -1,8 +1,7 @@
 pub mod ron;
-pub mod scenes;
 pub mod serde;
 
-use crate::util::reflection::{scenes::SceneSerializationExtensionsPlugin, serde::SerdeRegistry};
+use crate::util::reflection::serde::SerdeRegistry;
 use bevy::{prelude::*, reflect::TypeInfo};
 
 pub struct ReflectionExtensionsPlugin;
@@ -12,7 +11,6 @@ impl Plugin for ReflectionExtensionsPlugin {
 		app
 			.init_resource::<SerdeRegistry>()
 			.init_resource::<ReflectDefaultCache>()
-			.add_plugins(SceneSerializationExtensionsPlugin)
 			.add_systems(
 				First,
 				ReflectDefaultCache::rebuild_cache.run_if(resource_changed::<AppTypeRegistry>),

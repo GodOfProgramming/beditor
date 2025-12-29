@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 use egui_toast::{Toast, ToastKind};
 
@@ -38,28 +40,28 @@ impl Notification {
 
 	pub fn success(text: impl Into<egui::WidgetText>) -> Self {
 		Self {
-			toast: Toast::new().text(text).kind(ToastKind::Success),
+			toast: toast(ToastKind::Success, text),
 			ctx: None,
 		}
 	}
 
 	pub fn info(text: impl Into<egui::WidgetText>) -> Self {
 		Self {
-			toast: Toast::new().text(text).kind(ToastKind::Info),
+			toast: toast(ToastKind::Info, text),
 			ctx: None,
 		}
 	}
 
 	pub fn warn(text: impl Into<egui::WidgetText>) -> Self {
 		Self {
-			toast: Toast::new().text(text).kind(ToastKind::Warning),
+			toast: toast(ToastKind::Warning, text),
 			ctx: None,
 		}
 	}
 
 	pub fn error(text: impl Into<egui::WidgetText>) -> Self {
 		Self {
-			toast: Toast::new().text(text).kind(ToastKind::Error),
+			toast: toast(ToastKind::Error, text),
 			ctx: None,
 		}
 	}
@@ -136,4 +138,11 @@ fn show_toasts(
 	};
 
 	toasts.show(ctx);
+}
+
+fn toast(kind: ToastKind, text: impl Into<egui::WidgetText>) -> Toast {
+	Toast::new()
+		.text(text)
+		.kind(kind)
+		.options(egui_toast::ToastOptions::default().duration(Duration::from_secs(5)))
 }

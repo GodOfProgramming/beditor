@@ -17,7 +17,9 @@ pub enum Error {
 }
 
 impl Error {
-	pub fn ui(self, ui: &mut egui::Ui, name_of_type: &str) {
+	pub fn ui(self, ui: &mut egui::Ui, name_of_type: impl AsRef<str>) {
+		let name_of_type = name_of_type.as_ref();
+
 		match self {
 			Error::NoAccessToResource => no_access_resource(ui, name_of_type),
 			Error::NoAccessToComponent(entity) => no_access_component(ui, entity, name_of_type),

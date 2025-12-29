@@ -1,12 +1,12 @@
 use crate::{
-	EditorEntity, EditorUi, ProjectSettings, SettingChanged, settings::LogLevelSetting, util::log::{EventCollectorHandle, LogLevel}
+	EditorOwned, EditorUi, ProjectSettings, SettingChanged, settings::LogLevelSetting, util::log::{EventCollectorHandle, LogLevel}
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use strum::IntoEnumIterator;
 use uuid::{Uuid, uuid};
 
 #[derive(Default, Component, Reflect)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct LogUi {
 	log_level: LogLevel,
 }

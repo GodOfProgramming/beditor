@@ -6,6 +6,7 @@ use crate::{
 	util::{
 		self, WorldExtensions,
 		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
+		pretty_type_name_str, type_path_of,
 		world::{MutableWorldView, ReflectBorrow, RestrictedWorldView, WorldView},
 	},
 };
@@ -117,10 +118,12 @@ pub fn ui_for_entity_components(
 
 		let value = match component_view.entity_component_reflect_mut(entity, type_id, type_registry) {
 			Ok(value) => value,
-			Err(_) => {
+			Err(e) => {
 				let response = ui.indent(id, |ui| {
 					ui.label(egui::RichText::new(&name).underline())
-						.on_hover_ui(|ui| errors::no_access_component(ui, entity, &name))
+						.on_hover_ui(|ui| {
+							e.ui(ui, name);
+						})
 				});
 
 				clicked_header.maybe_take(ComponentInfo::from_response(

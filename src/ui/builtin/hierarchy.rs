@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
 use crate::{
-	EditorEntity,
+	EditorOwned,
 	inspector::WorldExtensions as _,
+	scene::serialize_to_scene,
 	ui::{
 		EditorUiBundle, InspectorSelection, SelectedEntities,
 		builtin::{BundleDnd, image_viewer::OpenImageViewer},
 		notifications::Notification,
 	},
-	util::{WorldExtensions as _, reflection},
+	util::WorldExtensions as _,
 	view::cam::{ActiveEditorCamera, EditorManagedCamera, LookAt, MoveTo},
 };
 use bevy::prelude::*;
@@ -16,7 +17,7 @@ use egui_file_dialog::FileDialog;
 use uuid::{Uuid, uuid};
 
 #[derive(Component, Reflect, Default)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct HierarchyUi;
 
 impl EditorUiBundle for HierarchyUi {
@@ -129,16 +130,16 @@ impl HierarchyUi {
 
 				let state = world
 					.resource::<HierarchyState>()
-					.file_dialog
+					.scene_file_dialog
 					.state()
 					.clone();
 
 				ui.add_enabled_ui(state != egui_file_dialog::DialogState::Open, |ui| {
 					if ui.button("Save As Scene").clicked() {
-						match reflection::scenes::serialize_to_scene(entity, world) {
+						match serialize_to_scene(entity, world) {
 							Ok(data) => {
 								let mut state = world.resource_mut::<HierarchyState>();
-								state.file_dialog.save_file();
+								state.scene_file_dialog.save_file();
 								state.data = data;
 							}
 							Err(err) => {
@@ -220,7 +221,7 @@ impl ClearSelectedMessage {
 
 #[derive(Resource, Default)]
 struct HierarchyState {
-	file_dialog: FileDialog,
+	scene_file_dialog: FileDialog,
 	data: Vec<u8>,
 }
 
@@ -234,9 +235,9 @@ fn show_dialogs(
 		return;
 	};
 
-	state.file_dialog.update(ctx);
-	if let Some(file) = state.file_dialog.take_picked()
-		&& state.file_dialog.mode() == egui_file_dialog::DialogMode::SaveFile
+	state.scene_file_dialog.update(ctx);
+	if let Some(file) = state.scene_file_dialog.take_picked()
+		&& state.scene_file_dialog.mode() == egui_file_dialog::DialogMode::SaveFile
 	{
 		match std::fs::write(&file, std::mem::take(&mut state.data)) {
 			Ok(_) => {

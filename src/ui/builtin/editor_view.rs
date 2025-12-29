@@ -1,5 +1,6 @@
 use crate::{
-	EditorEntity, EditorSceneRoot, EditorState, EditorUi,
+	EditorOwned, EditorState, EditorUi,
+	scene::PrimaryScene,
 	ui::{
 		builtin::{
 			BundleDnd,
@@ -7,7 +8,7 @@ use crate::{
 		},
 		misc::UiState,
 	},
-	util::{WorldExtensions as _, make_singleton},
+	util::{WorldExtensions as _, ensure_singleton},
 	view::cam::EditorCamera,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -46,7 +47,7 @@ impl EditorUi for EditorViewUi {
 		EditorManagedViewUi::<EditorCamera>::init(app);
 
 		app
-			.add_observer(make_singleton::<TemporaryEntity>)
+			.add_observer(ensure_singleton::<TemporaryEntity>)
 			.add_systems(OnExit(EditorState::Editing), despawn_temporaries)
 			.add_systems(
 				FixedUpdate,
@@ -151,7 +152,7 @@ impl EditorUi for EditorViewUi {
 			payload.insert(std::iter::once(new_entity), world);
 
 			'make_child: {
-				let mut query = world.query_filtered::<Entity, With<EditorSceneRoot>>();
+				let mut query = world.query_filtered::<Entity, With<PrimaryScene>>();
 				let Ok(root_entity) = query.query_mut(world).single() else {
 					break 'make_child;
 				};
@@ -184,7 +185,7 @@ impl EditorUi for EditorViewUi {
 }
 
 #[derive(Component)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 struct TemporaryEntity;
 
 fn move_temporaries(

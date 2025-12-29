@@ -67,14 +67,6 @@ impl Setting for EditorSettingsSetting {
 	const NAME: &str = "settings";
 }
 
-pub struct StartEditorInTestingSetting;
-
-impl Setting for StartEditorInTestingSetting {
-	type Type = bool;
-	type Group = EditorSettingsGroup;
-	const NAME: &str = "start_in_testing";
-}
-
 pub struct EditorEguiSettings;
 
 impl Setting for EditorEguiSettings {

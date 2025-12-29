@@ -1,5 +1,6 @@
 use crate::{
 	EditorState, SimulationState,
+	scene::PrimaryScene,
 	ui::{
 		builtin::settings::{EditorSettingsUi, ProjectSettingsUi},
 		events::OpenSingleUiMessage,
@@ -28,7 +29,7 @@ struct CachedSettings {
 
 pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 	egui::MenuBar::new().ui(ui, |ui| {
-		file_menu(ui);
+		file_menu(ui, &mut params);
 		edit_menu(ui, &mut params);
 		tools_menu(ui);
 		view_menu(ui);
@@ -36,10 +37,14 @@ pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 	});
 }
 
-fn file_menu(ui: &mut egui::Ui) {
+fn file_menu(ui: &mut egui::Ui, params: &mut Params) {
 	ui.menu_button("File", |ui| {
 		if ui.button("New Scene").clicked() {
-			//
+			params.commands.spawn(PrimaryScene);
+		}
+
+		if ui.button("Test").clicked() {
+			params.commands.spawn_empty();
 		}
 	});
 }
@@ -103,6 +108,12 @@ fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 		}
 		_ => (),
 	}
+
+	ui.menu_button(icons::DOTS_THREE_VERTICAL, |ui| {
+		if ui.button("placeholder").clicked() {
+			info!("placeholder");
+		}
+	});
 }
 
 fn play_button(ui: &mut egui::Ui, params: &mut Params, target_state: EditorState) {

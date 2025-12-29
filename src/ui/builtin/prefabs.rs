@@ -1,6 +1,6 @@
 use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 
-use crate::{EditorEntity, ui::{
+use crate::{EditorOwned, ui::{
 	EditorUiBundle,
 	builtin::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
 	notifications::Notification,
@@ -12,7 +12,7 @@ use uuid::{Uuid, uuid};
 use vfs::Vfs;
 
 #[derive(Component, Reflect, Default)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct PrefabsUi;
 
 impl EditorUiBundle for PrefabsUi {

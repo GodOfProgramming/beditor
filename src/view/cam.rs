@@ -1,12 +1,12 @@
 use super::UP;
 use crate::{
-	EditorEntity, Notification,
+	EditorOwned, Notification,
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
 	ui::EditorUiHitCaptureNode,
-	util::{make_singleton, storage::ProjectSettings},
+	util::{ensure_singleton, storage::ProjectSettings},
 };
 use bevy::{
-	camera::{ImageRenderTarget, NormalizedRenderTarget, RenderTarget},
+	camera::{NormalizedRenderTarget, RenderTarget},
 	color::palettes::tailwind,
 	picking::{
 		PickingSystems,
@@ -33,7 +33,7 @@ impl Plugin for EditorCamPlugin {
 		app
 			.init_resource::<RenderCameras>()
 			.init_resource::<GameCameraColor>()
-			.add_observer(make_singleton::<EditorCamera>)
+			.add_observer(ensure_singleton::<EditorCamera>)
 			.add_observer(LookAt::handle)
 			.add_observer(MoveTo::handle)
 			.add_observer(SyncRenderCamerasEvent::handle)
@@ -71,19 +71,22 @@ fn init_camera(
 
 fn on_manage_camera(
 	event: On<Add, EditorManagedCamera>,
-	mut commands: Commands,
 	mut contexts: bevy_egui::EguiContexts,
 	mut images: ResMut<Assets<Image>>,
+	mut q_cameras: Query<&mut Camera>,
 ) {
-	let image = Image::new_target_texture(1, 1, TextureFormat::bevy_default());
-	let image_handle = images.add(image);
+	if let Ok(mut camera) = q_cameras.get_mut(event.event_target()) {
+		let image_handle = if let RenderTarget::Image(render_target) = &camera.target {
+			render_target.handle.clone()
+		} else {
+			let image = Image::new_target_texture(1, 1, TextureFormat::bevy_default());
+			let handle = images.add(image);
+			camera.target = RenderTarget::Image(handle.clone().into());
+			handle
+		};
 
-	contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
-
-	commands.entity(event.event_target()).insert(Camera {
-		target: RenderTarget::Image(ImageRenderTarget::from(image_handle)),
-		..default()
-	});
+		contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
+	}
 }
 
 fn on_unmanage_camera(
@@ -110,7 +113,7 @@ fn on_spawn_editor_camera(
 		});
 	commands.spawn((
 		Name::new("Axis Image"),
-		EditorEntity,
+		EditorOwned,
 		Pickable::IGNORE,
 		FocusPolicy::Pass,
 		UiTargetCamera(event.event_target()),
@@ -144,7 +147,7 @@ fn despawn_editor_cameras(mut commands: Commands, q_cams: Query<Entity, With<Edi
 
 #[derive(Default, Component, Reflect, Identifiable)]
 #[require(
-  EditorEntity,
+  EditorOwned,
   MeshPickingCamera,
   EditorManagedCamera,
   AxesGizmoSyncCamera = AxesGizmoSyncCamera,

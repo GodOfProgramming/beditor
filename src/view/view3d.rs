@@ -1,6 +1,6 @@
 use super::{OrbitState, PanState, UP};
 use crate::{
-	EditorEntity,
+	EditorOwned,
 	input::EditorActions,
 	settings::CamStateSetting3d,
 	util::{self, storage::ProjectSettings},
@@ -22,7 +22,7 @@ pub struct View3d;
 #[require(
   Camera3d,
   EditorCamera,
-  EditorEntity,
+  EditorOwned,
   CameraSettings,
   GizmoCamera = GizmoCamera,
   OutlineCamera = OutlineCamera, Msaa::Off, DepthPrepass,
@@ -259,7 +259,7 @@ pub struct CameraSaveData {
 }
 
 #[derive(Component, Reflect, Serialize, Deserialize, Clone)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct CameraSettings {
 	move_speed: f32,
 	orbit_sensitivity: f32,

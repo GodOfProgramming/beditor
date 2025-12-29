@@ -6,7 +6,7 @@ mod systems;
 pub mod widgets;
 
 use crate::{
-	DataTable, EditorEntity, EditorState, PersistentData, ProjectSettings, RuntimeSettings,
+	DataTable, EditorOwned, EditorState, PersistentData, ProjectSettings, RuntimeSettings,
 	inspector::ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
 	settings::CurrentLayoutSetting,
 	ui::{
@@ -17,7 +17,7 @@ use crate::{
 		},
 		events::{OpenSingleUiMessage, OpenUiMessage, ShowUiMessage},
 	},
-	util::make_singleton,
+	util::ensure_singleton,
 	view::cam::EditorCamera,
 };
 use bevy::{
@@ -25,10 +25,7 @@ use bevy::{
 	camera::visibility::{Layer, RenderLayers},
 	ecs::{
 		component::Mutable,
-		entity_disabling::Disabled,
-		lifecycle::HookContext,
 		system::{SystemParam, SystemState, entity_command},
-		world::DeferredWorld,
 	},
 	picking::pointer::PointerId,
 	platform::collections::HashMap,
@@ -69,17 +66,17 @@ struct EditorUiSystems;
   },
   Camera2d,
   RenderLayers = RenderLayers::layer(EDITOR_UI_LAYER),
-  EditorEntity
+  EditorOwned
 )]
 pub struct EditorUiCamera;
 
 #[derive(Component)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct EditorUiHitCaptureNode;
 
-pub(crate) struct UiPlugin;
+pub(crate) struct EditorUiPlugin;
 
-impl Plugin for UiPlugin {
+impl Plugin for EditorUiPlugin {
 	fn build(&self, app: &mut App) {
 		debug!("Building UI Plugin");
 
@@ -287,7 +284,7 @@ where
 	fn init(app: &mut App) {
 		<Self as EditorUi>::init(app);
 		if <Self as EditorUi>::UNIQUE {
-			app.add_observer(make_singleton::<Self>);
+			app.add_observer(ensure_singleton::<Self>);
 		}
 	}
 
@@ -677,7 +674,7 @@ impl VTable {
 		let entity = world
 			.spawn((
 				Name::new(T::NAME),
-				EditorEntity,
+				EditorOwned,
 				PersistentId(T::ID),
 				UiState::default(),
 			))
@@ -903,7 +900,7 @@ fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 
 /// Component that stores all ui components as children for organization
 #[derive(Component)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct UiPanels;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States, Default)]

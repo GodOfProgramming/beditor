@@ -1,5 +1,5 @@
 use crate::{
-	EditorEntity, EditorUiBundle,
+	EditorOwned, EditorUiBundle,
 	inspector::WorldExtensions,
 	ui::{TabState, UiManager, widgets},
 	util::reflection::{ReflectDefaultCache, serde::SerdeRegistry},
@@ -19,7 +19,7 @@ pub struct TypeEditorUi {
 }
 
 #[derive(Component, Reflect, Default)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct TypeEditorMarker;
 
 impl EditorUiBundle for TypeEditorUi {
@@ -146,7 +146,7 @@ impl AsRef<str> for CachedType {
 }
 
 #[derive(Component)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 struct TypeEditorState {
 	opened_file: Option<PathBuf>,
 

@@ -1,4 +1,4 @@
-use crate::{EditingSystems, EditorEntity, EditorState, RuntimeSettings, ui::KeyboardFocus};
+use crate::{EditingSystems, EditorOwned, EditorState, RuntimeSettings, ui::KeyboardFocus};
 use bevy::prelude::*;
 use leafwing_input_manager::{
 	Actionlike,
@@ -23,9 +23,9 @@ pub enum EditorActions {
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
 pub struct Unfocused;
 
-pub struct InputPlugin;
+pub struct EditorInputPlugin;
 
-impl InputPlugin {
+impl EditorInputPlugin {
 	fn init_input(mut commands: Commands) {
 		let inputs = InputMap::default()
 			.with(EditorActions::Play, KeyCode::F5)
@@ -38,11 +38,11 @@ impl InputPlugin {
 			.with(EditorActions::MoveEast, KeyCode::KeyD)
 			.with(EditorActions::ToggleUi, KeyCode::F11);
 
-		commands.spawn((Name::new("Editor Input"), EditorEntity, inputs));
+		commands.spawn((Name::new("Editor Input"), EditorOwned, inputs));
 	}
 }
 
-impl Plugin for InputPlugin {
+impl Plugin for EditorInputPlugin {
 	fn build(&self, app: &mut App) {
 		app
 			.configure_sets(

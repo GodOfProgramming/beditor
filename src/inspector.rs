@@ -25,9 +25,9 @@ use bevy::{
 use std::{any::TypeId, borrow::BorrowMut};
 use ui::{InspectorUi, components, hierarchy};
 
-pub struct InspectorPlugin;
+pub struct EditorInspectorPlugin;
 
-impl Plugin for InspectorPlugin {
+impl Plugin for EditorInspectorPlugin {
 	fn build(&self, app: &mut App) {
 		app
 			.register_types::<(

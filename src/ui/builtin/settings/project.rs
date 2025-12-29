@@ -1,6 +1,6 @@
 use crate::{
-	EditorEntity, EditorUi, Notification,
-	settings::{SaveLayoutOnExitSetting, StartEditorInTestingSetting},
+	EditorOwned, EditorUi, Notification,
+	settings::SaveLayoutOnExitSetting,
 	ui::{
 		DockExtensions, LayoutManager, LoadLayout, SavedLayout, UiManager, misc::MissingUi, widgets,
 	},
@@ -15,7 +15,7 @@ use strum_macros::{Display, EnumIter};
 use uuid::uuid;
 
 #[derive(Component)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct ProjectSettingsUi {
 	selected_category: Option<ProjectSettingCategory>,
 	save_layout_dialog: widgets::Dialog,
@@ -32,7 +32,6 @@ pub struct ProjectSettingsUiParams<'w, 's> {
 	layout_name: Local<'s, String>,
 
 	save_layout_on_exit: Local<'s, bool>,
-	start_in_testing: Local<'s, bool>,
 }
 
 impl EditorUi for ProjectSettingsUi {
@@ -64,11 +63,6 @@ impl EditorUi for ProjectSettingsUi {
 			.project_settings
 			.get(SaveLayoutOnExitSetting)
 			.unwrap_or(true);
-
-		*params.start_in_testing = params
-			.project_settings
-			.get(StartEditorInTestingSetting)
-			.unwrap_or_default();
 
 		Self {
 			selected_category: None,
@@ -136,7 +130,6 @@ impl EditorUi for ProjectSettingsUi {
 
 #[derive(Reflect, Clone, Copy, EnumIter, Display, PartialEq, Eq)]
 enum ProjectSettingCategory {
-	Core,
 	Camera,
 	Layouts,
 }
@@ -149,15 +142,6 @@ impl ProjectSettingCategory {
 		settings_ui: &mut ProjectSettingsUi,
 	) {
 		match self {
-			Self::Core => {
-				ui.label("Start In Testing");
-				if ui.checkbox(&mut params.start_in_testing, ()).clicked() {
-					params
-						.project_settings
-						.set(StartEditorInTestingSetting, *params.start_in_testing)
-						.ok();
-				}
-			}
 			Self::Camera => {
 				ui.horizontal(|ui| {
 					ui.label("Editor Camera Mode:");

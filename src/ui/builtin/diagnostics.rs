@@ -1,5 +1,5 @@
 use crate::{
-	EditorEntity, RuntimeSettings,
+	EditorOwned, RuntimeSettings,
 	ui::{EditorUi, builtin::inspector::InspectorSettings},
 	util::{egui::ContextExtensions, log::LogLevel},
 	view::cam::{RenderCameras, SyncRenderCamerasEvent},
@@ -182,7 +182,7 @@ fn startup(
 	let graph_camera = commands
 		.spawn((
 			Name::new("Frame Graph Camera"),
-			EditorEntity,
+			EditorOwned,
 			FrameTimeGraphCamera,
 			Camera2d,
 			Camera {
@@ -194,7 +194,7 @@ fn startup(
 
 	commands.spawn((
 		Name::new("Frame Graph Node"),
-		EditorEntity,
+		EditorOwned,
 		UiTargetCamera(graph_camera),
 		Node {
 			width: vw(100),

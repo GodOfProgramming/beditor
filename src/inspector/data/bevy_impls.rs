@@ -635,11 +635,11 @@ fn asset_picker<'c, A: Asset>(
 		(Ok(a), Ok(b)) => (a, b),
 		(a, b) => {
 			if let Err(e) = a {
-				e.ui(ui, &pretty_type_name::<AssetServer>());
+				e.ui(ui, pretty_type_name::<AssetServer>());
 			}
 
 			if let Err(e) = b {
-				e.ui(ui, &pretty_type_name::<Assets<A>>());
+				e.ui(ui, pretty_type_name::<Assets<A>>());
 			}
 			return false;
 		}

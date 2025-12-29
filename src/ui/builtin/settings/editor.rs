@@ -1,5 +1,5 @@
 use crate::{
-	APP_DIR, EditorEntity, EditorState, EditorUi, Notification, Settings,
+	APP_DIR, EditorOwned, EditorState, EditorUi, Notification, Settings,
 	settings::{CurrentThemeSetting, EditorEguiSettings},
 	util::storage::{Global, GlobalEditorSettings},
 };
@@ -13,7 +13,7 @@ use strum_macros::{Display, EnumIter};
 use uuid::uuid;
 
 #[derive(Default, Component, Reflect)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct EditorSettingsUi {
 	selected_category: Option<EditorSettingCategory>,
 }

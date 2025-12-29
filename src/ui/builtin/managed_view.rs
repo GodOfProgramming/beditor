@@ -1,4 +1,6 @@
-use crate::{EditorEntity, ui::EditorUi, util::egui::ContextExtensions, view::cam::EditorManagedCamera};
+use crate::{
+	EditorOwned, ui::EditorUi, util::egui::ContextExtensions, view::cam::EditorManagedCamera,
+};
 use bevy::{
 	camera::RenderTarget, ecs::system::SystemParam, prelude::*, reflect::Reflectable,
 	render::render_resource::Extent3d,
@@ -8,7 +10,7 @@ use persistent_id::Identifiable;
 use std::marker::PhantomData;
 
 #[derive(Component)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct EditorManagedViewUi<C>
 where
 	C: Component,

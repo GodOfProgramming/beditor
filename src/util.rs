@@ -8,19 +8,31 @@ pub mod storage;
 pub mod window;
 pub mod world;
 
-use bevy::{ecs::world::CommandQueue, prelude::*, reflect::GetTypeRegistration};
+use bevy::{
+	ecs::{system::entity_command, world::CommandQueue},
+	prelude::*,
+	reflect::{GetTypeRegistration, TypeRegistry},
+};
 use std::{
+	any::TypeId,
 	borrow::{Borrow, BorrowMut},
 	marker::PhantomData,
 };
 
-use crate::{EditorEntity, EditorState, Simulated};
+use crate::{EditorOwned, EditorState, Simulated};
 
 pub fn pretty_type_name<T>() -> String {
 	format!("{:?}", disqualified::ShortName::of::<T>())
 }
+
 pub fn pretty_type_name_str(val: &str) -> String {
 	format!("{:?}", disqualified::ShortName(val))
+}
+
+pub fn type_path_of(type_registry: &TypeRegistry, type_id: TypeId) -> Option<&'static str> {
+	type_registry
+		.get_type_info(type_id)
+		.map(|info| info.type_path())
 }
 
 // Replace this when || becomes an operator
@@ -28,13 +40,27 @@ pub fn or(a: bool, b: bool) -> bool {
 	a || b
 }
 
-pub fn make_singleton<C: Component>(
+pub fn ensure_singleton<C: Component>(
 	event: On<Add, C>,
 	mut commands: Commands,
 	q_others: Query<Entity, With<C>>,
 ) {
 	for entity in q_others.iter().filter(|&e| e != event.event_target()) {
-		commands.entity(entity).despawn();
+		if let Ok(mut entity) = commands.get_entity(entity) {
+			entity.queue_silenced(entity_command::despawn());
+		}
+	}
+}
+
+pub fn one_of<C: Component>(
+	event: On<Add, C>,
+	mut commands: Commands,
+	q_others: Query<Entity, With<C>>,
+) {
+	for entity in q_others.iter().filter(|&e| e != event.event_target()) {
+		if let Ok(mut entity) = commands.get_entity(entity) {
+			entity.queue_silenced(entity_command::remove::<C>());
+		}
 	}
 }
 
@@ -78,7 +104,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 		let world = self.borrow_mut();
 
 		match world.state::<EditorState>() {
-			EditorState::Editing => Some(world.spawn(EditorEntity).id()),
+			EditorState::Editing => Some(world.spawn(EditorOwned).id()),
 			EditorState::SimulationPrep | EditorState::Simulating(_) => Some(world.spawn(Simulated).id()),
 			_ => None,
 		}

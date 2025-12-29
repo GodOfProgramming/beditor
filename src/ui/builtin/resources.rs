@@ -1,5 +1,5 @@
 use crate::{
-	EditorEntity,
+	EditorOwned,
 	ui::{EditorUi, InspectorSelection},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 use uuid::uuid;
 
 #[derive(Default, Component, Reflect)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct ResourcesUi;
 
 #[derive(SystemParam)]

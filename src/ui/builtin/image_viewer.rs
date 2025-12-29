@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::{
-	EditorEntity,
+	EditorOwned,
 	ui::{EditorUi, TabState, events::ShowUiMessage},
 	util::egui::ContextExtensions,
 };
@@ -19,7 +19,7 @@ use egui_file_dialog::FileDialog;
 use uuid::uuid;
 
 #[derive(Component, Default)]
-#[require(EditorEntity)]
+#[require(EditorOwned)]
 pub struct ImageViewerUi {
 	image: Handle<Image>,
 	tex: egui::TextureId,
@@ -80,7 +80,7 @@ impl EditorUi for ImageViewerUi {
 
 		if let Some(path) = file_dialog.take_picked() {
 			commands
-				.spawn((EditorEntity, Screenshot::image(self.image.clone())))
+				.spawn((EditorOwned, Screenshot::image(self.image.clone())))
 				.observe(save_to_disk(path));
 		}
 

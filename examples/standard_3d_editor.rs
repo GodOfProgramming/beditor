@@ -9,11 +9,21 @@ static GLOBAL: MiMalloc = MiMalloc;
 fn main() {
 	App::new()
 		.add_plugins((
-			EditorPlugin::new().register_game_camera::<GameCamera>(),
+			EditorPlugin::new(),
+			EditorExtensionPlugin::<GameCameraPlugin>::default(),
 			PrefabPlugin::default().with_static_prefab::<Cube>(),
 		))
 		.add_systems(Startup, startup)
 		.run();
+}
+
+#[derive(Default)]
+struct GameCameraPlugin;
+
+impl EditorExtension for GameCameraPlugin {
+	fn build(&self, ctx: EditorExtensionContext) {
+		ctx.register_game_camera::<GameCamera>();
+	}
 }
 
 #[derive(Component, Reflect, Default, Identifiable)]

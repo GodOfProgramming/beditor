@@ -3,27 +3,37 @@ use bevy::prelude::*;
 
 fn main() {
 	App::new()
-		.add_plugins(
-			EditorPlugin::new()
-				.register_components::<(SpinComponent, GrowthComponent)>()
-				.register_components::<(
-					ExampleComponent<i8>,
-					ExampleComponent<i16>,
-					ExampleComponent<i32>,
-					ExampleComponent<i64>,
-				)>()
-				.register_components::<(
-					ExampleComponent<u8>,
-					ExampleComponent<u16>,
-					ExampleComponent<u32>,
-					ExampleComponent<u64>,
-				)>()
-				.register_components::<(ExampleComponent<f32>, ExampleComponent<f64>)>()
-				.register_components::<(ExampleComponent<isize>, ExampleComponent<usize>)>(),
-		)
+		.add_plugins((
+			EditorPlugin::new(),
+			EditorExtensionPlugin::<GameComponentsExtension>::default(),
+		))
 		.add_systems(Startup, startup)
 		.add_systems(Update, (spin, grow).in_set(AppSystems))
 		.run();
+}
+
+#[derive(Default)]
+struct GameComponentsExtension;
+
+impl EditorExtension for GameComponentsExtension {
+	fn build(&self, ctx: EditorExtensionContext) {
+		ctx
+			.register_components::<(SpinComponent, GrowthComponent)>()
+			.register_components::<(
+				ExampleComponent<i8>,
+				ExampleComponent<i16>,
+				ExampleComponent<i32>,
+				ExampleComponent<i64>,
+			)>()
+			.register_components::<(
+				ExampleComponent<u8>,
+				ExampleComponent<u16>,
+				ExampleComponent<u32>,
+				ExampleComponent<u64>,
+			)>()
+			.register_components::<(ExampleComponent<f32>, ExampleComponent<f64>)>()
+			.register_components::<(ExampleComponent<isize>, ExampleComponent<usize>)>();
+	}
 }
 
 fn startup(

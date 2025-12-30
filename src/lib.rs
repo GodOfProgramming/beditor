@@ -44,6 +44,7 @@ use bevy_axes_gizmo::AxesGizmoPlugin;
 use bevy_infinite_grid::InfiniteGridPlugin;
 use bevy_mesh_outline::MeshOutlinePlugin;
 use brefabs::PrefabPlugin;
+use derive_new::new;
 use input::EditorInputPlugin;
 use platform_dirs::AppDirs;
 pub use prelude::*;
@@ -55,7 +56,7 @@ use view::EditorViewPlugin;
 
 pub mod prelude {
 	pub use crate::{
-		AppSystems, EditorPlugin,
+		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
 		ui::{EditorUi, EditorUiBundle, NoParams, UiManager, notifications::Notification, widgets},
 		util::{
 			AppExtensions, RegisterableType, TypeGroups, TypeList,
@@ -92,10 +93,6 @@ pub enum SimulationState {
 	Idle,
 }
 
-type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
-type UiRegistrationFn = Box<dyn Fn(&mut App, &mut UiManager) + Send + Sync>;
-type ComponentRegistrationFn = Box<dyn Fn(&mut App, &mut ComponentRegistry) + Send + Sync>;
-
 static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 	let dirs =
 		AppDirs::new(Some("beditor"), false).expect("Could not acquire application directories");
@@ -103,13 +100,12 @@ static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 	dirs.data_dir
 });
 
+type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
+
 #[derive(Default)]
 pub struct EditorPlugin {
 	skip_registering_reflected_components: bool,
 	default_plugins: Option<AppRegistrationFn>,
-	generic_registrations: Vec<AppRegistrationFn>,
-	ui_registrations: Vec<UiRegistrationFn>,
-	component_registrations: Vec<ComponentRegistrationFn>,
 }
 
 impl EditorPlugin {
@@ -134,42 +130,6 @@ impl EditorPlugin {
 		self
 	}
 
-	pub fn register_component<T: RegisterableComponent>(mut self) -> Self {
-		self
-			.component_registrations
-			.push(Box::new(|app, component_registry| {
-				T::register(app.world_mut(), component_registry);
-			}));
-		self
-	}
-
-	pub fn register_components<T: RegisterableComponents>(mut self) -> Self {
-		self
-			.component_registrations
-			.push(Box::new(|app, component_registry| {
-				T::register_components(app.world_mut(), component_registry);
-			}));
-		self
-	}
-
-	pub fn register_game_camera<C>(mut self) -> Self
-	where
-		C: Component + Reflectable + Identifiable,
-	{
-		self.ui_registrations.push(Box::new(|app, ui_manager| {
-			view::add_game_camera::<C>(app);
-			ui_manager.register::<EditorManagedViewUi<C>>(app);
-		}));
-		self
-	}
-
-	pub fn register_ui<U: EditorUiBundle>(mut self) -> Self {
-		self.ui_registrations.push(Box::new(|app, ui_manager| {
-			ui_manager.register::<U>(app);
-		}));
-		self
-	}
-
 	fn override_defaults(builder: PluginGroupBuilder) -> PluginGroupBuilder {
 		builder
 			.set(WindowPlugin {
@@ -185,32 +145,6 @@ impl EditorPlugin {
 			})
 			.disable::<bevy::log::LogPlugin>()
 	}
-
-	fn configure<'a>(&self, app: &'a mut App) -> &'a mut App {
-		if let Some(config_fn) = &self.default_plugins {
-			(config_fn)(app);
-		} else {
-			app.add_plugins(Self::override_defaults(DefaultPlugins.build()));
-		}
-
-		for f in &self.generic_registrations {
-			(f)(app);
-		}
-
-		let mut ui_manager = UiManager::new(app);
-		for f in &self.ui_registrations {
-			(f)(app, &mut ui_manager);
-		}
-
-		let mut component_registry = ComponentRegistry::default();
-		for f in &self.component_registrations {
-			(f)(app, &mut component_registry);
-		}
-
-		app
-			.insert_resource(component_registry)
-			.insert_resource(ui_manager)
-	}
 }
 
 impl Plugin for EditorPlugin {
@@ -222,8 +156,16 @@ impl Plugin for EditorPlugin {
 			.insert_resource(Settings::<Project>::new().unwrap())
 			.add_plugins(LogPlugin);
 
-		self
-			.configure(app)
+		if let Some(config_fn) = &self.default_plugins {
+			(config_fn)(app);
+		} else {
+			app.add_plugins(Self::override_defaults(DefaultPlugins.build()));
+		}
+
+		let ui_manager = UiManager::new(app);
+		app
+			.insert_resource(ui_manager)
+			.init_resource::<ComponentRegistry>()
 			.init_resource::<RuntimeSettings>()
 			.insert_state(EditorState::Editing)
 			.configure_sets(
@@ -303,6 +245,95 @@ impl Plugin for EditorPlugin {
 				AppSystems.run_if(in_state(EditorState::Simulating(SimulationState::Live))),
 			);
 		}
+	}
+}
+
+pub trait EditorExtension {
+	fn build(&self, ctx: EditorExtensionContext);
+}
+
+#[derive(new)]
+pub struct EditorExtensionPlugin<T>(T)
+where
+	T: EditorExtension;
+
+impl<T> Default for EditorExtensionPlugin<T>
+where
+	T: Default + EditorExtension,
+{
+	fn default() -> Self {
+		Self(default())
+	}
+}
+
+impl<T> Plugin for EditorExtensionPlugin<T>
+where
+	T: 'static + Send + Sync + EditorExtension,
+{
+	fn build(&self, app: &mut App) {}
+
+	fn finish(&self, app: &mut App) {
+		app.try_add_plugin(EditorPlugin::new());
+
+		let mut ui_registrations = Vec::new();
+
+		app
+			.world_mut()
+			.resource_scope(|world, mut components: Mut<ComponentRegistry>| {
+				let ctx = EditorExtensionContext::new(world, &mut components, &mut ui_registrations);
+				self.0.build(ctx);
+			});
+
+		let mut ui_manager = app
+			.world_mut()
+			.remove_resource::<UiManager>()
+			.expect("EditorPlugin must be added before this");
+
+		for f in ui_registrations {
+			(f)(app, &mut ui_manager);
+		}
+
+		app.world_mut().insert_resource(ui_manager);
+	}
+}
+
+type UiRegistrationFn = fn(&mut App, &mut UiManager);
+
+#[derive(new)]
+pub struct EditorExtensionContext<'w> {
+	world: &'w mut World,
+	components: &'w mut ComponentRegistry,
+
+	app_ui_registrations: &'w mut Vec<UiRegistrationFn>,
+}
+
+impl<'w> EditorExtensionContext<'w> {
+	pub fn register_component<T: RegisterableComponent>(mut self) -> Self {
+		T::register(self.world, self.components);
+		self
+	}
+
+	pub fn register_components<T: RegisterableComponents>(mut self) -> Self {
+		T::register_components(self.world, self.components);
+		self
+	}
+
+	pub fn register_game_camera<C>(mut self) -> Self
+	where
+		C: Component + Reflectable + Identifiable,
+	{
+		self.app_ui_registrations.push(|app, ui_manager| {
+			view::add_game_camera::<C>(app);
+			ui_manager.register::<EditorManagedViewUi<C>>(app);
+		});
+		self
+	}
+
+	pub fn register_ui<U: EditorUiBundle>(mut self) -> Self {
+		self.app_ui_registrations.push(|app, ui_manager| {
+			ui_manager.register::<U>(app);
+		});
+		self
 	}
 }
 

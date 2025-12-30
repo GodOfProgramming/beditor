@@ -7,8 +7,20 @@ use egui_demo_lib::{View, WidgetGallery};
 
 fn main() {
 	App::new()
-		.add_plugins(EditorPlugin::new().register_ui::<CustomPanel>())
+		.add_plugins((
+			EditorPlugin::new(),
+			EditorExtensionPlugin::<EditorUiPlugin>::default(),
+		))
 		.run();
+}
+
+#[derive(Default)]
+struct EditorUiPlugin;
+
+impl EditorExtension for EditorUiPlugin {
+	fn build(&self, ctx: EditorExtensionContext) {
+		ctx.register_ui::<CustomPanel>();
+	}
 }
 
 #[derive(Reflect, Component, Default)]

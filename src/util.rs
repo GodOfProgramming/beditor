@@ -8,18 +8,16 @@ pub mod storage;
 pub mod window;
 pub mod world;
 
+use crate::{EditorOwned, EditorState, Simulated};
 use bevy::{
 	ecs::{system::entity_command, world::CommandQueue},
 	prelude::*,
-	reflect::{GetTypeRegistration, TypeRegistry},
+	reflect::GetTypeRegistration,
 };
 use std::{
-	any::TypeId,
 	borrow::{Borrow, BorrowMut},
 	marker::PhantomData,
 };
-
-use crate::{EditorOwned, EditorState, Simulated};
 
 pub fn pretty_type_name<T>() -> String {
 	format!("{:?}", disqualified::ShortName::of::<T>())

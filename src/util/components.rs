@@ -15,19 +15,29 @@ pub struct ComponentRegistry {
 }
 
 impl ComponentRegistry {
-	pub fn get(&self, type_id: &TypeId) -> Option<&RegisteredComponent> {
+	pub fn register<T: RegisterableComponent>(&mut self, world: &mut World) -> &mut Self {
+		T::register(world, self);
+		self
+	}
+
+	pub fn register_multiple<T: RegisterableComponents>(&mut self, world: &mut World) -> &mut Self {
+		T::register_components(world, self);
+		self
+	}
+
+	pub(crate) fn get(&self, type_id: &TypeId) -> Option<&RegisteredComponent> {
 		self.mapping.get(type_id)
 	}
 
-	pub fn len(&self) -> usize {
+	pub(crate) fn len(&self) -> usize {
 		self.mapping.len()
 	}
 
-	pub fn iter(&self) -> impl Iterator<Item = (&TypeId, &RegisteredComponent)> {
+	pub(crate) fn iter(&self) -> impl Iterator<Item = (&TypeId, &RegisteredComponent)> {
 		self.mapping.iter()
 	}
 
-	pub fn vfs(&self) -> &Vfs<TypeId> {
+	pub(crate) fn vfs(&self) -> &Vfs<TypeId> {
 		&self.vfs
 	}
 

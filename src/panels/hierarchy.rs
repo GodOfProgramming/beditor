@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-	EditorOwned,
+	EditorExtension, EditorOwned,
 	inspector::{WorldExtensions as _, ui::hierarchy::SelectedEntities},
 	panels::{BundleDnd, image_viewer::OpenImageViewer},
 	scene::serialize_to_scene,
@@ -13,21 +13,15 @@ use bevy::prelude::*;
 use egui_file_dialog::FileDialog;
 use uuid::{Uuid, uuid};
 
-#[derive(Component, Reflect, Default)]
-#[require(EditorOwned)]
-pub struct HierarchyUi;
+#[derive(Default)]
+pub struct HierarchyExtension;
 
-impl EditorUiBundle for HierarchyUi {
-	type PrimaryComponent = Self;
+impl EditorExtension for HierarchyExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<HierarchyUi>();
+	}
 
-	const NAME: &str = stringify!(Hierarchy);
-	const ID: Uuid = uuid!("860ac319-5c6e-4a2e-83ae-8bb0000d5cb4");
-
-	const UNIQUE: bool = true;
-
-	const SCROLL_BARS: [bool; 2] = [true, false];
-
-	fn init(app: &mut App) {
+	fn build_app(&self, app: &mut App) {
 		app
 			.init_resource::<HierarchyState>()
 			.add_message::<ReparentMessage>()
@@ -43,6 +37,21 @@ impl EditorUiBundle for HierarchyUi {
 				),
 			);
 	}
+}
+
+#[derive(Component, Reflect, Default)]
+#[require(EditorOwned)]
+pub struct HierarchyUi;
+
+impl EditorUiBundle for HierarchyUi {
+	type PrimaryComponent = Self;
+
+	const NAME: &str = stringify!(Hierarchy);
+	const ID: Uuid = uuid!("860ac319-5c6e-4a2e-83ae-8bb0000d5cb4");
+
+	const UNIQUE: bool = true;
+
+	const SCROLL_BARS: [bool; 2] = [true, false];
 
 	fn spawn(_entity: Entity, _world: &mut World) -> Self {
 		default()

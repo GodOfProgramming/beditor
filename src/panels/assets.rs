@@ -1,6 +1,18 @@
-use crate::ui::{EditorUi, InspectorSelection};
+use crate::{
+	EditorExtension,
+	ui::{EditorUi, InspectorSelection},
+};
 use bevy::{asset::ReflectAsset, ecs::system::SystemParam, prelude::*};
 use uuid::uuid;
+
+#[derive(Default)]
+pub struct AssetsUiExtension;
+
+impl EditorExtension for AssetsUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<AssetsUi>();
+	}
+}
 
 #[derive(Default, Component, Reflect)]
 pub struct AssetsUi;

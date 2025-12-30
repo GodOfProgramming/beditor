@@ -1,5 +1,5 @@
 use crate::{
-	APP_DIR, EditorOwned, EditorState, EditorUi, Notification, Settings,
+	APP_DIR, EditorExtension, EditorOwned, EditorState, EditorUi, Notification, Settings,
 	settings::{CurrentThemeSetting, EditorEguiSettings},
 	util::storage::{Global, GlobalEditorSettings},
 };
@@ -11,6 +11,22 @@ use std::{collections::BTreeMap, path::PathBuf};
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
 use uuid::uuid;
+
+#[derive(Default)]
+pub struct EditorSettingsUiExtension;
+
+impl EditorExtension for EditorSettingsUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<EditorSettingsUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.init_resource::<EditorSettings>()
+			.add_observer(on_new_ctx)
+			.add_systems(OnEnter(EditorState::Exiting), save_settings);
+	}
+}
 
 #[derive(Default, Component, Reflect)]
 #[require(EditorOwned)]
@@ -35,13 +51,6 @@ impl EditorUi for EditorSettingsUi {
 	const SCROLL_BARS: [bool; 2] = [true, true];
 
 	type Params<'w, 's> = EditorSettingsUiParams<'w, 's>;
-
-	fn init(app: &mut App) {
-		app
-			.init_resource::<EditorSettings>()
-			.add_observer(on_new_ctx)
-			.add_systems(OnEnter(EditorState::Exiting), save_settings);
-	}
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		default()

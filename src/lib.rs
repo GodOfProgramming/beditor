@@ -14,10 +14,11 @@ mod view;
 
 use crate::{
 	inspector::EditorInspectorPlugin,
-	panels::prelude::*,
+	panels::managed_view::{EditorManagedViewUi, EditorManagedViewUiExtension},
 	scene::EditorScenePlugin,
 	settings::{EditorSettingsSetting, WindowMaximizedSetting, WindowSizeSetting},
 	util::{
+		WorldExtensions as _,
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 		log::LogPlugin,
 		reflection::ReflectionExtensionsPlugin,
@@ -43,7 +44,7 @@ use bevy::{
 use bevy_axes_gizmo::AxesGizmoPlugin;
 use bevy_infinite_grid::InfiniteGridPlugin;
 use bevy_mesh_outline::MeshOutlinePlugin;
-use brefabs::PrefabPlugin;
+use brefabs::{PrefabPlugin, Prefabs};
 use derive_new::new;
 use input::EditorInputPlugin;
 use platform_dirs::AppDirs;
@@ -106,6 +107,7 @@ type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
 pub struct EditorPlugin {
 	skip_registering_reflected_components: bool,
 	default_plugins: Option<AppRegistrationFn>,
+	camera_registrations: Vec<fn(&mut App)>,
 }
 
 impl EditorPlugin {
@@ -127,6 +129,16 @@ impl EditorPlugin {
 			let plugins = (f)(app, DefaultPlugins).into();
 			app.add_plugins(Self::override_defaults(plugins));
 		}));
+		self
+	}
+
+	pub fn register_camera<C>(mut self) -> Self
+	where
+		C: Component + Identifiable,
+	{
+		self.camera_registrations.push(|app| {
+			app.add_plugins(EditorExtensionPlugin::<EditorManagedViewUiExtension<C>>::default());
+		});
 		self
 	}
 
@@ -160,6 +172,10 @@ impl Plugin for EditorPlugin {
 			(config_fn)(app);
 		} else {
 			app.add_plugins(Self::override_defaults(DefaultPlugins.build()));
+		}
+
+		for f in self.camera_registrations.iter() {
+			(f)(app);
 		}
 
 		app
@@ -250,10 +266,14 @@ impl Plugin for EditorPlugin {
 }
 
 pub trait EditorExtension {
-	fn build(&self, ctx: &mut EditorExtensionContext);
+	fn build_editor(&self, ctx: &mut EditorExtensionContext);
+
+	fn build_app(&self, app: &mut App) {
+		let _ = app;
+	}
 }
 
-#[derive(new)]
+#[derive(new, Deref)]
 pub struct EditorExtensionPlugin<T>(T)
 where
 	T: EditorExtension;
@@ -271,76 +291,61 @@ impl<T> Plugin for EditorExtensionPlugin<T>
 where
 	T: 'static + Send + Sync + EditorExtension,
 {
-	fn build(&self, _: &mut App) {}
+	fn build(&self, app: &mut App) {
+		self.build_app(app);
+	}
 
 	fn finish(&self, app: &mut App) {
-		app.try_add_plugin(EditorPlugin::new());
-
-		let mut ui_registrations = Vec::new();
+		info!("Added editor extension {}", std::any::type_name::<T>());
 
 		app
 			.world_mut()
-			.resource_scope(|world, mut components: Mut<ComponentRegistry>| {
-				let mut ctx = EditorExtensionContext::new(world, &mut components, &mut ui_registrations);
-				self.0.build(&mut ctx);
+			.resources_scope::<(UiManager, ComponentRegistry, Prefabs)>(|world, resources| {
+				let (ui_manager, components, prefabs) = resources;
+				let mut ctx = EditorExtensionContext::new(world, components, prefabs, ui_manager);
+				self.0.build_editor(&mut ctx);
 			});
-
-		let mut ui_manager = app
-			.world_mut()
-			.remove_resource::<UiManager>()
-			.expect("EditorPlugin must be added before this");
-
-		for f in ui_registrations {
-			(f)(app, &mut ui_manager);
-		}
-
-		app.world_mut().insert_resource(ui_manager);
 	}
 }
 
-type UiRegistrationFn = fn(&mut App, &mut UiManager);
+impl<T> From<T> for EditorExtensionPlugin<T>
+where
+	T: 'static + Send + Sync + EditorExtension,
+{
+	fn from(value: T) -> Self {
+		Self(value)
+	}
+}
 
 #[derive(new)]
 pub struct EditorExtensionContext<'w> {
 	world: &'w mut World,
 	components: &'w mut ComponentRegistry,
-
-	app_ui_registrations: &'w mut Vec<UiRegistrationFn>,
+	prefabs: &'w mut Prefabs,
+	ui_manager: &'w mut UiManager,
 }
 
 impl<'w> EditorExtensionContext<'w> {
-	pub fn add_plugin<T>(&mut self, plugin: impl Into<EditorExtensionPlugin<T>>)
-	where
-		T: EditorExtension,
-	{
-		plugin.into().0.build(self);
+	pub fn world(&mut self) -> &mut World {
+		self.world
+	}
+
+	pub fn prefabs(&mut self) -> &mut Prefabs {
+		self.prefabs
 	}
 
 	pub fn register_component<T: RegisterableComponent>(&mut self) -> &mut Self {
-		T::register(self.world, self.components);
+		self.components.register::<T>(self.world);
 		self
 	}
 
 	pub fn register_components<T: RegisterableComponents>(&mut self) -> &mut Self {
-		T::register_components(self.world, self.components);
-		self
-	}
-
-	pub fn register_game_camera<C>(&mut self) -> &mut Self
-	where
-		C: Component + Reflectable + Identifiable,
-	{
-		self.app_ui_registrations.push(|app, ui_manager| {
-			view::add_game_camera::<C>(app);
-			ui_manager.register::<EditorManagedViewUi<C>>(app);
-		});
+		self.components.register_multiple::<T>(self.world);
 		self
 	}
 
 	pub fn register_ui<U: EditorUiBundle>(&mut self) -> &mut Self {
-		self.app_ui_registrations.push(|app, ui_manager| {
-			ui_manager.register::<U>(app);
-		});
+		self.ui_manager.register::<U>();
 		self
 	}
 }

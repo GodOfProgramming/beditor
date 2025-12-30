@@ -16,7 +16,7 @@ fn main() {
 struct GameComponentsExtension;
 
 impl EditorExtension for GameComponentsExtension {
-	fn build(&self, ctx: &mut EditorExtensionContext) {
+	fn build_editor(&self, ctx: &mut EditorExtensionContext) {
 		ctx
 			.register_components::<(SpinComponent, GrowthComponent)>()
 			.register_components::<(

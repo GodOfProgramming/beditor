@@ -1,17 +1,48 @@
 use crate::{
-	EditorOwned, ui::EditorUi, util::egui::ContextExtensions, view::cam::EditorManagedCamera,
+	EditorExtension, EditorOwned, ui::EditorUi, util::egui::ContextExtensions,
+	view::cam::EditorManagedCamera,
 };
 use bevy::{
-	camera::RenderTarget, ecs::system::SystemParam, prelude::*, reflect::Reflectable,
-	render::render_resource::Extent3d,
+	camera::RenderTarget, ecs::system::SystemParam, prelude::*, render::render_resource::Extent3d,
 };
 use bevy_egui::EguiContexts;
 use persistent_id::Identifiable;
 use std::marker::PhantomData;
 
+pub(crate) struct EditorManagedViewUiExtension<C>
+where
+	C: Component,
+{
+	_pd: PhantomData<C>,
+}
+
+impl<C> Default for EditorManagedViewUiExtension<C>
+where
+	C: Component,
+{
+	fn default() -> Self {
+		Self { _pd: default() }
+	}
+}
+
+impl<C> EditorExtension for EditorManagedViewUiExtension<C>
+where
+	C: Component + Identifiable,
+{
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<EditorManagedViewUi<C>>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.add_observer(take_ownership_of_camera::<C>)
+			.add_observer(transfer_ownership_of_camera::<C>);
+	}
+}
+
 #[derive(Component)]
 #[require(EditorOwned)]
-pub struct EditorManagedViewUi<C>
+pub(crate) struct EditorManagedViewUi<C>
 where
 	C: Component,
 {
@@ -55,7 +86,7 @@ where
 
 impl<C> EditorUi for EditorManagedViewUi<C>
 where
-	C: Component + Reflectable + Identifiable,
+	C: Component + Identifiable,
 {
 	const NAME: &str = <C as Identifiable>::TYPE_NAME;
 	const ID: uuid::Uuid = <C as Identifiable>::ID;
@@ -69,12 +100,6 @@ where
 	const SCROLL_BARS: [bool; 2] = [false, false];
 
 	type Params<'w, 's> = Params<'w, 's, C>;
-
-	fn init(app: &mut App) {
-		app
-			.add_observer(take_ownership_of_camera::<C>)
-			.add_observer(transfer_ownership_of_camera::<C>);
-	}
 
 	fn spawn(mut params: Self::Params<'_, '_>) -> Self {
 		if let Some(mut camera) = params.managed_camera.p0() {

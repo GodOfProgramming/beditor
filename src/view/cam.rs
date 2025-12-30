@@ -425,9 +425,16 @@ pub fn should_show_cameras(render_cameras: Res<RenderCameras>) -> bool {
 }
 
 #[allow(clippy::type_complexity)]
-pub fn render_2d_cameras<C: Component>(
+pub fn render_2d_cameras(
 	mut gizmos: Gizmos,
-	q_cam: Query<(&Transform, &Projection), (With<Camera2d>, With<C>)>,
+	q_cam: Query<
+		(&Transform, &Projection),
+		(
+			With<Camera2d>,
+			With<EditorManagedCamera>,
+			Without<EditorCamera>,
+		),
+	>,
 	cam_color: Res<GameCameraColor>,
 ) {
 	for (transform, projection) in &q_cam {
@@ -439,9 +446,16 @@ pub fn render_2d_cameras<C: Component>(
 }
 
 #[allow(clippy::type_complexity)]
-pub fn render_3d_cameras<C: Component>(
+pub fn render_3d_cameras(
 	mut gizmos: Gizmos,
-	q_cam: Query<(&Transform, &Projection), (With<Camera3d>, With<C>)>,
+	q_cam: Query<
+		(&Transform, &Projection),
+		(
+			With<Camera3d>,
+			With<EditorManagedCamera>,
+			Without<EditorCamera>,
+		),
+	>,
 	cam_color: Res<GameCameraColor>,
 ) {
 	for (transform, projection) in &q_cam {

@@ -10,7 +10,6 @@ use crate::{
 	panels::prelude::*,
 	settings::CurrentLayoutSetting,
 	ui::events::{OpenSingleUiMessage, OpenUiMessage, ShowUiMessage},
-	util::ensure_singleton,
 	view::cam::EditorCamera,
 };
 use bevy::{
@@ -36,7 +35,7 @@ use misc::{MissingUi, UiExtensions, UiState};
 use notifications::NotificationPlugin;
 use persistent_id::PersistentId;
 use serde::{Deserialize, Serialize};
-use std::{any::TypeId, cell::RefCell, collections::BTreeSet, marker::PhantomData};
+use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
 use transform_gizmo_bevy::GizmoTarget;
 use uuid::Uuid;
 
@@ -134,11 +133,6 @@ pub trait EditorUiBundle: Bundle + Send + Sync + Sized {
 
 	const REOPEN_ON_STARTUP: bool = true;
 
-	/// Add systems or resources that this UI needs in order to function
-	fn init(app: &mut App) {
-		let _ = app;
-	}
-
 	fn spawn(entity: Entity, world: &mut World) -> Self;
 
 	fn on_despawn(entity: Entity, world: &mut World) {
@@ -205,11 +199,6 @@ pub trait EditorUi: EditorUiBundle + Component {
 		Item<'world, 'system> = Self::Params<'world, 'system>,
 	>;
 
-	/// Add systems or resources that this UI needs in order to function
-	fn init(app: &mut App) {
-		let _ = app;
-	}
-
 	fn spawn(params: Self::Params<'_, '_>) -> Self;
 
 	fn title(&mut self, params: Self::Params<'_, '_>) -> egui::WidgetText {
@@ -269,13 +258,6 @@ where
 
 	const REOPEN_ON_STARTUP: bool = <Self as EditorUi>::REOPEN_ON_STARTUP;
 
-	fn init(app: &mut App) {
-		<Self as EditorUi>::init(app);
-		if <Self as EditorUi>::UNIQUE {
-			app.add_observer(ensure_singleton::<Self>);
-		}
-	}
-
 	fn spawn(entity: Entity, world: &mut World) -> Self {
 		Self::register_params(entity, world);
 		Self::with_params(entity, world, EditorUi::spawn)
@@ -318,28 +300,6 @@ where
 	}
 }
 
-struct RegisteredUiPlugin<T>(PhantomData<T>)
-where
-	T: EditorUiBundle;
-
-impl<T> Default for RegisteredUiPlugin<T>
-where
-	T: EditorUiBundle,
-{
-	fn default() -> Self {
-		Self(default())
-	}
-}
-
-impl<T> Plugin for RegisteredUiPlugin<T>
-where
-	T: EditorUiBundle,
-{
-	fn build(&self, app: &mut App) {
-		T::init(app);
-	}
-}
-
 #[derive(Resource)]
 pub struct UiManager {
 	state: DockState<TabState>,
@@ -358,9 +318,13 @@ impl Default for UiManager {
 }
 
 impl UiManager {
-	pub fn register<T: EditorUiBundle>(&mut self, app: &mut App) {
-		app.add_plugins(RegisteredUiPlugin::<T>::default());
-		self.vtables.insert(PersistentId(T::ID), &T::VTABLE);
+	pub fn register<T: EditorUiBundle>(&mut self) {
+		let key = PersistentId(T::ID);
+		if self.vtables.contains_key(&key) {
+			panic!("Already registered Ui {}", std::any::type_name::<T>());
+		}
+
+		self.vtables.insert(key, &T::VTABLE);
 	}
 
 	pub fn add_detached(&mut self, tabs: Vec<TabState>) -> SurfaceIndex {

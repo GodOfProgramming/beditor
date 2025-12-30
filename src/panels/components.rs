@@ -1,6 +1,6 @@
 use super::BundleDnd;
 use crate::{
-	EditorUi,
+	EditorExtension, EditorUi,
 	panels::SearchableVfs,
 	ui::widgets::Card,
 	util::components::{ComponentRegistry, RegisteredComponent},
@@ -8,6 +8,15 @@ use crate::{
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::{marker::PhantomData, num::NonZeroUsize};
 use uuid::uuid;
+
+#[derive(Default)]
+pub struct ComponentsUiExtension;
+
+impl EditorExtension for ComponentsUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<ComponentsUi>();
+	}
+}
 
 #[derive(Component, Reflect)]
 pub struct ComponentsUi {

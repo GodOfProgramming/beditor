@@ -1,10 +1,19 @@
 use crate::{
-	EditorOwned,
+	EditorExtension, EditorOwned,
 	ui::{EditorUi, InspectorSelection},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::marker::PhantomData;
 use uuid::uuid;
+
+#[derive(Default)]
+pub struct ResourcesUiExtension;
+
+impl EditorExtension for ResourcesUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<ResourcesUi>();
+	}
+}
 
 #[derive(Default, Component, Reflect)]
 #[require(EditorOwned)]

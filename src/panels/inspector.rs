@@ -1,6 +1,6 @@
 use super::BundleDnd;
 use crate::{
-	EditorOwned,
+	EditorExtension, EditorOwned,
 	inspector::{WorldExtensions as _, ui::components::ComponentInfo},
 	panels::panel_dnd_drop_ui,
 	ui::{EditorUiBundle, InspectorSelection},
@@ -8,6 +8,19 @@ use crate::{
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};
 use uuid::{Uuid, uuid};
+
+#[derive(Default)]
+pub struct InspectorUiExtension;
+
+impl EditorExtension for InspectorUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<InspectorUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app.init_resource::<InspectorSettings>();
+	}
+}
 
 #[derive(Component, Reflect, Default)]
 #[require(EditorOwned)]
@@ -36,10 +49,6 @@ impl EditorUiBundle for InspectorUi {
 
 	const UNIQUE: bool = true;
 	const SCROLL_BARS: [bool; 2] = [true, true];
-
-	fn init(app: &mut App) {
-		app.init_resource::<InspectorSettings>();
-	}
 
 	fn spawn(_entity: Entity, _world: &mut World) -> Self {
 		default()

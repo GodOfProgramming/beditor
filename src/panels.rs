@@ -13,8 +13,8 @@ pub mod resources;
 pub mod settings;
 pub mod type_editor;
 
-pub mod prelude {
-	pub use super::{
+pub(crate) mod prelude {
+	pub(crate) use super::{
 		assets::AssetsUi,
 		components::ComponentsUi,
 		diagnostics::DiagnosticsUi,
@@ -33,7 +33,8 @@ pub mod prelude {
 }
 
 use crate::{
-	EditorExtension, EditorExtensionContext, ui::widgets, util::components::ComponentRegistry,
+	EditorExtension, EditorExtensionContext, EditorExtensionPlugin, ui::widgets,
+	util::components::ComponentRegistry,
 };
 use bevy::prelude::*;
 use brefabs::Prefabs;
@@ -49,25 +50,26 @@ use vfs::{Vfs, VfsEntry, VfsNode};
 pub struct EditorPanelsExtension;
 
 impl EditorExtension for EditorPanelsExtension {
-	fn build(&self, ctx: &mut EditorExtensionContext) {
+	fn build_editor(&self, ctx: &mut EditorExtensionContext) {
 		use crate::ui::misc::MissingUi;
-		use prelude::*;
+		ctx.register_ui::<MissingUi>();
+	}
 
-		ctx
-			.register_ui::<MissingUi>()
-			.register_ui::<AssetsUi>()
-			.register_ui::<ComponentsUi>()
-			.register_ui::<DiagnosticsUi>()
-			.register_ui::<EditorSettingsUi>()
-			.register_ui::<EditorViewUi>()
-			.register_ui::<HierarchyUi>()
-			.register_ui::<ImageViewerUi>()
-			.register_ui::<InspectorUi>()
-			.register_ui::<LogUi>()
-			.register_ui::<PrefabsUi>()
-			.register_ui::<ProjectSettingsUi>()
-			.register_ui::<ResourcesUi>()
-			.register_ui::<TypeEditorUi>();
+	fn build_app(&self, app: &mut App) {
+		app.add_plugins((
+			EditorExtensionPlugin::<assets::AssetsUiExtension>::default(),
+			EditorExtensionPlugin::<components::ComponentsUiExtension>::default(),
+			EditorExtensionPlugin::<diagnostics::DiagnosticsUiExtension>::default(),
+			EditorExtensionPlugin::<editor_view::EditorViewUiExtension>::default(),
+			EditorExtensionPlugin::<hierarchy::HierarchyExtension>::default(),
+			EditorExtensionPlugin::<image_viewer::ImageViewerUiExtension>::default(),
+			EditorExtensionPlugin::<inspector::InspectorUiExtension>::default(),
+			EditorExtensionPlugin::<logs::LogsUiExtension>::default(),
+			EditorExtensionPlugin::<prefabs::PrefabsUiExtension>::default(),
+			EditorExtensionPlugin::<resources::ResourcesUiExtension>::default(),
+			EditorExtensionPlugin::<settings::SettingsUiExtension>::default(),
+			EditorExtensionPlugin::<type_editor::TypeEditorUiExtension>::default(),
+		));
 	}
 }
 

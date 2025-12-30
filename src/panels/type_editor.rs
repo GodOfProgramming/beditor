@@ -1,5 +1,5 @@
 use crate::{
-	EditorOwned, EditorUiBundle,
+	EditorExtension, EditorOwned, EditorUiBundle,
 	inspector::WorldExtensions,
 	ui::{TabState, UiManager, widgets},
 	util::reflection::{ReflectDefaultCache, serde::SerdeRegistry},
@@ -10,6 +10,27 @@ use egui_file_dialog::{DialogState, FileDialog};
 use parking_lot::Mutex;
 use std::{cell::RefCell, io::Write, path::PathBuf, sync::Arc};
 use uuid::{Uuid, uuid};
+
+#[derive(Default)]
+pub struct TypeEditorUiExtension;
+
+impl EditorExtension for TypeEditorUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<TypeEditorUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.add_observer(on_editor_state_insert)
+			.add_message::<SaveFileMessage>()
+			.add_message::<OpenFileMessage>()
+			.add_systems(
+				FixedUpdate,
+				(SaveFileMessage::handle, OpenFileMessage::handle),
+			)
+			.add_systems(bevy_egui::EguiPrimaryContextPass, show_dialogs);
+	}
+}
 
 #[derive(Bundle, Reflect, Default)]
 pub struct TypeEditorUi {
@@ -30,18 +51,6 @@ impl EditorUiBundle for TypeEditorUi {
 	const ID: Uuid = uuid!("2b01d041-d8b3-4cbe-8ca7-f6ae8e8ef7dd");
 
 	const REOPEN_ON_STARTUP: bool = false;
-
-	fn init(app: &mut App) {
-		app
-			.add_observer(on_editor_state_insert)
-			.add_message::<SaveFileMessage>()
-			.add_message::<OpenFileMessage>()
-			.add_systems(
-				FixedUpdate,
-				(SaveFileMessage::handle, OpenFileMessage::handle),
-			)
-			.add_systems(bevy_egui::EguiPrimaryContextPass, show_dialogs);
-	}
 
 	fn spawn(_entity: Entity, _world: &mut World) -> Self {
 		default()

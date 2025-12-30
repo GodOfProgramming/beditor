@@ -1,5 +1,5 @@
 use crate::{
-	EditorOwned,
+	EditorExtension, EditorOwned,
 	ui::{EditorUi, TabState, events::ShowUiMessage},
 	util::egui::ContextExtensions,
 };
@@ -16,6 +16,22 @@ use derive_new::new;
 use egui_file_dialog::FileDialog;
 use std::time::Duration;
 use uuid::uuid;
+
+#[derive(Default)]
+pub struct ImageViewerUiExtension;
+
+impl EditorExtension for ImageViewerUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<ImageViewerUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app.init_resource::<TrackedImages>().add_systems(
+			First,
+			remove_texture_images.run_if(on_timer(Duration::from_secs(1))),
+		);
+	}
+}
 
 #[derive(Component, Default)]
 #[require(EditorOwned)]
@@ -45,13 +61,6 @@ impl EditorUi for ImageViewerUi {
 	const REOPEN_ON_STARTUP: bool = false;
 
 	type Params<'w, 's> = Params<'w, 's>;
-
-	fn init(app: &mut App) {
-		app.init_resource::<TrackedImages>().add_systems(
-			First,
-			remove_texture_images.run_if(on_timer(Duration::from_secs(1))),
-		);
-	}
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		default()

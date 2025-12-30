@@ -8,7 +8,7 @@ use crate::{
 	ui::misc::UiState,
 	view::cam::{ActiveEditorCamera, EditorCamPlugin},
 };
-use bevy::{prelude::*, reflect::Reflectable};
+use bevy::prelude::*;
 use view2d::View2d;
 use view3d::View3d;
 
@@ -43,6 +43,17 @@ impl Plugin for EditorViewPlugin {
 			.add_systems(
 				OnEnter(EditorState::Exiting),
 				(view2d::save_settings, view3d::save_settings),
+			)
+			.add_systems(
+				Update,
+				(
+					cam::render_2d_cameras
+						.in_set(View2d)
+						.run_if(cam::should_show_cameras),
+					cam::render_3d_cameras
+						.in_set(View3d)
+						.run_if(cam::should_show_cameras),
+				),
 			)
 			.add_systems(
 				Update,
@@ -95,23 +106,6 @@ pub fn mouse_hovered_in_editor_view(
 
 fn mouse_movement_active(orbit: Res<State<OrbitState>>, pan: Res<State<PanState>>) -> bool {
 	*orbit == OrbitState::Active || *pan == PanState::Active
-}
-
-pub fn add_game_camera<C>(app: &mut App)
-where
-	C: Component + Reflectable,
-{
-	app.add_systems(
-		Update,
-		(
-			cam::render_2d_cameras::<C>
-				.in_set(View2d)
-				.run_if(cam::should_show_cameras),
-			cam::render_3d_cameras::<C>
-				.in_set(View3d)
-				.run_if(cam::should_show_cameras),
-		),
-	);
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]

@@ -1,9 +1,26 @@
 use crate::{
-	EditorOwned, EditorUi, ProjectSettings, SettingChanged, settings::LogLevelSetting, util::log::{EventCollectorHandle, LogLevel}
+	EditorExtension, EditorOwned, EditorUi, ProjectSettings, SettingChanged,
+	settings::LogLevelSetting,
+	util::log::{EventCollectorHandle, LogLevel},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use strum::IntoEnumIterator;
 use uuid::{Uuid, uuid};
+
+#[derive(Default)]
+pub struct LogsUiExtension;
+
+impl EditorExtension for LogsUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<LogUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.add_observer(on_log_level_changed.pipe(apply_new_level))
+			.add_systems(Startup, load_log_level.pipe(apply_new_level));
+	}
+}
 
 #[derive(Default, Component, Reflect)]
 #[require(EditorOwned)]
@@ -24,12 +41,6 @@ impl EditorUi for LogUi {
 	const UNIQUE: bool = true;
 
 	type Params<'w, 's> = Params<'w, 's>;
-
-	fn init(app: &mut App) {
-		app
-			.add_observer(on_log_level_changed.pipe(apply_new_level))
-			.add_systems(Startup, load_log_level.pipe(apply_new_level));
-	}
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		Self::default()

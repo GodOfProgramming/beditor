@@ -1,7 +1,7 @@
 use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 
 use crate::{
-	EditorOwned,
+	EditorExtension, EditorOwned,
 	panels::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
 	ui::{EditorUiBundle, notifications::Notification, widgets::Card},
 };
@@ -9,6 +9,28 @@ use bevy::prelude::*;
 use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
 use uuid::{Uuid, uuid};
 use vfs::Vfs;
+
+#[derive(Default)]
+pub struct PrefabsUiExtension;
+
+impl EditorExtension for PrefabsUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<PrefabsUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.init_resource::<PrefabVfsState>()
+			.add_message::<EditPrefabDescriptorMessage>()
+			.add_systems(
+				FixedUpdate,
+				(
+					EditPrefabDescriptorMessage::handle,
+					rebuild_vfs.run_if(resource_changed::<Prefabs>),
+				),
+			);
+	}
+}
 
 #[derive(Component, Reflect, Default)]
 #[require(EditorOwned)]
@@ -21,19 +43,6 @@ impl EditorUiBundle for PrefabsUi {
 	const ID: Uuid = uuid!("fa977fad-ed99-4842-bab4-7c00641b39b0");
 
 	const UNIQUE: bool = true;
-
-	fn init(app: &mut App) {
-		app
-			.init_resource::<PrefabVfsState>()
-			.add_message::<EditPrefabDescriptorMessage>()
-			.add_systems(
-				FixedUpdate,
-				(
-					EditPrefabDescriptorMessage::handle,
-					rebuild_vfs.run_if(resource_changed::<Prefabs>),
-				),
-			);
-	}
 
 	fn spawn(_entity: Entity, _world: &mut World) -> Self {
 		default()

@@ -1,5 +1,5 @@
 use crate::{
-	EditorOwned, RuntimeSettings,
+	EditorExtension, EditorOwned, RuntimeSettings,
 	panels::inspector::InspectorSettings,
 	ui::EditorUi,
 	util::{egui::ContextExtensions, log::LogLevel},
@@ -19,19 +19,28 @@ use bevy::{
 use bevy_egui::{EguiContext, EguiContexts, EguiTextureHandle, egui};
 use uuid::uuid;
 
+#[derive(Default)]
+pub struct DiagnosticsUiExtension;
+
+impl EditorExtension for DiagnosticsUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<DiagnosticsUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.init_resource::<FrameTimeGraph>()
+			.add_observer(handle_ui_debug)
+			.add_systems(PostStartup, startup);
+	}
+}
+
 #[derive(Default, Component, Reflect)]
 pub struct DiagnosticsUi {
 	log_level: LogLevel,
 }
 
-impl DiagnosticsUi {
-	fn handle_ui_debug(event: On<DebugUiEvent>, mut q_egui_ctx: Query<&mut EguiContext>) {
-		for mut ctx in &mut q_egui_ctx {
-			let ctx = ctx.get_mut();
-			ctx.set_debug_on_hover(event.0);
-		}
-	}
-}
+impl DiagnosticsUi {}
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
@@ -51,13 +60,6 @@ impl EditorUi for DiagnosticsUi {
 	const UNIQUE: bool = true;
 
 	type Params<'w, 's> = Params<'w, 's>;
-
-	fn init(app: &mut App) {
-		app
-			.init_resource::<FrameTimeGraph>()
-			.add_observer(Self::handle_ui_debug)
-			.add_systems(PostStartup, startup);
-	}
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		Self::default()
@@ -205,4 +207,11 @@ fn startup(
 		Pickable::IGNORE,
 		MaterialNode::from(graph.mat.clone()),
 	));
+}
+
+fn handle_ui_debug(event: On<DebugUiEvent>, mut q_egui_ctx: Query<&mut EguiContext>) {
+	for mut ctx in &mut q_egui_ctx {
+		let ctx = ctx.get_mut();
+		ctx.set_debug_on_hover(event.0);
+	}
 }

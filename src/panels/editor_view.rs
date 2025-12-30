@@ -1,6 +1,9 @@
 use crate::{
-	EditorOwned, EditorState, EditorUi,
-	panels::{BundleDnd, managed_view, prelude::*},
+	EditorExtension, EditorExtensionPlugin, EditorOwned, EditorState, EditorUi,
+	panels::{
+		BundleDnd,
+		managed_view::{self, EditorManagedViewUi, EditorManagedViewUiExtension},
+	},
 	scene::PrimaryScene,
 	ui::misc::UiState,
 	util::{WorldExtensions as _, ensure_singleton},
@@ -10,6 +13,32 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContexts;
 use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
 use uuid::uuid;
+
+#[derive(Default)]
+pub struct EditorViewUiExtension;
+
+impl EditorExtension for EditorViewUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<EditorViewUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.add_plugins(EditorExtensionPlugin::<
+				EditorManagedViewUiExtension<EditorCamera>,
+			>::default())
+			.add_observer(ensure_singleton::<TemporaryEntity>)
+			.add_systems(OnExit(EditorState::Editing), despawn_temporaries)
+			.add_systems(
+				FixedUpdate,
+				detect_enter.run_if(in_state(EditorState::Editing)),
+			)
+			.add_systems(
+				Update,
+				move_temporaries.run_if(in_state(EditorState::Editing)),
+			);
+	}
+}
 
 #[derive(Component, Reflect, Default)]
 pub struct EditorViewUi;
@@ -37,22 +66,6 @@ impl EditorUi for EditorViewUi {
 	const SCROLL_BARS: [bool; 2] = EditorManagedViewUi::<EditorCamera>::SCROLL_BARS;
 
 	type Params<'w, 's> = Params<'w, 's>;
-
-	fn init(app: &mut App) {
-		EditorManagedViewUi::<EditorCamera>::init(app);
-
-		app
-			.add_observer(ensure_singleton::<TemporaryEntity>)
-			.add_systems(OnExit(EditorState::Editing), despawn_temporaries)
-			.add_systems(
-				FixedUpdate,
-				detect_enter.run_if(in_state(EditorState::Editing)),
-			)
-			.add_systems(
-				Update,
-				move_temporaries.run_if(in_state(EditorState::Editing)),
-			);
-	}
 
 	fn spawn(params: Self::Params<'_, '_>) -> Self {
 		EditorManagedViewUi::<EditorCamera>::spawn(params.managed_view_params);

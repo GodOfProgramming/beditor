@@ -1,8 +1,9 @@
 use crate::{
-	EditorOwned, EditorUi, Notification,
+	EditorExtension, EditorOwned, EditorUi, Notification,
 	settings::SaveLayoutOnExitSetting,
 	ui::{
-		LayoutManager, LoadLayout, SavedLayout, UiManager, misc::DockExtensions, misc::MissingUi,
+		LayoutManager, LoadLayout, SavedLayout, UiManager,
+		misc::{DockExtensions, MissingUi},
 		widgets,
 	},
 	util::storage::ProjectSettings,
@@ -14,6 +15,30 @@ use persistent_id::PersistentId;
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};
 use uuid::uuid;
+
+#[derive(Default)]
+pub struct ProjectSettingsUiExtension;
+
+impl EditorExtension for ProjectSettingsUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<ProjectSettingsUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.add_message::<SaveLayoutMessage>()
+			.add_message::<ResetLayoutMessage>()
+			.add_message::<LoadLayoutMessage>()
+			.add_systems(
+				FixedUpdate,
+				(
+					ResetLayoutMessage::handle,
+					SaveLayoutMessage::handle,
+					LoadLayoutMessage::handle,
+				),
+			);
+	}
+}
 
 #[derive(Component)]
 #[require(EditorOwned)]
@@ -43,21 +68,6 @@ impl EditorUi for ProjectSettingsUi {
 	const HIDDEN: bool = true;
 
 	type Params<'w, 's> = ProjectSettingsUiParams<'w, 's>;
-
-	fn init(app: &mut App) {
-		app
-			.add_message::<SaveLayoutMessage>()
-			.add_message::<ResetLayoutMessage>()
-			.add_message::<LoadLayoutMessage>()
-			.add_systems(
-				FixedUpdate,
-				(
-					ResetLayoutMessage::handle,
-					SaveLayoutMessage::handle,
-					LoadLayoutMessage::handle,
-				),
-			);
-	}
 
 	fn spawn(mut params: Self::Params<'_, '_>) -> Self {
 		*params.save_layout_on_exit = params

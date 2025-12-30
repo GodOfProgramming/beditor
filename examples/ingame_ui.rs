@@ -3,21 +3,9 @@ use bevy::prelude::*;
 
 fn main() {
 	App::new()
-		.add_plugins((
-			EditorPlugin::new(),
-			EditorExtensionPlugin::<GameCameraExtension>::default(),
-		))
+		.add_plugins(EditorPlugin::new().register_camera::<GameCamera>())
 		.add_systems(Startup, startup)
 		.run();
-}
-
-#[derive(Default)]
-struct GameCameraExtension;
-
-impl EditorExtension for GameCameraExtension {
-	fn build(&self, ctx: &mut EditorExtensionContext) {
-		ctx.register_camera::<GameCamera>();
-	}
 }
 
 #[derive(Component, Reflect, Default, Identifiable)]

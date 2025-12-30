@@ -347,36 +347,17 @@ pub struct UiManager {
 	id: egui::Id,
 }
 
-impl UiManager {
-	pub(crate) fn new(app: &mut App) -> Self {
-		let mut this = Self {
+impl Default for UiManager {
+	fn default() -> Self {
+		Self {
 			state: DockState::new(Vec::new()),
 			vtables: default(),
 			id: egui::Id::new(TypeId::of::<Self>()),
-		};
-
-		this.register::<MissingUi>(app);
-
-		this.register::<AssetsUi>(app);
-		this.register::<ComponentsUi>(app);
-		this.register::<DiagnosticsUi>(app);
-		this.register::<EditorSettingsUi>(app);
-		this.register::<EditorViewUi>(app);
-		this.register::<HierarchyUi>(app);
-		this.register::<ImageViewerUi>(app);
-		this.register::<InspectorUi>(app);
-		this.register::<LogUi>(app);
-		this.register::<PrefabsUi>(app);
-		this.register::<ProjectSettingsUi>(app);
-		this.register::<ResourcesUi>(app);
-		this.register::<TypeEditorUi>(app);
-
-		let state = SystemState::<menu_bar::Params<'_, '_>>::new(app.world_mut());
-		app.insert_resource(UiResourceState::new(state));
-
-		this
+		}
 	}
+}
 
+impl UiManager {
 	pub fn register<T: EditorUiBundle>(&mut self, app: &mut App) {
 		app.add_plugins(RegisteredUiPlugin::<T>::default());
 		self.vtables.insert(PersistentId(T::ID), &T::VTABLE);
@@ -411,6 +392,8 @@ impl UiManager {
 	}
 
 	fn init(world: &mut World) -> Result {
+		let state = SystemState::<menu_bar::Params<'_, '_>>::new(world);
+		world.insert_resource(UiResourceState::new(state));
 		world.spawn((Name::new("Editor Ui Panels"), UiPanels));
 		world.resource_scope(|world, mut this: Mut<Self>| this.restore_or_init(world))
 	}
@@ -553,10 +536,6 @@ impl TabState {
 
 	pub fn entity(&self) -> Entity {
 		self.entity
-	}
-
-	pub fn vtable(&self) -> &'static VTable {
-		self.vtable
 	}
 }
 

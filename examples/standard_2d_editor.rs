@@ -19,7 +19,7 @@ fn main() {
 struct GameCameraPlugin;
 
 impl EditorExtension for GameCameraPlugin {
-	fn build(&self, ctx: EditorExtensionContext) {
+	fn build(&self, ctx: &mut EditorExtensionContext) {
 		ctx.register_game_camera::<GameCamera>();
 	}
 }

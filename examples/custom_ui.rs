@@ -18,7 +18,7 @@ fn main() {
 struct EditorUiPlugin;
 
 impl EditorExtension for EditorUiPlugin {
-	fn build(&self, ctx: EditorExtensionContext) {
+	fn build(&self, ctx: &mut EditorExtensionContext) {
 		ctx.register_ui::<CustomPanel>();
 	}
 }

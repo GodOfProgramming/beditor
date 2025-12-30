@@ -162,9 +162,8 @@ impl Plugin for EditorPlugin {
 			app.add_plugins(Self::override_defaults(DefaultPlugins.build()));
 		}
 
-		let ui_manager = UiManager::new(app);
 		app
-			.insert_resource(ui_manager)
+			.init_resource::<UiManager>()
 			.init_resource::<ComponentRegistry>()
 			.init_resource::<RuntimeSettings>()
 			.insert_state(EditorState::Editing)
@@ -209,6 +208,8 @@ impl Plugin for EditorPlugin {
 				EditorInspectorPlugin,
 				ReflectionExtensionsPlugin,
 			))
+			// extensions
+			.add_plugins(EditorExtensionPlugin::<panels::EditorPanelsExtension>::default())
 			.add_observer(EnableGameUiEvent::handle)
 			.add_observer(DisableGameUiEvent::handle)
 			.add_systems(
@@ -249,7 +250,7 @@ impl Plugin for EditorPlugin {
 }
 
 pub trait EditorExtension {
-	fn build(&self, ctx: EditorExtensionContext);
+	fn build(&self, ctx: &mut EditorExtensionContext);
 }
 
 #[derive(new)]
@@ -280,8 +281,8 @@ where
 		app
 			.world_mut()
 			.resource_scope(|world, mut components: Mut<ComponentRegistry>| {
-				let ctx = EditorExtensionContext::new(world, &mut components, &mut ui_registrations);
-				self.0.build(ctx);
+				let mut ctx = EditorExtensionContext::new(world, &mut components, &mut ui_registrations);
+				self.0.build(&mut ctx);
 			});
 
 		let mut ui_manager = app
@@ -308,17 +309,24 @@ pub struct EditorExtensionContext<'w> {
 }
 
 impl<'w> EditorExtensionContext<'w> {
-	pub fn register_component<T: RegisterableComponent>(self) -> Self {
+	pub fn add_plugin<T>(&mut self, plugin: impl Into<EditorExtensionPlugin<T>>)
+	where
+		T: EditorExtension,
+	{
+		plugin.into().0.build(self);
+	}
+
+	pub fn register_component<T: RegisterableComponent>(&mut self) -> &mut Self {
 		T::register(self.world, self.components);
 		self
 	}
 
-	pub fn register_components<T: RegisterableComponents>(self) -> Self {
+	pub fn register_components<T: RegisterableComponents>(&mut self) -> &mut Self {
 		T::register_components(self.world, self.components);
 		self
 	}
 
-	pub fn register_game_camera<C>(self) -> Self
+	pub fn register_game_camera<C>(&mut self) -> &mut Self
 	where
 		C: Component + Reflectable + Identifiable,
 	{
@@ -329,7 +337,7 @@ impl<'w> EditorExtensionContext<'w> {
 		self
 	}
 
-	pub fn register_ui<U: EditorUiBundle>(self) -> Self {
+	pub fn register_ui<U: EditorUiBundle>(&mut self) -> &mut Self {
 		self.app_ui_registrations.push(|app, ui_manager| {
 			ui_manager.register::<U>(app);
 		});

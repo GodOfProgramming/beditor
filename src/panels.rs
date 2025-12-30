@@ -32,7 +32,9 @@ pub mod prelude {
 	};
 }
 
-use crate::{ui::widgets, util::components::ComponentRegistry};
+use crate::{
+	EditorExtension, EditorExtensionContext, ui::widgets, util::components::ComponentRegistry,
+};
 use bevy::prelude::*;
 use brefabs::Prefabs;
 use itertools::Itertools;
@@ -42,6 +44,32 @@ use std::{
 	sync::Arc,
 };
 use vfs::{Vfs, VfsEntry, VfsNode};
+
+#[derive(Default)]
+pub struct EditorPanelsExtension;
+
+impl EditorExtension for EditorPanelsExtension {
+	fn build(&self, ctx: &mut EditorExtensionContext) {
+		use crate::ui::misc::MissingUi;
+		use prelude::*;
+
+		ctx
+			.register_ui::<MissingUi>()
+			.register_ui::<AssetsUi>()
+			.register_ui::<ComponentsUi>()
+			.register_ui::<DiagnosticsUi>()
+			.register_ui::<EditorSettingsUi>()
+			.register_ui::<EditorViewUi>()
+			.register_ui::<HierarchyUi>()
+			.register_ui::<ImageViewerUi>()
+			.register_ui::<InspectorUi>()
+			.register_ui::<LogUi>()
+			.register_ui::<PrefabsUi>()
+			.register_ui::<ProjectSettingsUi>()
+			.register_ui::<ResourcesUi>()
+			.register_ui::<TypeEditorUi>();
+	}
+}
 
 pub enum BundleDnd {
 	AddComponent(TypeId),

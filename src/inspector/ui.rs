@@ -33,7 +33,6 @@ use std::{
 	borrow::{Borrow, Cow},
 	cell::RefCell,
 	marker::PhantomData,
-	rc::Rc,
 };
 
 pub trait ProjectorReflect: Fn(&mut dyn PartialReflect) -> &mut dyn PartialReflect {}
@@ -48,14 +47,14 @@ pub trait Context {
 
 pub struct ImmutableContext<'w> {
 	pub world_view: RestrictedWorldView<ImmutableWorldView<'w>>,
-	pub queue: Rc<RefCell<&'w mut CommandQueue>>,
+	pub queue: RefCell<&'w mut CommandQueue>,
 }
 
 impl<'w> ImmutableContext<'w> {
 	pub fn new(world_view: impl Into<ImmutableWorldView<'w>>, queue: &'w mut CommandQueue) -> Self {
 		Self {
 			world_view: RestrictedWorldView::new(world_view.into()),
-			queue: Rc::new(RefCell::new(queue)),
+			queue: RefCell::new(queue),
 		}
 	}
 
@@ -65,7 +64,7 @@ impl<'w> ImmutableContext<'w> {
 	) -> Self {
 		Self {
 			world_view,
-			queue: Rc::new(RefCell::new(queue)),
+			queue: RefCell::new(queue),
 		}
 	}
 }

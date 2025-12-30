@@ -270,7 +270,7 @@ impl<T> Plugin for EditorExtensionPlugin<T>
 where
 	T: 'static + Send + Sync + EditorExtension,
 {
-	fn build(&self, app: &mut App) {}
+	fn build(&self, _: &mut App) {}
 
 	fn finish(&self, app: &mut App) {
 		app.try_add_plugin(EditorPlugin::new());
@@ -308,17 +308,17 @@ pub struct EditorExtensionContext<'w> {
 }
 
 impl<'w> EditorExtensionContext<'w> {
-	pub fn register_component<T: RegisterableComponent>(mut self) -> Self {
+	pub fn register_component<T: RegisterableComponent>(self) -> Self {
 		T::register(self.world, self.components);
 		self
 	}
 
-	pub fn register_components<T: RegisterableComponents>(mut self) -> Self {
+	pub fn register_components<T: RegisterableComponents>(self) -> Self {
 		T::register_components(self.world, self.components);
 		self
 	}
 
-	pub fn register_game_camera<C>(mut self) -> Self
+	pub fn register_game_camera<C>(self) -> Self
 	where
 		C: Component + Reflectable + Identifiable,
 	{
@@ -329,7 +329,7 @@ impl<'w> EditorExtensionContext<'w> {
 		self
 	}
 
-	pub fn register_ui<U: EditorUiBundle>(mut self) -> Self {
+	pub fn register_ui<U: EditorUiBundle>(self) -> Self {
 		self.app_ui_registrations.push(|app, ui_manager| {
 			ui_manager.register::<U>(app);
 		});

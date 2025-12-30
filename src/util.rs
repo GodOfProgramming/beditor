@@ -102,12 +102,111 @@ pub trait WorldExtensions: BorrowMut<World> {
 		}
 	}
 
+	fn resources_scope<R>(&mut self, f: impl for<'a> FnOnce(&mut World, R::Output<'a>))
+	where
+		R: MultiResource,
+	{
+		let world = self.borrow_mut();
+		R::resources_scope(world, f);
+	}
+
 	fn state<S: States>(&self) -> S {
 		self.borrow().resource::<State<S>>().get().clone()
 	}
 }
 
 impl<T> WorldExtensions for T where T: BorrowMut<World> {}
+
+pub trait Resources<'w, T> {
+	type Output<'o>
+	where
+		Self: 'w,
+		Self: 'o;
+
+	fn resources(&'w self) -> Self::Output<'w>;
+}
+
+macro_rules! impl_resources {
+  ($(#[$meta:meta])* $($name: ident),*) => {
+    #[allow(unused_variables)]
+    $(#[$meta])*
+    impl<'w, W, $($name),*> Resources<'w, ($($name,)*)> for W
+    where
+      W: Borrow<World>,
+      $($name: Resource),*
+    {
+      type Output<'o>
+        = ($(&'o $name,)*)
+      where
+        Self: 'w,
+        Self: 'o;
+
+      fn resources(&'w self) -> Self::Output<'w> {
+        let world = self.borrow();
+        ($(world.resource::<$name>(),)*)
+      }
+    }
+  };
+}
+
+variadics_please::all_tuples!(impl_resources, 1, 12, T);
+
+pub trait MultiResource {
+	type Output<'o>;
+
+	fn resources_scope(world: &mut World, f: impl for<'a> FnOnce(&mut World, Self::Output<'a>));
+}
+
+macro_rules! chained_resource_scope {
+  (
+    $world:ident, $f:ident;
+    ($($name:ident),*);
+  ) => {
+    ($f)($world, ($(&mut $name,)*));
+  };
+
+  (
+    $world:ident, $f:ident;
+    ($($resource_var:ident),*);
+    $ty:ident $(, $rest:ident)*
+  ) => {
+    $world.resource_scope(|$world, mut $ty: Mut<$ty>| {
+      chained_resource_scope!(
+        $world, $f;
+        ($($resource_var),*);
+        $($rest),*
+      );
+    });
+  };
+
+  ($world:ident, $f:ident, $($ty:ident),+) => {
+    chained_resource_scope!(
+      $world, $f;
+      ($($ty),*);
+      $($ty),+
+    );
+  };
+}
+
+macro_rules! impl_resources_mut {
+  ($(#[$meta:meta])* $($name: ident),*) => {
+    #[allow(unused_variables)]
+    #[allow(non_snake_case)]
+    $(#[$meta])*
+    impl<$($name),*> MultiResource for ($($name,)*)
+    where
+      $($name: Resource),*
+    {
+      type Output<'o> = ($(&'o mut $name,)*);
+
+      fn resources_scope(world: &mut World, f: impl for<'a> FnOnce(&mut World, Self::Output<'a>)) {
+        chained_resource_scope!(world, f, $($name),*);
+      }
+    }
+  };
+}
+
+variadics_please::all_tuples!(impl_resources_mut, 1, 12, T);
 
 /* Individual Types */
 

@@ -5,18 +5,18 @@ fn main() {
 	App::new()
 		.add_plugins((
 			EditorPlugin::new(),
-			EditorExtensionPlugin::<GameCameraPlugin>::default(),
+			EditorExtensionPlugin::<GameCameraExtension>::default(),
 		))
 		.add_systems(Startup, startup)
 		.run();
 }
 
 #[derive(Default)]
-struct GameCameraPlugin;
+struct GameCameraExtension;
 
-impl EditorExtension for GameCameraPlugin {
+impl EditorExtension for GameCameraExtension {
 	fn build(&self, ctx: &mut EditorExtensionContext) {
-		ctx.register_game_camera::<GameCamera>();
+		ctx.register_camera::<GameCamera>();
 	}
 }
 

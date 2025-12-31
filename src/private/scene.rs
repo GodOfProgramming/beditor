@@ -38,7 +38,7 @@ impl Plugin for EditorScenePlugin {
   Visibility,
   Name = Name::new("Scene")
 )]
-#[reflect(Component, Clone, Default)]
+#[reflect(Clone, Default)]
 pub struct PrimaryScene;
 
 fn startup(mut commands: Commands) {

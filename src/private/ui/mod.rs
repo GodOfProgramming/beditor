@@ -12,7 +12,7 @@ use crate::{
 		resources,
 	},
 	private::cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
-	settings::{CurrentLayoutSetting, EditorEguiSettings, SaveLayoutOnExitSetting},
+	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
 	util::{entity::insert_bundle_from_world, storage::GlobalEditorSettings},
 };
 use bevy::{
@@ -710,13 +710,10 @@ pub fn startup(mut commands: Commands) {
 
 pub fn on_new_ctx(
 	event: On<Add, PrimaryEguiContext>,
-	mut q_ctx: Query<
-		(
-			&mut bevy_egui::EguiContext,
-			&mut bevy_egui::EguiContextSettings,
-		),
-		Added<PrimaryEguiContext>,
-	>,
+	mut q_ctx: Query<(
+		&mut bevy_egui::EguiContext,
+		&mut bevy_egui::EguiContextSettings,
+	)>,
 	mut settings: GlobalEditorSettings,
 ) {
 	let Ok((mut ctx, mut ctx_settings)) = q_ctx.get_mut(event.event_target()) else {
@@ -731,16 +728,14 @@ pub fn on_new_ctx(
 
 	if let Ok(options) = settings.get(EditorEguiSettings) {
 		ctx.options_mut(|opts| {
-			// corrects this running after the other that deals with themes
-			let dark = opts.dark_style.clone();
-			let light = opts.light_style.clone();
 			*opts = options;
-			opts.dark_style = dark;
-			opts.light_style = light;
 		});
 	}
 
 	ctx_settings.capture_pointer_input = false;
+	ctx_settings.scale_factor = settings
+		.get(EditorUiScale)
+		.unwrap_or(ctx_settings.scale_factor);
 }
 
 pub fn reset_ui_state(mut q_ui_state: Query<&mut UiState>) {

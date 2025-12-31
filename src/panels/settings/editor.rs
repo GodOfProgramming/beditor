@@ -1,10 +1,12 @@
 use crate::{
 	APP_DIR, EditorExtension, EditorOwned, EditorState, EditorUi, Settings,
-	settings::{CurrentThemeSetting, EditorEguiSettings},
+	settings::{CurrentThemeSetting, EditorEguiSettings, EditorUiScale},
 	util::storage::{Global, GlobalEditorSettings},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::{EguiContexts, PrimaryEguiContext};
+use bevy_egui::{EguiContextSettings, EguiContexts, PrimaryEguiContext};
+use egui::Widget;
+use egui_phosphor_icons::icons;
 use itertools::Itertools;
 use notify::Notification;
 use serde::{Deserialize, Serialize};
@@ -22,10 +24,10 @@ impl EditorExtension for EditorSettingsUiExtension {
 	}
 
 	fn build_app(&self, app: &mut App) {
-		app
-			.init_resource::<EditorSettings>()
-			.add_observer(on_new_ctx)
-			.add_systems(OnEnter(EditorState::Exiting), save_settings);
+		app.init_resource::<EditorSettings>().add_systems(
+			OnEnter(EditorState::Exiting),
+			(save_context_options, save_scale_factor),
+		);
 	}
 }
 
@@ -40,6 +42,7 @@ pub struct EditorSettingsUiParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	editor_settings: ResMut<'w, EditorSettings>,
 	global_settings: GlobalEditorSettings<'w, 's>,
+	q_contexts: Query<'w, 's, &'static mut EguiContextSettings, With<PrimaryEguiContext>>,
 }
 
 impl EditorUi for EditorSettingsUi {
@@ -90,35 +93,10 @@ impl FromWorld for EditorSettings {
 			settings.get(CurrentThemeSetting).ok()
 		});
 
-		let themes_dir = APP_DIR.join("themes");
-		std::fs::create_dir_all(&themes_dir).expect("Could not create themes directory");
-		let entries = std::fs::read_dir(themes_dir).unwrap();
-		let loaded_themes = entries
-			.filter_map_ok(|entry| {
-				let path = entry.path();
-
-				let file = std::fs::File::open(&path).ok()?;
-				let rdr = std::io::BufReader::new(file);
-				let theme: SavedTheme = ron::de::from_reader(rdr).ok()?;
-				Some((theme, path))
-			})
-			.flatten()
-			.map(|(t, p)| {
-				(
-					t.name,
-					ThemePair {
-						dark: t.dark,
-						light: t.light,
-						source: p,
-					},
-				)
-			})
-			.collect();
-
 		Self {
 			appearance_settings: AppearanceSettings {
 				current_theme: current_theme.unwrap_or_else(|| String::from("default")),
-				loaded_themes,
+				loaded_themes: load_themes(),
 			},
 			_advanced_options: default(),
 		}
@@ -144,6 +122,7 @@ impl AppearanceSettings {
 			commands,
 			editor_settings,
 			global_settings,
+			q_contexts,
 		} = params;
 
 		let EditorSettings {
@@ -151,86 +130,107 @@ impl AppearanceSettings {
 			..
 		} = &mut **editor_settings;
 
-		let ctx = ui.ctx().clone();
-		ctx.settings_ui(ui);
 		ui.horizontal(|ui| {
-			egui::ComboBox::from_label("Selected Theme")
-				.selected_text(&this.current_theme)
-				.show_ui(ui, |ui| {
-					for (key, value) in this.loaded_themes.iter() {
-						if ui
-							.selectable_value(&mut this.current_theme, key.clone(), key)
-							.clicked()
-						{
-							if let Err(err) = global_settings.set(CurrentThemeSetting, this.current_theme.clone())
-							{
-								error!("{err}");
-							}
-							ctx.set_style_of(egui::Theme::Dark, value.dark.clone());
-							ctx.set_style_of(egui::Theme::Light, value.light.clone());
-							commands.trigger(Notification::success("Changed Theme"));
-						}
-					}
-				});
+			for mut ctx_settings in q_contexts {
+				ui.label(format!(
+					"Zoom ({zoom:.2}x)",
+					zoom = ctx_settings.scale_factor
+				));
 
-			if ui.button("Save Theme").clicked() {
-				let dark = ctx.style_of(egui::Theme::Dark);
-				let light = ctx.style_of(egui::Theme::Light);
-				let saved_theme = SavedTheme {
-					name: this.current_theme.clone(),
-					dark: egui::Style::clone(&dark),
-					light: egui::Style::clone(&light),
-				};
+				if ui.add(egui::Button::new(icons::MINUS)).clicked() {
+					ctx_settings.scale_factor -= 0.25;
+				}
 
-				match ron::ser::to_string_pretty(&saved_theme, ron::ser::PrettyConfig::new()) {
-					Ok(data) => {
-						let file_path = APP_DIR
-							.join("themes")
-							.join(format!("{}.ron", saved_theme.name));
-						match std::fs::write(&file_path, data) {
-							Ok(_) => {
-								this.loaded_themes.insert(
-									this.current_theme.clone(),
-									ThemePair {
-										dark: saved_theme.dark,
-										light: saved_theme.light,
-										source: file_path,
-									},
-								);
-							}
-							Err(err) => {
-								commands.trigger(Notification::error("Failed to save theme").with_context(err));
-							}
-						}
-					}
-					Err(err) => {
-						commands.trigger(Notification::error("Failed to serialize theme").with_context(err));
-					}
+				if ui.add(egui::Button::new(icons::PLUS)).clicked() {
+					ctx_settings.scale_factor += 0.25;
 				}
 			}
+		});
 
-			if ui.button("Remove Theme").clicked()
-				&& let Some(theme) = this.loaded_themes.remove(&this.current_theme)
-			{
-				match std::fs::remove_file(&theme.source) {
-					Ok(_) => {
-						commands.trigger(Notification::success(format!(
-							"Removed theme {}",
-							this.current_theme
-						)));
-					}
-					Err(err) => {
-						commands.trigger(
-							Notification::error(format!("Failed to remove theme {}", this.current_theme))
-								.with_context(err),
-						);
+		let ctx = ui.ctx().clone();
 
-						this.loaded_themes.insert(this.current_theme.clone(), theme);
+		ctx.settings_ui(ui);
+
+		ui.vertical(|ui| {
+			egui_autocomplete::AutoCompleteTextEdit::new(
+				&mut this.current_theme,
+				this.loaded_themes.keys(),
+			)
+			.popup_on_focus(true)
+			.ui(ui);
+
+			ui.horizontal(|ui| {
+				if ui.button("Change Theme").clicked()
+					&& let Some(value) = this.loaded_themes.get(&this.current_theme)
+				{
+					global_settings
+						.set(CurrentThemeSetting, this.current_theme.clone())
+						.ok();
+
+					ctx.set_style_of(egui::Theme::Dark, value.dark.clone());
+					ctx.set_style_of(egui::Theme::Light, value.light.clone());
+					commands.trigger(Notification::success("Changed Theme"));
+				}
+
+				if ui.button("Save Theme").clicked() {
+					let dark = ctx.style_of(egui::Theme::Dark);
+					let light = ctx.style_of(egui::Theme::Light);
+					let saved_theme = SavedTheme {
+						name: this.current_theme.clone(),
+						dark: egui::Style::clone(&dark),
+						light: egui::Style::clone(&light),
+					};
+
+					match ron::ser::to_string_pretty(&saved_theme, ron::ser::PrettyConfig::new()) {
+						Ok(data) => {
+							let file_path = APP_DIR
+								.join("themes")
+								.join(format!("{}.ron", saved_theme.name));
+							match std::fs::write(&file_path, data) {
+								Ok(_) => {
+									this.loaded_themes.insert(
+										this.current_theme.clone(),
+										ThemePair {
+											dark: saved_theme.dark,
+											light: saved_theme.light,
+											source: file_path,
+										},
+									);
+								}
+								Err(err) => {
+									commands.trigger(Notification::error("Failed to save theme").with_context(err));
+								}
+							}
+						}
+						Err(err) => {
+							commands.trigger(Notification::error("Failed to serialize theme").with_context(err));
+						}
 					}
 				}
-			}
 
-			ui.text_edit_singleline(&mut this.current_theme);
+				if ui.button("Remove Theme").clicked()
+					&& let Some(theme) = this.loaded_themes.remove(&this.current_theme)
+				{
+					match std::fs::remove_file(&theme.source) {
+						Ok(_) => {
+							commands.trigger(Notification::success(format!(
+								"Removed theme {}",
+								this.current_theme
+							)));
+						}
+						Err(err) => {
+							commands.trigger(
+								Notification::error(format!("Failed to remove theme {}", this.current_theme))
+									.with_context(err),
+							);
+
+							this.loaded_themes.insert(this.current_theme.clone(), theme);
+						}
+					}
+				}
+
+				ui.text_edit_singleline(&mut this.current_theme);
+			});
 		});
 	}
 }
@@ -258,36 +258,18 @@ impl EditorSettingCategory {
 	}
 }
 
-fn save_settings(mut contexts: EguiContexts, mut settings: GlobalEditorSettings) {
+fn save_context_options(mut contexts: EguiContexts, mut settings: GlobalEditorSettings) {
 	if let Ok(ctx) = contexts.ctx_mut() {
 		let opts = ctx.options(|opts| opts.clone());
 		let _ = settings.set(EditorEguiSettings, opts);
 	}
 }
 
-fn on_new_ctx(
-	event: On<Add, PrimaryEguiContext>,
-	mut q_ctx: Query<&mut bevy_egui::EguiContext>,
-	editor_settings: Res<EditorSettings>,
+fn save_scale_factor(
+	ctx_settings: Single<&EguiContextSettings, With<PrimaryEguiContext>>,
+	mut settings: GlobalEditorSettings,
 ) {
-	let Ok(mut ctx) = q_ctx.get_mut(event.event_target()) else {
-		return;
-	};
-
-	let ctx = ctx.get_mut();
-
-	if let Some(value) = editor_settings
-		.appearance_settings
-		.loaded_themes
-		.get(&editor_settings.appearance_settings.current_theme)
-	{
-		ctx.set_style_of(egui::Theme::Dark, value.dark.clone());
-		ctx.set_style_of(egui::Theme::Light, value.light.clone());
-		info!(
-			"Restored style of {}",
-			editor_settings.appearance_settings.current_theme
-		);
-	}
+	settings.set(EditorUiScale, ctx_settings.scale_factor).ok();
 }
 
 #[derive(Serialize, Deserialize)]
@@ -295,4 +277,31 @@ struct SavedTheme {
 	name: String,
 	dark: egui::Style,
 	light: egui::Style,
+}
+
+fn load_themes() -> BTreeMap<String, ThemePair> {
+	let themes_dir = APP_DIR.join("themes");
+	std::fs::create_dir_all(&themes_dir).expect("Could not create themes directory");
+	let entries = std::fs::read_dir(themes_dir).expect("Themes directory was just created");
+	entries
+		.filter_map_ok(|entry| {
+			let path = entry.path();
+
+			let file = std::fs::File::open(&path).ok()?;
+			let rdr = std::io::BufReader::new(file);
+			let theme: SavedTheme = ron::de::from_reader(rdr).ok()?;
+			Some((theme, path))
+		})
+		.flatten()
+		.map(|(t, p)| {
+			(
+				t.name,
+				ThemePair {
+					dark: t.dark,
+					light: t.light,
+					source: p,
+				},
+			)
+		})
+		.collect()
 }

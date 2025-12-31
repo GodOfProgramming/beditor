@@ -72,6 +72,14 @@ impl Setting for EditorEguiSettings {
 	const NAME: &str = "egui_settings";
 }
 
+pub struct EditorUiScale;
+
+impl Setting for EditorUiScale {
+	type Type = f32;
+	type Group = EditorSettingsGroup;
+	const NAME: &str = "ui_scale";
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 pub struct WindowSettingsGroup;

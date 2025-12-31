@@ -9,6 +9,7 @@ use crate::{
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContexts;
+use egui_phosphor_icons::icons;
 use singleton::{SingletonBehavior, SingletonPlugin};
 use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
 use uuid::uuid;
@@ -48,6 +49,8 @@ pub struct Params<'w, 's> {
 	managed_view: Local<'s, EditorManagedViewUi<EditorCamera>>,
 	gizmo_options: ResMut<'w, GizmoOptions>,
 	temporary: Option<Single<'w, 's, (Entity, Option<&'static Transform>), With<TemporaryEntity>>>,
+
+	editor_camera: Option<Single<'w, 's, (Has<Camera2d>, Has<Camera3d>), With<EditorCamera>>>,
 }
 
 impl EditorUi for EditorViewUi {
@@ -81,6 +84,7 @@ impl EditorUi for EditorViewUi {
 			mut managed_view,
 			mut gizmo_options,
 			temporary,
+			editor_camera,
 		} = params;
 
 		let window_rect = ui.clip_rect();
@@ -101,42 +105,27 @@ impl EditorUi for EditorViewUi {
 			);
 
 			ui.scope_builder(egui::UiBuilder::new().max_rect(outer_ui), |ui| {
-				let style = ui.style_mut();
-				style.spacing.window_margin = egui::Margin::same(6);
+				let Some(editor_camera) = editor_camera else {
+					ui.label("No editor camera");
+					return;
+				};
 
-				ui.horizontal(|ui| {
-					let only_selecting = gizmo_options.gizmo_modes.is_empty();
-					if ui
-						.selectable_label(only_selecting, egui_phosphor_icons::icons::CURSOR)
-						.clicked()
-					{
-						gizmo_options.gizmo_modes.clear();
-					}
+				let (is_2d, is_3d) = *editor_camera;
 
-					for (set, icon) in [
-						(
-							GizmoMode::all_translate(),
-							egui_phosphor_icons::icons::ARROWS_OUT_CARDINAL,
-						),
-						(
-							GizmoMode::all_rotate(),
-							egui_phosphor_icons::icons::ARROWS_CLOCKWISE,
-						),
-						(
-							GizmoMode::all_scale(),
-							egui_phosphor_icons::icons::ARROW_SQUARE_OUT,
-						),
-					] {
-						let enabled = set.is_subset(gizmo_options.gizmo_modes);
-						if ui.selectable_label(enabled, icon).clicked() {
-							if enabled {
-								gizmo_options.gizmo_modes.remove_all(set);
-							} else {
-								gizmo_options.gizmo_modes.insert_all(set);
-							}
-						}
+				match (is_2d, is_3d) {
+					(true, false) => {
+						overlay2d();
 					}
-				});
+					(false, true) => {
+						overlay3d(ui, &mut gizmo_options);
+					}
+					(false, false) => {
+						ui.label("No camera kind");
+					}
+					(true, true) => {
+						ui.label("Multiple cameras registered");
+					}
+				}
 			});
 		}) else {
 			return;
@@ -254,4 +243,68 @@ fn despawn_temporaries(
 	for entity in &q_temporaries {
 		commands.entity(entity).despawn();
 	}
+}
+
+fn overlay2d() {}
+
+fn overlay3d(ui: &mut egui::Ui, gizmo_options: &mut GizmoOptions) {
+	let style = ui.style_mut();
+	style.spacing.window_margin = egui::Margin::same(6);
+	style.spacing.item_spacing.x = 6.0;
+
+	ui.horizontal(|ui| {
+		if ui
+			.selectable_label(gizmo_options.snapping, icons::MAGNET)
+			.clicked()
+		{
+			gizmo_options.snapping ^= true;
+		}
+
+		if gizmo_options.snapping {
+			ui.scope(|ui| {
+				ui.style_mut().spacing.item_spacing.x = 0.0;
+				ui.add_enabled(false, egui::Button::selectable(false, icons::GRID_NINE));
+				ui.add(egui::DragValue::new(&mut gizmo_options.snap_distance));
+			});
+
+			ui.scope(|ui| {
+				ui.style_mut().spacing.item_spacing.x = 0.0;
+				ui.add_enabled(false, egui::Button::selectable(false, icons::ANGLE));
+				ui.drag_angle(&mut gizmo_options.snap_angle);
+			});
+
+			ui.scope(|ui| {
+				ui.style_mut().spacing.item_spacing.x = 0.0;
+				ui.add_enabled(
+					false,
+					egui::Button::selectable(false, icons::ARROWS_OUT_SIMPLE),
+				);
+				ui.add(egui::DragValue::new(&mut gizmo_options.snap_scale));
+			});
+		}
+
+		ui.scope(|ui| {
+			ui.style_mut().spacing.item_spacing.x = 0.0;
+
+			let only_selecting = gizmo_options.gizmo_modes.is_empty();
+			if ui.selectable_label(only_selecting, icons::CURSOR).clicked() {
+				gizmo_options.gizmo_modes.clear();
+			}
+
+			for (set, icon) in [
+				(GizmoMode::all_translate(), icons::ARROWS_OUT_CARDINAL),
+				(GizmoMode::all_rotate(), icons::ARROWS_CLOCKWISE),
+				(GizmoMode::all_scale(), icons::ARROW_SQUARE_OUT),
+			] {
+				let enabled = set.is_subset(gizmo_options.gizmo_modes);
+				if ui.selectable_label(enabled, icon).clicked() {
+					if enabled {
+						gizmo_options.gizmo_modes.remove_all(set);
+					} else {
+						gizmo_options.gizmo_modes.insert_all(set);
+					}
+				}
+			}
+		});
+	});
 }

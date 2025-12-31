@@ -1,7 +1,11 @@
-//! For queries that may actually be more readable without abstraction
-#![allow(clippy::type_complexity)]
-//! For systems that may actually be more readable without abstraction
-#![allow(clippy::too_many_arguments)]
+#![expect(
+	clippy::type_complexity,
+	reason = "For queries that may actually be more readable without abstraction"
+)]
+#![expect(
+	clippy::too_many_arguments,
+	reason = "For systems that may actually be more readable without abstraction"
+)]
 
 pub mod inspector;
 mod panels;

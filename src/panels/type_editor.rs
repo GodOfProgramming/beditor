@@ -4,11 +4,11 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalQuery, EditorInternalSingle,
 		reflection::{ReflectDefaultCache, serde::SerdeRegistry},
-		ui::{TabState, UiManager},
+		ui::{EditorEguiContext, EditorUiEguiContextPass, TabState, UiManager},
 	},
 };
 use bevy::{prelude::*, reflect::TypeInfo};
-use bevy_egui::{EguiContext, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_egui::EguiContext;
 use derive_new::new;
 use egui_file_dialog::{DialogState, FileDialog};
 use parking_lot::Mutex;
@@ -32,7 +32,7 @@ impl EditorExtension for TypeEditorUiExtension {
 				FixedUpdate,
 				(SaveFileMessage::handle, OpenFileMessage::handle),
 			)
-			.add_systems(EguiPrimaryContextPass, show_dialogs);
+			.add_systems(EditorUiEguiContextPass, show_dialogs);
 	}
 }
 
@@ -240,7 +240,7 @@ fn on_editor_state_insert(
 fn show_dialogs(
 	mut commands: Commands,
 	mut q_states: EditorInternalQuery<(Entity, &mut TypeEditorState)>,
-	mut context: EditorInternalSingle<&mut EguiContext, With<PrimaryEguiContext>>,
+	mut context: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
 	cache: Res<ReflectDefaultCache>,
 	app_type_registry: Res<AppTypeRegistry>,
 ) {

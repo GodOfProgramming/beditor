@@ -22,15 +22,17 @@ use crate::{
 use bevy::{
 	asset::UntypedAssetId,
 	camera::visibility::RenderLayers,
-	ecs::system::{SystemState, entity_command},
+	ecs::{
+		schedule::ScheduleLabel,
+		system::{SystemState, entity_command},
+	},
 	picking::pointer::PointerId,
 	platform::collections::HashMap,
 	prelude::*,
 	ui::FocusPolicy,
 };
 use bevy_egui::{
-	EguiContext, EguiContextSettings, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
-	PrimaryEguiContext,
+	EguiContext, EguiContextSettings, EguiGlobalSettings, EguiMultipassSchedule, EguiPlugin,
 };
 use bevy_mod_outline::{OutlineMode, OutlineRenderLayers, OutlineVolume};
 use derive_new::new;
@@ -93,7 +95,7 @@ impl Plugin for EditorUiPlugin {
 				),
 			)
 			.add_systems(
-				EguiPrimaryContextPass,
+				EditorUiEguiContextPass,
 				(
 					KeyboardFocus::set_state,
 					(reset_ui_state, editor_ui).chain(),
@@ -106,6 +108,13 @@ impl Plugin for EditorUiPlugin {
 		add_single::<UiState>(&mut type_registry);
 	}
 }
+
+#[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct EditorUiEguiContextPass;
+
+#[derive(Component, Default, Clone)]
+#[require(EguiContext, EguiMultipassSchedule::new(EditorUiEguiContextPass))]
+pub struct EditorEguiContext;
 
 #[derive(Resource)]
 pub struct UiManager {
@@ -205,7 +214,7 @@ impl UiManager {
 
 	fn ui(&mut self, world: &mut World) {
 		let Ok(ctx) = world
-			.query_filtered::<&mut EguiContext, EditorInternalFilter<With<PrimaryEguiContext>>>()
+			.query_filtered::<&mut EguiContext, EditorInternalFilter<With<EditorEguiContext>>>()
 			.single_mut(world)
 			.map(|mut ctx| ctx.get_mut().clone())
 		else {
@@ -723,7 +732,7 @@ pub fn startup(mut commands: Commands) {
 }
 
 pub fn on_new_ctx(
-	event: On<Add, PrimaryEguiContext>,
+	event: On<Add, EditorEguiContext>,
 	mut q_ctx: EditorInternalQuery<(&mut EguiContext, &mut bevy_egui::EguiContextSettings)>,
 	mut settings: GlobalEditorSettings,
 ) {
@@ -762,7 +771,7 @@ pub fn editor_ui(world: &mut World) {
 }
 
 fn save_context_options(
-	mut context: EditorInternalSingle<&mut EguiContext, With<PrimaryEguiContext>>,
+	mut context: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
 	mut settings: GlobalEditorSettings,
 ) {
 	let ctx = context.get_mut();
@@ -771,7 +780,7 @@ fn save_context_options(
 }
 
 fn save_scale_factor(
-	ctx_settings: Single<&EguiContextSettings, With<PrimaryEguiContext>>,
+	ctx_settings: Single<&EguiContextSettings, With<EditorEguiContext>>,
 	mut settings: GlobalEditorSettings,
 ) {
 	settings.set(EditorUiScale, ctx_settings.scale_factor).ok();

@@ -1,4 +1,10 @@
-use bevy::{ecs::query::QueryFilter, prelude::*};
+use bevy::{
+	ecs::{
+		query::QueryFilter,
+		schedule::{InternedScheduleLabel, ScheduleLabel},
+	},
+	prelude::*,
+};
 use bevy_egui::{EguiContext, EguiPrimaryContextPass};
 use egui_toast::{Toast, ToastKind};
 use std::{marker::PhantomData, time::Duration};
@@ -61,11 +67,24 @@ fn toast(kind: ToastKind, text: impl Into<egui::WidgetText>) -> Toast {
 		.options(egui_toast::ToastOptions::default().duration(Duration::from_secs(5)))
 }
 
-pub struct NotificationPlugin<Q: QueryFilter = ()>(PhantomData<Q>);
+pub struct NotificationPlugin<Q: QueryFilter = ()> {
+	schedule: InternedScheduleLabel,
+	_pd: PhantomData<Q>,
+}
 
 impl<Q: QueryFilter> Default for NotificationPlugin<Q> {
 	fn default() -> Self {
-		Self(default())
+		Self {
+			schedule: EguiPrimaryContextPass.intern(),
+			_pd: default(),
+		}
+	}
+}
+
+impl<Q: QueryFilter> NotificationPlugin<Q> {
+	pub fn in_schedule(mut self, schedule: impl ScheduleLabel) -> Self {
+		self.schedule = schedule.intern();
+		self
 	}
 }
 
@@ -77,7 +96,7 @@ where
 		app
 			.init_resource::<Toasts>()
 			.add_observer(on_notification)
-			.add_systems(EguiPrimaryContextPass, show_toasts::<Q>);
+			.add_systems(self.schedule, show_toasts::<Q>);
 	}
 }
 

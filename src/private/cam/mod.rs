@@ -8,7 +8,7 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
 		input,
-		ui::{EditorUiHitCaptureNode, misc::UiState},
+		ui::{EditorEguiContext, EditorUiHitCaptureNode, misc::UiState},
 	},
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
 	util::storage::ProjectSettings,
@@ -30,7 +30,7 @@ use bevy::{
 	ui::FocusPolicy,
 };
 use bevy_axes_gizmo::{AxesGizmoSyncCamera, AxesGizmoTexture};
-use bevy_egui::{EguiTextureHandle, EguiUserTextures, PrimaryEguiContext};
+use bevy_egui::{EguiTextureHandle, EguiUserTextures};
 use cam2d::Cam2dSystems;
 use cam3d::Cam3dSystems;
 use commands::{LookAt, MoveTo};
@@ -268,11 +268,11 @@ pub struct EditorCamera;
 
 #[derive(Default, Component, Reflect)]
 #[require(
+  EditorEguiContext,
+  UserHidden,
   Camera2d,
   Camera = Camera { order: isize::MAX, ..default() },
-  PrimaryEguiContext = PrimaryEguiContext,
   RenderLayers = RenderLayers::layer(EDITOR_UI_RENDER_LAYER),
-  UserHidden,
 )]
 pub struct EditorUiCamera;
 

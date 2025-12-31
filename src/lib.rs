@@ -15,7 +15,7 @@ mod util;
 
 use crate::{
 	panels::managed_view::EditorManagedViewUiExtension,
-	private::EditorInternalFilter,
+	private::{EditorInternalFilter, ui::EditorUiEguiContextPass},
 	util::{
 		WorldExtensions as _,
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
@@ -174,7 +174,9 @@ impl Plugin for EditorPlugin {
 			.try_add_plugin(FrameTimeGraphPlugin)
 			.try_add_plugin(RemotePlugin::default())
 			.try_add_plugin(RemoteHttpPlugin::default())
-			.try_add_plugin(NotificationPlugin::<EditorInternalFilter>::default())
+			.try_add_plugin(
+				NotificationPlugin::<EditorInternalFilter>::default().in_schedule(EditorUiEguiContextPass),
+			)
 			// crates
 			.try_add_plugin(AxesGizmoPlugin {
 				rendering_layer: EDITOR_AXIS_RENDER_LAYER,

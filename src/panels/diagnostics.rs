@@ -1,9 +1,7 @@
 use crate::{
 	EditorExtension, ProjectSettings,
 	panels::inspector::InspectorSettings,
-	private::{
-		EditorInternal, EditorInternalQuery, UserHidden, cam::RenderCameras, util::log::LogLevel,
-	},
+	private::{EditorInternal, EditorInternalQuery, cam::RenderCameras, util::log::LogLevel},
 	settings::RenderCamerasSetting,
 	ui::EditorUi,
 	util::egui::ContextExtensions,

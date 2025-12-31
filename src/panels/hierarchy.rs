@@ -14,13 +14,13 @@ use crate::{
 			commands::{LookAt, MoveTo},
 		},
 		scene,
-		ui::InspectorSelection,
+		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
 	},
 	ui::EditorUiWorld,
 	util::WorldExtensions as _,
 };
 use bevy::prelude::*;
-use bevy_egui::{EguiContext, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_egui::EguiContext;
 use egui_file_dialog::FileDialog;
 use notify::Notification;
 use uuid::{Uuid, uuid};
@@ -40,7 +40,7 @@ impl EditorExtension for HierarchyExtension {
 			.add_message::<ClearSelectedMessage>()
 			.add_message::<DespawnEntityMessage>()
 			.add_observer(SelectedEntitiesChangedEvent::on_event)
-			.add_systems(EguiPrimaryContextPass, show_dialogs)
+			.add_systems(EditorUiEguiContextPass, show_dialogs)
 			.add_systems(
 				FixedUpdate,
 				(
@@ -251,7 +251,7 @@ struct HierarchyState {
 fn show_dialogs(
 	mut commands: Commands,
 	mut state: ResMut<HierarchyState>,
-	mut context: EditorInternalSingle<&mut EguiContext, With<PrimaryEguiContext>>,
+	mut context: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
 ) {
 	let ctx = context.get_mut();
 

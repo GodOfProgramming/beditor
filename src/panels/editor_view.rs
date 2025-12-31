@@ -6,12 +6,14 @@ use crate::{
 	},
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
-		cam::EditorCamera, scene::PrimaryScene, ui::misc::UiState,
+		cam::EditorCamera,
+		scene::PrimaryScene,
+		ui::{EditorEguiContext, misc::UiState},
 	},
 	util::WorldExtensions as _,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::{EguiContext, PrimaryEguiContext};
+use bevy_egui::EguiContext;
 use egui_phosphor_icons::icons;
 use singleton::{SingletonBehavior, SingletonPlugin};
 use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
@@ -216,7 +218,7 @@ fn detect_enter(
 	temporary: Option<EditorInternalSingle<Entity, With<TemporaryEntity>>>,
 	editor_view_state: EditorInternalSingle<&UiState, With<EditorViewUi>>,
 	mut hovered: Local<bool>,
-	mut context: EditorInternalSingle<&mut EguiContext, With<PrimaryEguiContext>>,
+	mut context: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
 ) {
 	let ctx = context.get_mut();
 

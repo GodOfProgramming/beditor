@@ -1,11 +1,11 @@
 use crate::{
 	APP_DIR, EditorExtension, EditorUi, Settings,
-	private::{EditorInternal, EditorInternalSingle},
+	private::{EditorInternal, EditorInternalSingle, ui::EditorEguiContext},
 	settings::CurrentThemeSetting,
 	util::storage::{Global, GlobalEditorSettings},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::{EguiContextSettings, PrimaryEguiContext};
+use bevy_egui::EguiContextSettings;
 use egui::Widget;
 use egui_phosphor_icons::icons;
 use itertools::Itertools;
@@ -40,9 +40,8 @@ pub struct EditorSettingsUiParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	editor_settings: ResMut<'w, EditorSettings>,
 	global_settings: GlobalEditorSettings<'w, 's>,
-	context_settings: Option<
-		EditorInternalSingle<'w, 's, &'static mut EguiContextSettings, With<PrimaryEguiContext>>,
-	>,
+	context_settings:
+		Option<EditorInternalSingle<'w, 's, &'static mut EguiContextSettings, With<EditorEguiContext>>>,
 }
 
 impl EditorUi for EditorSettingsUi {

@@ -1,5 +1,5 @@
 use super::UiManager;
-use crate::{EditorUiBundle, private::ui::TabState};
+use crate::{EditorUiWorld, private::ui::TabState};
 use bevy::prelude::*;
 use derive_new::new;
 use egui_dock::{NodeIndex, SurfaceIndex};
@@ -24,7 +24,7 @@ pub struct OpenSingleUiMessage {
 impl OpenSingleUiMessage {
 	pub fn new<T>() -> Self
 	where
-		T: EditorUiBundle,
+		T: EditorUiWorld,
 	{
 		Self {
 			cmd: Box::new(|commands| commands.queue(OpenSingleUi::<T>::new())),
@@ -40,14 +40,14 @@ impl OpenSingleUiMessage {
 
 pub struct OpenSingleUi<T>
 where
-	T: EditorUiBundle,
+	T: EditorUiWorld,
 {
 	_pd: PhantomData<T>,
 }
 
 impl<T> OpenSingleUi<T>
 where
-	T: EditorUiBundle,
+	T: EditorUiWorld,
 {
 	pub fn new() -> Self {
 		Self { _pd: default() }
@@ -56,7 +56,7 @@ where
 
 impl<T> Command for OpenSingleUi<T>
 where
-	T: EditorUiBundle,
+	T: EditorUiWorld,
 {
 	fn apply(self, world: &mut World) {
 		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {

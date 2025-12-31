@@ -1,7 +1,7 @@
 use crate::{
 	EditorExtension, EditorUi, ProjectSettings, SettingChanged,
 	private::{
-		EditorInternalQuery, EditorOwned,
+		EditorInternalQuery, EditorInternal,
 		util::log::{EventCollectorHandle, LogLevel},
 	},
 	settings::LogLevelSetting,
@@ -26,7 +26,7 @@ impl EditorExtension for LogsUiExtension {
 }
 
 #[derive(Default, Component, Reflect)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct LogUi {
 	log_level: LogLevel,
 }

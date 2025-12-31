@@ -1,7 +1,7 @@
 use crate::{
 	EditorExtension,
 	private::{
-		EditorOwned,
+		EditorInternal, UserHidden,
 		ui::{TabState, events::ShowUiMessage},
 	},
 	ui::EditorUi,
@@ -14,7 +14,7 @@ use bevy::{
 	render::view::screenshot::{Screenshot, save_to_disk},
 	time::common_conditions::on_timer,
 };
-use bevy_egui::EguiContexts;
+use bevy_egui::{EguiTextureHandle, EguiUserTextures};
 use derive_more::derive::{Deref, DerefMut};
 use derive_new::new;
 use egui_file_dialog::FileDialog;
@@ -38,7 +38,7 @@ impl EditorExtension for ImageViewerUiExtension {
 }
 
 #[derive(Component, Default)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct ImageViewerUi {
 	image: Handle<Image>,
 	tex: egui::TextureId,
@@ -47,7 +47,7 @@ pub struct ImageViewerUi {
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
 	commands: Commands<'w, 's>,
-	contexts: EguiContexts<'w, 's>,
+	egui_textures: ResMut<'w, EguiUserTextures>,
 	images: Res<'w, Assets<Image>>,
 	file_dialog: Local<'s, FileDialog>,
 }
@@ -71,8 +71,10 @@ impl EditorUi for ImageViewerUi {
 	}
 
 	fn on_despawn(&mut self, params: Self::Params<'_, '_>) {
-		let Self::Params { mut contexts, .. } = params;
-		contexts.remove_image(self.image.id());
+		let Params {
+			mut egui_textures, ..
+		} = params;
+		egui_textures.remove_image(self.image.id());
 	}
 
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
@@ -92,7 +94,7 @@ impl EditorUi for ImageViewerUi {
 
 		if let Some(path) = file_dialog.take_picked() {
 			commands
-				.spawn((EditorOwned, Screenshot::image(self.image.clone())))
+				.spawn((UserHidden, Screenshot::image(self.image.clone())))
 				.observe(save_to_disk(path));
 		}
 
@@ -151,10 +153,9 @@ pub struct OpenImageViewer(pub Handle<Image>);
 
 impl Command for OpenImageViewer {
 	fn apply(self, world: &mut World) {
-		let mut sys_state = bevy::ecs::system::SystemState::<EguiContexts>::new(world);
-		let mut contexts = sys_state.get_mut(world);
-
-		let tex_id = contexts.add_image(bevy_egui::EguiTextureHandle::Weak(self.id()));
+		let tex_id = world
+			.resource_mut::<EguiUserTextures>()
+			.add_image(EguiTextureHandle::Weak(self.id()));
 
 		world.resource_mut::<TrackedImages>().insert(self.id());
 
@@ -172,13 +173,13 @@ impl Command for OpenImageViewer {
 fn remove_texture_images(
 	mut messages: MessageReader<AssetEvent<Image>>,
 	mut tracked_images: ResMut<TrackedImages>,
-	mut contexts: EguiContexts,
+	mut user_textures: ResMut<EguiUserTextures>,
 ) {
 	for msg in messages.read() {
 		if let AssetEvent::Removed { id } = msg
 			&& tracked_images.remove(id)
 		{
-			contexts.remove_image(*id);
+			user_textures.remove_image(*id);
 		}
 	}
 }

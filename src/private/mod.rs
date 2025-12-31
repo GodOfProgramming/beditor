@@ -65,9 +65,16 @@ impl Plugin for InternalPlugin {
 	}
 }
 
-#[derive(Component, Default)]
+/// For entities that do not need to be found by other crates
+#[derive(Component, Reflect, Default)]
 #[require(EditorOwned)]
 pub struct EditorInternal;
+
+/// For entities that might need to be found by other crates
+/// but should not be displayed in some contexts
+#[derive(Component, Reflect, Default)]
+#[require(EditorOwned)]
+pub struct UserHidden;
 
 pub type EditorInternalFilter<F = ()> = (Allow<EditorInternal>, F);
 
@@ -75,10 +82,12 @@ pub type EditorInternalQuery<'w, 's, Q, F = ()> = Query<'w, 's, Q, EditorInterna
 
 pub type EditorInternalSingle<'w, 's, Q, F = ()> = Single<'w, 's, Q, EditorInternalFilter<F>>;
 
-#[derive(Component, Default)]
+/// Entities that are owned by the editor
+#[derive(Component, Reflect, Default)]
 pub struct EditorOwned;
 
-#[derive(Component)]
+/// Entities that are spawned during simulation
+#[derive(Component, Reflect)]
 pub struct Simulated;
 
 fn auto_register_components(world: &mut World) {

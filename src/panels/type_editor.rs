@@ -1,13 +1,14 @@
 use crate::{
-	EditorExtension, EditorUiBundle,
+	EditorExtension, EditorUiWorld,
 	inspector::WorldExtensions,
 	private::{
-		EditorInternalQuery, EditorOwned,
+		EditorInternal, EditorInternalQuery, EditorInternalSingle,
 		reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 		ui::{TabState, UiManager},
 	},
 };
 use bevy::{prelude::*, reflect::TypeInfo};
+use bevy_egui::{EguiContext, EguiPrimaryContextPass, PrimaryEguiContext};
 use derive_new::new;
 use egui_file_dialog::{DialogState, FileDialog};
 use parking_lot::Mutex;
@@ -31,7 +32,7 @@ impl EditorExtension for TypeEditorUiExtension {
 				FixedUpdate,
 				(SaveFileMessage::handle, OpenFileMessage::handle),
 			)
-			.add_systems(bevy_egui::EguiPrimaryContextPass, show_dialogs);
+			.add_systems(EguiPrimaryContextPass, show_dialogs);
 	}
 }
 
@@ -43,11 +44,11 @@ pub struct TypeEditorUi {
 }
 
 #[derive(Component, Reflect, Default)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct TypeEditorMarker;
 
-impl EditorUiBundle for TypeEditorUi {
-	type PrimaryComponent = TypeEditorMarker;
+impl EditorUiWorld for TypeEditorUi {
+	type MarkerComponent = TypeEditorMarker;
 
 	const NAME: &str = stringify!(TypeEditor);
 
@@ -158,7 +159,7 @@ impl AsRef<str> for CachedType {
 }
 
 #[derive(Component)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 struct TypeEditorState {
 	opened_file: Option<PathBuf>,
 
@@ -239,13 +240,11 @@ fn on_editor_state_insert(
 fn show_dialogs(
 	mut commands: Commands,
 	mut q_states: EditorInternalQuery<(Entity, &mut TypeEditorState)>,
-	mut contexts: bevy_egui::EguiContexts,
+	mut context: EditorInternalSingle<&mut EguiContext, With<PrimaryEguiContext>>,
 	cache: Res<ReflectDefaultCache>,
 	app_type_registry: Res<AppTypeRegistry>,
 ) {
-	let Ok(ctx) = contexts.ctx_mut() else {
-		return;
-	};
+	let ctx = context.get_mut();
 
 	for (entity, mut state) in &mut q_states {
 		let TypeEditorState {

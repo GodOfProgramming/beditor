@@ -1,11 +1,12 @@
-use bevy::prelude::*;
+use bevy::{ecs::query::QueryFilter, prelude::*};
+use bevy_egui::{EguiContext, EguiPrimaryContextPass};
 use egui_toast::{Toast, ToastKind};
-use std::time::Duration;
+use std::{marker::PhantomData, time::Duration};
 
 #[derive(Event)]
 pub struct Notification {
-	pub(crate) toast: Toast,
-	pub(crate) ctx: Option<Box<dyn ToString + Send + Sync>>,
+	toast: Toast,
+	ctx: Option<Box<dyn ToString + Send + Sync>>,
 }
 
 impl Notification {
@@ -60,14 +61,23 @@ fn toast(kind: ToastKind, text: impl Into<egui::WidgetText>) -> Toast {
 		.options(egui_toast::ToastOptions::default().duration(Duration::from_secs(5)))
 }
 
-pub struct NotificationPlugin;
+pub struct NotificationPlugin<Q: QueryFilter = ()>(PhantomData<Q>);
 
-impl Plugin for NotificationPlugin {
+impl<Q: QueryFilter> Default for NotificationPlugin<Q> {
+	fn default() -> Self {
+		Self(default())
+	}
+}
+
+impl<Q: QueryFilter> Plugin for NotificationPlugin<Q>
+where
+	Q: 'static + Send + Sync,
+{
 	fn build(&self, app: &mut App) {
 		app
 			.init_resource::<Toasts>()
 			.add_observer(on_notification)
-			.add_systems(bevy_egui::EguiPrimaryContextPass, show_toasts);
+			.add_systems(EguiPrimaryContextPass, show_toasts::<Q>);
 	}
 }
 
@@ -84,21 +94,11 @@ impl Default for Toasts {
 	}
 }
 
-fn show_toasts(
-	mut contexts: bevy_egui::EguiContexts,
+fn show_toasts<Q: QueryFilter>(
+	mut context: Single<&mut EguiContext, Q>,
 	mut toasts: ResMut<Toasts>,
-	mut logged_egui_failure: Local<bool>,
 ) {
-	let Ok(ctx) = contexts.ctx_mut() else {
-		if *logged_egui_failure {
-			return;
-		}
-
-		*logged_egui_failure = true;
-
-		warn!("Failed to get egui context");
-		return;
-	};
+	let ctx = context.get_mut();
 
 	toasts.show(ctx);
 }

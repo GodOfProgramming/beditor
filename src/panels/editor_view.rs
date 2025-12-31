@@ -1,15 +1,17 @@
 use crate::{
-	EditorExtension,
-	EditorState, EditorUi,
+	EditorExtension, EditorState, EditorUi,
 	panels::{
 		BundleDnd,
 		managed_view::{self, EditorManagedViewUi},
 	},
-	private::{cam::EditorCamera, scene::PrimaryScene, ui::misc::UiState, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned},
+	private::{
+		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
+		cam::EditorCamera, scene::PrimaryScene, ui::misc::UiState,
+	},
 	util::WorldExtensions as _,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::EguiContexts;
+use bevy_egui::{EguiContext, PrimaryEguiContext};
 use egui_phosphor_icons::icons;
 use singleton::{SingletonBehavior, SingletonPlugin};
 use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
@@ -43,6 +45,7 @@ impl EditorExtension for EditorViewUiExtension {
 }
 
 #[derive(Component, Reflect, Default)]
+#[require(EditorInternal)]
 pub struct EditorViewUi;
 
 #[derive(SystemParam)]
@@ -155,7 +158,7 @@ impl EditorUi for EditorViewUi {
 			payload.insert(std::iter::once(new_entity), world);
 
 			'make_child: {
-				let mut query = world.query_filtered::<Entity, With<PrimaryScene>>();
+				let mut query = world.query_filtered::<Entity, EditorInternalFilter<With<PrimaryScene>>>();
 				let Ok(root_entity) = query.query_mut(world).single() else {
 					break 'make_child;
 				};
@@ -188,7 +191,7 @@ impl EditorUi for EditorViewUi {
 }
 
 #[derive(Component)]
-#[require(EditorOwned)]
+#[require(UserHidden)]
 struct TemporaryEntity;
 
 fn move_temporaries(
@@ -213,11 +216,9 @@ fn detect_enter(
 	temporary: Option<EditorInternalSingle<Entity, With<TemporaryEntity>>>,
 	editor_view_state: EditorInternalSingle<&UiState, With<EditorViewUi>>,
 	mut hovered: Local<bool>,
-	mut contexts: EguiContexts,
+	mut context: EditorInternalSingle<&mut EguiContext, With<PrimaryEguiContext>>,
 ) {
-	let Ok(ctx) = contexts.ctx_mut() else {
-		return;
-	};
+	let ctx = context.get_mut();
 
 	let is_hovered = editor_view_state.hovered();
 	let hovered_before = *hovered;

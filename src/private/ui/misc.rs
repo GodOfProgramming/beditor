@@ -1,11 +1,11 @@
 use super::{LayoutInfo, TabState, VTable};
 use crate::{
-	EditorUi, EditorUiBundle, NoParams, UiManager,
+	EditorUi, EditorUiWorld, NoParams, UiManager,
 	inspector::{
 		InspectorPrimitive,
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
-	private::{EditorInternalQuery, EditorOwned},
+	private::{EditorInternal, EditorInternalFilter, EditorInternalQuery},
 };
 use bevy::{
 	ecs::{
@@ -76,7 +76,7 @@ pub(crate) trait EditorUiExtensions {
 
 impl<T> EditorUiExtensions for T
 where
-	T: EditorUiBundle,
+	T: EditorUiWorld,
 {
 	const VTABLE: VTable = VTable::new::<Self>();
 }
@@ -87,7 +87,7 @@ type UiParams<'w, 's, T> = UiComponentState<<T as EditorUi>::Params<'w, 's>>;
 /// Cannot access the world mutably in the system params
 /// Though it is on the user to not query for a mutable reference to themselves when they also have a self reference
 pub unsafe trait UiExtensions: EditorUi {
-	fn get_entity_mut<T>(
+	fn with_entity_params<T>(
 		entity: Entity,
 		world: &mut World,
 		f: impl FnOnce(&mut Self, Self::Params<'_, '_>) -> T,
@@ -95,7 +95,8 @@ pub unsafe trait UiExtensions: EditorUi {
 	where
 		Self: Component<Mutability = Mutable>,
 	{
-		let mut q = world.query::<(&mut Self, &mut UiParams<Self>)>();
+		let mut q = world.query_filtered::<(&mut Self, &mut UiParams<Self>), EditorInternalFilter>();
+
 		let world_cell = world.as_unsafe_world_cell();
 		let Ok((mut this, mut params)) = q.get_mut(unsafe { world_cell.world_mut() }, entity) else {
 			// # Safety
@@ -103,7 +104,7 @@ pub unsafe trait UiExtensions: EditorUi {
 			let mut q = unsafe {
 				world_cell
 					.world_mut()
-					.query::<(Has<Self>, Has<UiParams<Self>>)>()
+					.query_filtered::<(Has<Self>, Has<UiParams<Self>>), EditorInternalFilter>()
 			};
 			match q.get(unsafe { world_cell.world() }, entity) {
 				Ok((has_self, has_params)) => {
@@ -159,7 +160,7 @@ where
 	P: SystemParam + 'static;
 
 #[derive(Component, Reflect, Default)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct MissingUi {
 	message: String,
 	id: PersistentId,
@@ -250,9 +251,9 @@ pub(crate) trait DockExtensions:
 
 					let entity = world
 						.spawn((
-							Name::new(<MissingUi as EditorUiBundle>::NAME),
+							Name::new(<MissingUi as EditorUiWorld>::NAME),
 							MissingUi::new(name, layout_info.id()),
-							PersistentId(<MissingUi as EditorUiBundle>::ID),
+							PersistentId(<MissingUi as EditorUiWorld>::ID),
 							UiState::default(),
 							UiComponentState(state),
 						))

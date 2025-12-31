@@ -1,10 +1,7 @@
-use beditor::{
-	NoParams,
-	prelude::*,
-	uuid::{Uuid, uuid},
-};
+use beditor::prelude::*;
 use bevy::prelude::*;
 use egui_demo_lib::{View, WidgetGallery};
+use uuid::{Uuid, uuid};
 
 fn main() {
 	App::new()
@@ -38,7 +35,7 @@ impl EditorUi for CustomPanel {
 		Self::default()
 	}
 
-	fn ui(&mut self, ui: &mut bevy_egui::egui::Ui, _params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {
 		self.0.ui(ui);
 	}
 }

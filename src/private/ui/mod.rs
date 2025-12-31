@@ -2,7 +2,7 @@ pub mod events;
 pub mod misc;
 
 use crate::{
-	DataTable, EditorState, EditorUiBundle, PersistentData, ProjectSettings,
+	DataTable, EditorState, EditorUiWorld, PersistentData, ProjectSettings,
 	inspector::{
 		add_single,
 		ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
@@ -12,7 +12,8 @@ use crate::{
 		resources,
 	},
 	private::{
-		EditorInternalQuery, EditorInternalSingle, EditorOwned,
+		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned,
+		UserHidden,
 		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
 	},
 	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
@@ -27,7 +28,10 @@ use bevy::{
 	prelude::*,
 	ui::FocusPolicy,
 };
-use bevy_egui::{EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass, PrimaryEguiContext};
+use bevy_egui::{
+	EguiContext, EguiContextSettings, EguiGlobalSettings, EguiPlugin, EguiPrimaryContextPass,
+	PrimaryEguiContext,
+};
 use bevy_mod_outline::{OutlineMode, OutlineRenderLayers, OutlineVolume};
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
@@ -43,7 +47,7 @@ use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
 use transform_gizmo_bevy::GizmoTarget;
 
 #[derive(Component)]
-#[require(EditorOwned)]
+#[require(UserHidden)]
 pub struct EditorUiHitCaptureNode;
 
 pub(crate) struct EditorUiPlugin;
@@ -75,7 +79,10 @@ impl Plugin for EditorUiPlugin {
 			.add_observer(handle_selected)
 			.add_observer(handle_deselected)
 			.add_systems(Startup, (startup, UiManager::init))
-			.add_systems(OnEnter(EditorState::Exiting), on_app_exit)
+			.add_systems(
+				OnEnter(EditorState::Exiting),
+				(save_context_options, save_scale_factor, save_layouts),
+			)
 			.add_systems(
 				FixedUpdate,
 				(
@@ -87,7 +94,10 @@ impl Plugin for EditorUiPlugin {
 			)
 			.add_systems(
 				EguiPrimaryContextPass,
-				(KeyboardFocus::set_state, (reset_ui_state, render).chain()),
+				(
+					KeyboardFocus::set_state,
+					(reset_ui_state, editor_ui).chain(),
+				),
 			);
 
 		let type_registry = app.world().resource::<AppTypeRegistry>();
@@ -115,7 +125,7 @@ impl Default for UiManager {
 }
 
 impl UiManager {
-	pub fn register<T: EditorUiBundle>(&mut self) {
+	pub fn register<T: EditorUiWorld>(&mut self) {
 		let key = PersistentId(T::ID);
 		if self.vtables.contains_key(&key) {
 			panic!("Already registered Ui {}", std::any::type_name::<T>());
@@ -195,10 +205,11 @@ impl UiManager {
 
 	fn ui(&mut self, world: &mut World) {
 		let Ok(ctx) = world
-			.query::<&mut bevy_egui::EguiContext>()
+			.query_filtered::<&mut EguiContext, EditorInternalFilter<With<PrimaryEguiContext>>>()
 			.single_mut(world)
 			.map(|mut ctx| ctx.get_mut().clone())
 		else {
+			error!("No egui context to render to");
 			return;
 		};
 
@@ -288,7 +299,7 @@ pub struct TabState {
 }
 
 impl TabState {
-	pub(crate) fn new<T: EditorUiBundle>(world: &mut World) -> Self {
+	pub(crate) fn new<T: EditorUiWorld>(world: &mut World) -> Self {
 		Self {
 			entity: (T::VTABLE.spawn)(world),
 			vtable: &T::VTABLE,
@@ -384,7 +395,7 @@ pub(crate) struct VTable {
 impl VTable {
 	const fn new<T>() -> Self
 	where
-		T: EditorUiBundle,
+		T: EditorUiWorld,
 	{
 		Self {
 			name: T::NAME,
@@ -406,7 +417,7 @@ impl VTable {
 		}
 	}
 
-	fn spawn<T: EditorUiBundle>(world: &mut World) -> Entity {
+	fn spawn<T: EditorUiWorld>(world: &mut World) -> Entity {
 		info!("Spawning UI component {}", T::NAME);
 		let entity = world
 			.spawn((
@@ -418,7 +429,7 @@ impl VTable {
 			.id();
 
 		let ui_scene = world
-			.query_filtered::<Entity, With<UiPanels>>()
+			.query_filtered::<Entity, EditorInternalFilter<With<UiPanels>>>()
 			.iter(world)
 			.next()
 			.unwrap();
@@ -428,15 +439,15 @@ impl VTable {
 		world.entity_mut(entity).insert(instance).id()
 	}
 
-	fn despawn<T: EditorUiBundle>(entity: Entity, world: &mut World) {
+	fn despawn<T: EditorUiWorld>(entity: Entity, world: &mut World) {
 		info!("Despawning UI component {}", T::NAME);
-		<T as EditorUiBundle>::on_despawn(entity, world);
+		<T as EditorUiWorld>::on_despawn(entity, world);
 		world.trigger(RemoveUiEvent::new(entity));
 	}
 
-	fn count<T: EditorUiBundle>(world: &mut World) -> usize {
-		let mut q_uis = world.query::<&T::PrimaryComponent>();
-		q_uis.iter(world).len()
+	fn count<T: EditorUiWorld>(world: &mut World) -> usize {
+		let mut q_uis = world.query_filtered::<&T::MarkerComponent, EditorInternalFilter>();
+		q_uis.iter(world).count()
 	}
 }
 
@@ -449,7 +460,7 @@ struct TabViewer<'a> {
 impl TabViewer<'_> {
 	fn ui_state_mut(&self, entity: Entity, f: impl FnOnce(&mut UiState)) {
 		let mut world = self.world.borrow_mut();
-		let mut q_ids = world.query::<&mut UiState>();
+		let mut q_ids = world.query_filtered::<&mut UiState, EditorInternalFilter>();
 		let ui_info = q_ids.get_mut(&mut world, entity).ok();
 		if let Some(mut ui_info) = ui_info {
 			f(&mut ui_info);
@@ -675,7 +686,7 @@ fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 
 /// Component that stores all ui components as children for organization
 #[derive(Component)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct UiPanels;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States, Default)]
@@ -687,7 +698,7 @@ pub enum KeyboardFocus {
 
 impl KeyboardFocus {
 	fn set_state(
-		mut q_contexts: Query<&mut bevy_egui::EguiContext>,
+		mut q_contexts: Query<&mut EguiContext>,
 		mut keyboard_focus: ResMut<NextState<Self>>,
 	) {
 		let focus = q_contexts
@@ -713,10 +724,7 @@ pub fn startup(mut commands: Commands) {
 
 pub fn on_new_ctx(
 	event: On<Add, PrimaryEguiContext>,
-	mut q_ctx: Query<(
-		&mut bevy_egui::EguiContext,
-		&mut bevy_egui::EguiContextSettings,
-	)>,
+	mut q_ctx: EditorInternalQuery<(&mut EguiContext, &mut bevy_egui::EguiContextSettings)>,
 	mut settings: GlobalEditorSettings,
 ) {
 	let Ok((mut ctx, mut ctx_settings)) = q_ctx.get_mut(event.event_target()) else {
@@ -747,13 +755,29 @@ pub fn reset_ui_state(mut q_ui_state: EditorInternalQuery<&mut UiState>) {
 	});
 }
 
-pub fn render(world: &mut World) {
+pub fn editor_ui(world: &mut World) {
 	world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
 		ui_manager.ui(world);
 	});
 }
 
-pub fn on_app_exit(
+fn save_context_options(
+	mut context: EditorInternalSingle<&mut EguiContext, With<PrimaryEguiContext>>,
+	mut settings: GlobalEditorSettings,
+) {
+	let ctx = context.get_mut();
+	let opts = ctx.options(|opts| opts.clone());
+	settings.set(EditorEguiSettings, opts).ok();
+}
+
+fn save_scale_factor(
+	ctx_settings: Single<&EguiContextSettings, With<PrimaryEguiContext>>,
+	mut settings: GlobalEditorSettings,
+) {
+	settings.set(EditorUiScale, ctx_settings.scale_factor).ok();
+}
+
+pub fn save_layouts(
 	ui_manager: Res<UiManager>,
 	q_uuids: EditorInternalQuery<&PersistentId, Without<MissingUi>>,
 	q_missing: EditorInternalQuery<&MissingUi>,

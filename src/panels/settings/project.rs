@@ -1,7 +1,7 @@
 use crate::{
 	EditorExtension, EditorUi,
 	private::{
-		EditorInternalQuery, EditorOwned,
+		EditorInternalQuery, EditorInternal,
 		cam::ActiveEditorCamera,
 		ui::{
 			LayoutManager, LoadLayout, SavedLayout, UiManager,
@@ -44,7 +44,7 @@ impl EditorExtension for ProjectSettingsUiExtension {
 }
 
 #[derive(Component)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct ProjectSettingsUi {
 	selected_category: Option<ProjectSettingCategory>,
 	save_layout_dialog: widgets::Dialog,

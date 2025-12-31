@@ -1,11 +1,11 @@
 use crate::{
-	APP_DIR, EditorExtension, EditorState, EditorUi, Settings,
-	private::EditorOwned,
-	settings::{CurrentThemeSetting, EditorEguiSettings, EditorUiScale},
+	APP_DIR, EditorExtension, EditorUi, Settings,
+	private::{EditorInternal, EditorInternalSingle},
+	settings::CurrentThemeSetting,
 	util::storage::{Global, GlobalEditorSettings},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::{EguiContextSettings, EguiContexts, PrimaryEguiContext};
+use bevy_egui::{EguiContextSettings, PrimaryEguiContext};
 use egui::Widget;
 use egui_phosphor_icons::icons;
 use itertools::Itertools;
@@ -25,15 +25,12 @@ impl EditorExtension for EditorSettingsUiExtension {
 	}
 
 	fn build_app(&self, app: &mut App) {
-		app.init_resource::<EditorSettings>().add_systems(
-			OnEnter(EditorState::Exiting),
-			(save_context_options, save_scale_factor),
-		);
+		app.init_resource::<EditorSettings>();
 	}
 }
 
 #[derive(Default, Component, Reflect)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct EditorSettingsUi {
 	selected_category: Option<EditorSettingCategory>,
 }
@@ -43,7 +40,9 @@ pub struct EditorSettingsUiParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	editor_settings: ResMut<'w, EditorSettings>,
 	global_settings: GlobalEditorSettings<'w, 's>,
-	q_contexts: Query<'w, 's, &'static mut EguiContextSettings, With<PrimaryEguiContext>>,
+	context_settings: Option<
+		EditorInternalSingle<'w, 's, &'static mut EguiContextSettings, With<PrimaryEguiContext>>,
+	>,
 }
 
 impl EditorUi for EditorSettingsUi {
@@ -123,7 +122,7 @@ impl AppearanceSettings {
 			commands,
 			editor_settings,
 			global_settings,
-			q_contexts,
+			context_settings,
 		} = params;
 
 		let EditorSettings {
@@ -131,22 +130,22 @@ impl AppearanceSettings {
 			..
 		} = &mut **editor_settings;
 
-		ui.horizontal(|ui| {
-			for mut ctx_settings in q_contexts {
+		if let Some(context_settings) = context_settings.as_deref_mut() {
+			ui.horizontal(|ui| {
 				ui.label(format!(
 					"Zoom ({zoom:.2}x)",
-					zoom = ctx_settings.scale_factor
+					zoom = context_settings.scale_factor
 				));
 
 				if ui.add(egui::Button::new(icons::MINUS)).clicked() {
-					ctx_settings.scale_factor -= 0.25;
+					context_settings.scale_factor -= 0.25;
 				}
 
 				if ui.add(egui::Button::new(icons::PLUS)).clicked() {
-					ctx_settings.scale_factor += 0.25;
+					context_settings.scale_factor += 0.25;
 				}
-			}
-		});
+			});
+		}
 
 		let ctx = ui.ctx().clone();
 
@@ -257,20 +256,6 @@ impl EditorSettingCategory {
 			Self::AdvancedOptions => AdvancedOptions::ui(ui),
 		}
 	}
-}
-
-fn save_context_options(mut contexts: EguiContexts, mut settings: GlobalEditorSettings) {
-	if let Ok(ctx) = contexts.ctx_mut() {
-		let opts = ctx.options(|opts| opts.clone());
-		let _ = settings.set(EditorEguiSettings, opts);
-	}
-}
-
-fn save_scale_factor(
-	ctx_settings: Single<&EguiContextSettings, With<PrimaryEguiContext>>,
-	mut settings: GlobalEditorSettings,
-) {
-	settings.set(EditorUiScale, ctx_settings.scale_factor).ok();
 }
 
 #[derive(Serialize, Deserialize)]

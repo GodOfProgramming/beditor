@@ -1,7 +1,9 @@
 use crate::{
 	EditorExtension, ProjectSettings,
 	panels::inspector::InspectorSettings,
-	private::{cam::RenderCameras, util::log::LogLevel,  EditorOwned},
+	private::{
+		EditorInternal, EditorInternalQuery, UserHidden, cam::RenderCameras, util::log::LogLevel,
+	},
 	settings::RenderCamerasSetting,
 	ui::EditorUi,
 	util::egui::ContextExtensions,
@@ -17,7 +19,7 @@ use bevy::{
 		storage::ShaderStorageBuffer,
 	},
 };
-use bevy_egui::{EguiContext, EguiContexts, EguiTextureHandle, egui};
+use bevy_egui::{EguiContext, EguiTextureHandle, EguiUserTextures, egui};
 use uuid::uuid;
 
 #[derive(Default)]
@@ -160,7 +162,7 @@ fn startup(
 	mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
 	mut images: ResMut<Assets<Image>>,
 	mut graph: ResMut<FrameTimeGraph>,
-	mut contexts: EguiContexts,
+	mut user_textures: ResMut<EguiUserTextures>,
 ) {
 	graph.image = images.add(Image::new_target_texture(
 		1,
@@ -168,7 +170,7 @@ fn startup(
 		TextureFormat::bevy_default(),
 	));
 
-	graph.tex = contexts.add_image(EguiTextureHandle::Weak(graph.image.id()));
+	graph.tex = user_textures.add_image(EguiTextureHandle::Weak(graph.image.id()));
 
 	graph.mat = frame_time_graph_materials.add(FrametimeGraphMaterial {
 		values: buffers.add(ShaderStorageBuffer {
@@ -184,7 +186,7 @@ fn startup(
 	let graph_camera = commands
 		.spawn((
 			Name::new("Frame Graph Camera"),
-			EditorOwned,
+			EditorInternal,
 			FrameTimeGraphCamera,
 			Camera2d,
 			Camera {
@@ -196,7 +198,7 @@ fn startup(
 
 	commands.spawn((
 		Name::new("Frame Graph Node"),
-		EditorOwned,
+		EditorInternal,
 		UiTargetCamera(graph_camera),
 		Node {
 			width: vw(100),
@@ -208,7 +210,7 @@ fn startup(
 	));
 }
 
-fn handle_ui_debug(event: On<DebugUiEvent>, mut q_egui_ctx: Query<&mut EguiContext>) {
+fn handle_ui_debug(event: On<DebugUiEvent>, mut q_egui_ctx: EditorInternalQuery<&mut EguiContext>) {
 	for mut ctx in &mut q_egui_ctx {
 		let ctx = ctx.get_mut();
 		ctx.set_debug_on_hover(event.0);

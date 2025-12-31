@@ -1,6 +1,6 @@
 use crate::{
 	EditorExtension,
-	private::{EditorOwned, ui::InspectorSelection},
+	private::{EditorInternal, ui::InspectorSelection},
 	ui::EditorUi,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -17,7 +17,7 @@ impl EditorExtension for ResourcesUiExtension {
 }
 
 #[derive(Default, Component, Reflect)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct ResourcesUi;
 
 #[derive(SystemParam)]

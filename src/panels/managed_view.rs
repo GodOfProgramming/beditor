@@ -1,12 +1,12 @@
 use crate::{
 	EditorExtension, EditorUi,
-	private::{EditorInternalQuery, EditorInternalSingle, EditorOwned, cam::EditorManagedCamera},
+	private::{EditorInternal, EditorInternalQuery, EditorInternalSingle, cam::EditorManagedCamera},
 	util::egui::ContextExtensions,
 };
 use bevy::{
 	camera::RenderTarget, ecs::system::SystemParam, prelude::*, render::render_resource::Extent3d,
 };
-use bevy_egui::EguiContexts;
+use bevy_egui::EguiUserTextures;
 use persistent_id::Identifiable;
 use std::marker::PhantomData;
 
@@ -42,7 +42,7 @@ where
 }
 
 #[derive(Component)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub(crate) struct EditorManagedViewUi<C>
 where
 	C: Component,
@@ -79,7 +79,7 @@ where
 			>,
 		),
 	>,
-	contexts: EguiContexts<'w, 's>,
+	user_textures: Res<'w, EguiUserTextures>,
 	images: ResMut<'w, Assets<Image>>,
 }
 
@@ -116,7 +116,7 @@ where
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Self::Params {
 			mut managed_camera,
-			contexts,
+			user_textures,
 			mut images,
 		} = params;
 
@@ -132,7 +132,7 @@ where
 			return;
 		};
 
-		let Some(tex) = contexts.image_id(target.handle.id()) else {
+		let Some(tex) = user_textures.image_id(target.handle.id()) else {
 			ui.label("No image registered to egui contexts");
 			return;
 		};

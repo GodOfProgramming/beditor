@@ -1,6 +1,6 @@
 use crate::{
 	EditorState,
-	private::{EditorInternalQuery, EditorOwned, ui::KeyboardFocus},
+	private::{EditorInternalQuery, UserHidden, ui::KeyboardFocus},
 };
 use bevy::prelude::*;
 use leafwing_input_manager::{
@@ -39,7 +39,7 @@ impl EditorInputPlugin {
 			.with(EditorActions::MoveWest, KeyCode::KeyA)
 			.with(EditorActions::MoveEast, KeyCode::KeyD);
 
-		commands.spawn((Name::new("Editor Input"), EditorOwned, inputs));
+		commands.spawn((Name::new("Editor Input"), UserHidden, inputs));
 	}
 }
 

@@ -7,6 +7,7 @@ use crate::{
 		errors::{self, name_of_type, reflect::TypeDataError},
 		options::{InspectorOptions, ReflectInspectorOptions, Target},
 	},
+	private::EditorInternalFilter,
 	util::{
 		self,
 		egui::{
@@ -1903,11 +1904,11 @@ impl<F: QueryFilter> EntityFilter for Filter<F> {
 	}
 
 	fn filter_entity(&self, world: &mut World, entity: Entity) -> bool {
-		self_or_children_satisfy_filter(world, entity, self.word.as_str(), self.is_fuzzy)
+		self_or_children_satisfy_filter::<F>(world, entity, self.word.as_str(), self.is_fuzzy)
 	}
 }
 
-fn self_or_children_satisfy_filter(
+fn self_or_children_satisfy_filter<QF: QueryFilter>(
 	world: &mut World,
 	entity: Entity,
 	filter: &str,
@@ -1923,7 +1924,7 @@ fn self_or_children_satisfy_filter(
 	};
 	self_matches || {
 		let Ok(children) = world
-			.query::<&Children>()
+			.query_filtered::<&Children, QF>()
 			.get(world, entity)
 			.map(|children| children.to_vec())
 		else {
@@ -1932,7 +1933,7 @@ fn self_or_children_satisfy_filter(
 
 		children
 			.into_iter()
-			.any(|child| self_or_children_satisfy_filter(world, child, filter, is_fuzzy))
+			.any(|child| self_or_children_satisfy_filter::<QF>(world, child, filter, is_fuzzy))
 	}
 }
 

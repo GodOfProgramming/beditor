@@ -3,8 +3,8 @@ use crate::{
 	EditorExtension,
 	inspector::{WorldExtensions as _, ui::components::ComponentInfo},
 	panels::panel_dnd_drop_ui,
-	private::{ ui::InspectorSelection, EditorOwned },
-	ui::EditorUiBundle,
+	private::{EditorInternal, ui::InspectorSelection},
+	ui::EditorUiWorld,
 	util::{WorldExtensions as _, egui::show_docs},
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};
@@ -24,7 +24,7 @@ impl EditorExtension for InspectorUiExtension {
 }
 
 #[derive(Component, Reflect, Default)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct InspectorUi;
 
 impl InspectorUi {
@@ -42,8 +42,8 @@ impl InspectorUi {
 	}
 }
 
-impl EditorUiBundle for InspectorUi {
-	type PrimaryComponent = Self;
+impl EditorUiWorld for InspectorUi {
+	type MarkerComponent = Self;
 
 	const NAME: &str = stringify!(Inspector);
 	const ID: Uuid = uuid!("10bb68b8-c247-4792-89e9-61d1b9682a72");

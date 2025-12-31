@@ -6,7 +6,8 @@ use crate::{
 	EditorState,
 	panels::editor_view::EditorViewUi,
 	private::{
-		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned, input,
+		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
+		input,
 		ui::{EditorUiHitCaptureNode, misc::UiState},
 	},
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
@@ -29,7 +30,7 @@ use bevy::{
 	ui::FocusPolicy,
 };
 use bevy_axes_gizmo::{AxesGizmoSyncCamera, AxesGizmoTexture};
-use bevy_egui::PrimaryEguiContext;
+use bevy_egui::{EguiTextureHandle, EguiUserTextures, PrimaryEguiContext};
 use cam2d::Cam2dSystems;
 use cam3d::Cam3dSystems;
 use commands::{LookAt, MoveTo};
@@ -43,6 +44,7 @@ use uuid::Uuid;
 
 pub const EDITOR_UI_RENDER_LAYER: Layer = 31;
 pub const EDITOR_VIEW_RENDER_LAYER: Layer = 30;
+pub const EDITOR_AXIS_RENDER_LAYER: Layer = 29;
 
 pub struct EditorCamPlugin;
 
@@ -167,9 +169,9 @@ fn init_camera(
 
 fn on_manage_camera(
 	event: On<Add, EditorManagedCamera>,
-	mut contexts: bevy_egui::EguiContexts,
 	mut images: ResMut<Assets<Image>>,
 	mut q_cameras: EditorInternalQuery<&mut Camera>,
+	mut user_textures: ResMut<EguiUserTextures>,
 ) {
 	let Ok(mut camera) = q_cameras.get_mut(event.event_target()) else {
 		return;
@@ -184,18 +186,18 @@ fn on_manage_camera(
 		handle
 	};
 
-	contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
+	user_textures.add_image(EguiTextureHandle::Weak(image_handle.id()));
 }
 
 fn on_unmanage_camera(
 	event: On<Remove, EditorManagedCamera>,
 	q_cameras: EditorInternalQuery<&Camera>,
-	mut contexts: bevy_egui::EguiContexts,
+	mut user_textures: ResMut<EguiUserTextures>,
 ) {
 	if let Ok(camera) = q_cameras.get(event.event_target())
 		&& let RenderTarget::Image(image) = &camera.target
 	{
-		contexts.remove_image(image.handle.id());
+		user_textures.remove_image(image.handle.id());
 	}
 }
 
@@ -207,7 +209,7 @@ fn spawn_axis_ui(
 	for editor_camera in &q_new_editor_cameras {
 		commands.spawn((
 			Name::new("Axis Image"),
-			EditorOwned,
+			EditorInternal,
 			Pickable::IGNORE,
 			FocusPolicy::Pass,
 			UiTargetCamera(editor_camera),
@@ -255,7 +257,7 @@ enum PanState {
 
 #[derive(Default, Component, Reflect, Identifiable)]
 #[require(
-  EditorOwned,
+  UserHidden,
   MeshPickingCamera,
   EditorManagedCamera,
   AxesGizmoSyncCamera = AxesGizmoSyncCamera,
@@ -270,7 +272,7 @@ pub struct EditorCamera;
   Camera = Camera { order: isize::MAX, ..default() },
   PrimaryEguiContext = PrimaryEguiContext,
   RenderLayers = RenderLayers::layer(EDITOR_UI_RENDER_LAYER),
-  EditorOwned,
+  UserHidden,
 )]
 pub struct EditorUiCamera;
 

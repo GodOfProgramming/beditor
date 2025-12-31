@@ -8,17 +8,19 @@ use crate::{
 	},
 	panels::{BundleDnd, image_viewer::OpenImageViewer},
 	private::{
+		EditorInternal, EditorInternalFilter, EditorInternalSingle, UserHidden,
 		cam::{
 			ActiveEditorCamera, EditorManagedCamera,
 			commands::{LookAt, MoveTo},
 		},
 		scene,
-		ui::InspectorSelection, EditorInternalFilter, EditorOwned,
+		ui::InspectorSelection,
 	},
-	ui::EditorUiBundle,
+	ui::EditorUiWorld,
 	util::WorldExtensions as _,
 };
 use bevy::prelude::*;
+use bevy_egui::{EguiContext, EguiPrimaryContextPass, PrimaryEguiContext};
 use egui_file_dialog::FileDialog;
 use notify::Notification;
 use uuid::{Uuid, uuid};
@@ -38,7 +40,7 @@ impl EditorExtension for HierarchyExtension {
 			.add_message::<ClearSelectedMessage>()
 			.add_message::<DespawnEntityMessage>()
 			.add_observer(SelectedEntitiesChangedEvent::on_event)
-			.add_systems(bevy_egui::EguiPrimaryContextPass, show_dialogs)
+			.add_systems(EguiPrimaryContextPass, show_dialogs)
 			.add_systems(
 				FixedUpdate,
 				(
@@ -51,11 +53,11 @@ impl EditorExtension for HierarchyExtension {
 }
 
 #[derive(Component, Reflect, Default)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct HierarchyUi;
 
-impl EditorUiBundle for HierarchyUi {
-	type PrimaryComponent = Self;
+impl EditorUiWorld for HierarchyUi {
+	type MarkerComponent = Self;
 
 	const NAME: &str = stringify!(Hierarchy);
 	const ID: Uuid = uuid!("860ac319-5c6e-4a2e-83ae-8bb0000d5cb4");
@@ -106,7 +108,7 @@ impl HierarchyUi {
 		let Some(response) = (if cfg!(feature = "editor-dev") {
 			world.hierarchy_ui::<EditorInternalFilter, BundleDnd>(ui, selected, dnd_handler)
 		} else {
-			world.hierarchy_ui::<(), BundleDnd>(ui, selected, dnd_handler)
+			world.hierarchy_ui::<Without<UserHidden>, BundleDnd>(ui, selected, dnd_handler)
 		}) else {
 			return false;
 		};
@@ -249,12 +251,9 @@ struct HierarchyState {
 fn show_dialogs(
 	mut commands: Commands,
 	mut state: ResMut<HierarchyState>,
-	mut contexts: bevy_egui::EguiContexts,
+	mut context: EditorInternalSingle<&mut EguiContext, With<PrimaryEguiContext>>,
 ) {
-	let Ok(ctx) = contexts.ctx_mut() else {
-		commands.trigger(Notification::error("Failed to get egui context"));
-		return;
-	};
+	let ctx = context.get_mut();
 
 	state.scene_file_dialog.update(ctx);
 	if let Some(file) = state.scene_file_dialog.take_picked()

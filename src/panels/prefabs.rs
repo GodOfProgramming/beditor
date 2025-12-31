@@ -1,9 +1,10 @@
 use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 
 use crate::{
-	EditorExtension, private::EditorOwned,
+	EditorExtension,
 	panels::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
-	ui::EditorUiBundle,
+	private::EditorInternal,
+	ui::EditorUiWorld,
 };
 use bevy::prelude::*;
 use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
@@ -35,11 +36,11 @@ impl EditorExtension for PrefabsUiExtension {
 }
 
 #[derive(Component, Reflect, Default)]
-#[require(EditorOwned)]
+#[require(EditorInternal)]
 pub struct PrefabsUi;
 
-impl EditorUiBundle for PrefabsUi {
-	type PrimaryComponent = Self;
+impl EditorUiWorld for PrefabsUi {
+	type MarkerComponent = Self;
 
 	const NAME: &str = stringify!(Prefabs);
 	const ID: Uuid = uuid!("fa977fad-ed99-4842-bab4-7c00641b39b0");

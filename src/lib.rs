@@ -15,6 +15,7 @@ mod util;
 
 use crate::{
 	panels::managed_view::EditorManagedViewUiExtension,
+	private::EditorInternalFilter,
 	util::{
 		WorldExtensions as _,
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
@@ -36,8 +37,9 @@ use bevy_infinite_grid::InfiniteGridPlugin;
 use bevy_mod_outline::OutlinePlugin;
 use brefabs::{PrefabPlugin, Prefabs};
 use derive_new::new;
+use notify::NotificationPlugin;
 use platform_dirs::AppDirs;
-use private::ui::UiManager;
+use private::{cam::EDITOR_AXIS_RENDER_LAYER, ui::UiManager};
 use std::{path::PathBuf, sync::LazyLock};
 use transform_gizmo_bevy::TransformGizmoPlugin;
 
@@ -46,7 +48,7 @@ pub use prelude::*;
 pub mod prelude {
 	pub use crate::{
 		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
-		ui::{EditorUi, EditorUiBundle},
+		ui::{EditorUi, EditorUiWorld},
 		util::{
 			AppExtensions, NoParams, TypeGroups, TypeList,
 			storage::{
@@ -172,8 +174,12 @@ impl Plugin for EditorPlugin {
 			.try_add_plugin(FrameTimeGraphPlugin)
 			.try_add_plugin(RemotePlugin::default())
 			.try_add_plugin(RemoteHttpPlugin::default())
+			.try_add_plugin(NotificationPlugin::<EditorInternalFilter>::default())
 			// crates
-			.try_add_plugin(AxesGizmoPlugin::default())
+			.try_add_plugin(AxesGizmoPlugin {
+				rendering_layer: EDITOR_AXIS_RENDER_LAYER,
+				..default()
+			})
 			.try_add_plugin(InfiniteGridPlugin)
 			.try_add_plugin(OutlinePlugin)
 			.try_add_plugin(TransformGizmoPlugin)
@@ -264,7 +270,7 @@ impl<'w> EditorExtensionContext<'w> {
 		self
 	}
 
-	pub fn register_ui<U: EditorUiBundle>(&mut self) -> &mut Self {
+	pub fn register_ui<U: EditorUiWorld>(&mut self) -> &mut Self {
 		self.ui_manager.register::<U>();
 		self
 	}

@@ -1,6 +1,6 @@
 use super::{ActiveEditorCamera, EditorCamera, OrbitState, PanState};
 use crate::{
-	private::{EditorInternalQuery, EditorInternalSingle, EditorOwned, input::EditorActions, util},
+	private::{EditorInternalQuery, EditorInternalSingle, UserHidden, input::EditorActions, util},
 	settings::{ActiveEditorCameraSetting, CamStateSetting3d},
 	util::storage::ProjectSettings,
 };
@@ -16,7 +16,7 @@ pub struct Cam3dSystems;
 #[require(
   Camera3d,
   EditorCamera,
-  EditorOwned,
+  UserHidden,
   CameraSettings,
   GizmoCamera = GizmoCamera,
 )]
@@ -228,7 +228,7 @@ pub struct CameraSaveData {
 }
 
 #[derive(Component, Reflect, Serialize, Deserialize, Clone)]
-#[require(EditorOwned)]
+#[require(UserHidden)]
 pub struct CameraSettings {
 	move_speed: f32,
 	orbit_sensitivity: f32,

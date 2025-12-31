@@ -6,8 +6,8 @@ use bevy::{
 use egui_dock::{NodeIndex, SurfaceIndex};
 use uuid::Uuid;
 
-pub trait EditorUiBundle: Bundle + Send + Sync + Sized {
-	type PrimaryComponent: Component;
+pub trait EditorUiWorld: Bundle + Send + Sync + Sized {
+	type MarkerComponent: Component;
 
 	const NAME: &str;
 	const ID: Uuid;
@@ -68,7 +68,7 @@ pub trait EditorUiBundle: Bundle + Send + Sync + Sized {
 	}
 }
 
-pub trait EditorUi: EditorUiBundle + Component {
+pub trait EditorUi: EditorUiWorld + Component {
 	const NAME: &str;
 	const ID: Uuid;
 
@@ -126,11 +126,11 @@ pub trait EditorUi: EditorUiBundle + Component {
 	}
 }
 
-impl<T> EditorUiBundle for T
+impl<T> EditorUiWorld for T
 where
 	Self: Component<Mutability = Mutable> + EditorUi + 'static,
 {
-	type PrimaryComponent = Self;
+	type MarkerComponent = Self;
 
 	const NAME: &str = <Self as EditorUi>::NAME;
 	const ID: Uuid = <T as EditorUi>::ID;
@@ -155,11 +155,11 @@ where
 	}
 
 	fn title(entity: Entity, world: &mut World) -> egui::WidgetText {
-		Self::get_entity_mut(entity, world, EditorUi::title)
+		Self::with_entity_params(entity, world, EditorUi::title)
 	}
 
 	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) {
-		Self::get_entity_mut(entity, world, |this, params| {
+		Self::with_entity_params(entity, world, |this, params| {
 			this.ui(ui, params);
 		})
 	}
@@ -171,22 +171,22 @@ where
 		surface: SurfaceIndex,
 		node: NodeIndex,
 	) {
-		Self::get_entity_mut(entity, world, |this, params| {
+		Self::with_entity_params(entity, world, |this, params| {
 			this.context_menu(ui, params, surface, node);
 		})
 	}
 
 	fn handle_tab_response(entity: Entity, world: &mut World, response: &egui::Response) {
-		Self::get_entity_mut(entity, world, |this, params| {
+		Self::with_entity_params(entity, world, |this, params| {
 			this.handle_tab_response(params, response);
 		});
 	}
 
 	fn on_panel_changed(entity: Entity, world: &mut World) {
-		Self::get_entity_mut(entity, world, <Self as EditorUi>::on_panel_changed)
+		Self::with_entity_params(entity, world, <Self as EditorUi>::on_panel_changed)
 	}
 
 	fn on_despawn(entity: Entity, world: &mut World) {
-		Self::get_entity_mut(entity, world, <Self as EditorUi>::on_despawn)
+		Self::with_entity_params(entity, world, <Self as EditorUi>::on_despawn)
 	}
 }

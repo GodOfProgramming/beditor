@@ -1,6 +1,6 @@
 use crate::{
 	EditorState, SimulationState,
-	private::{EditorInternalQuery, EditorOwned, Simulated, ui::InspectorSelection},
+	private::{EditorInternalQuery, EditorOwned, Simulated, UserHidden, ui::InspectorSelection},
 	util::one_of,
 };
 use bevy::{
@@ -48,7 +48,7 @@ fn startup(mut commands: Commands) {
 
 fn show_infinite_grid(mut commands: Commands) {
 	commands.spawn((
-		EditorOwned,
+		UserHidden,
 		Name::new("Infinite Grid"),
 		InfiniteGridBundle::default(),
 	));

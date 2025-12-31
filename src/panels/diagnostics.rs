@@ -1,5 +1,5 @@
 use crate::{
-	EditorExtension, EditorOwned, ProjectSettings, RuntimeSettings,
+	EditorExtension, EditorOwned, ProjectSettings,
 	panels::inspector::InspectorSettings,
 	private::{cam::RenderCameras, util::log::LogLevel},
 	settings::RenderCamerasSetting,
@@ -47,7 +47,6 @@ impl DiagnosticsUi {}
 pub struct Params<'w, 's> {
 	diagnostics: Res<'w, DiagnosticsStore>,
 	render_cameras: ResMut<'w, RenderCameras>,
-	editor_settings: ResMut<'w, RuntimeSettings>,
 	inspector_settings: ResMut<'w, InspectorSettings>,
 	graph: Res<'w, FrameTimeGraph>,
 	images: ResMut<'w, Assets<Image>>,
@@ -70,7 +69,6 @@ impl EditorUi for DiagnosticsUi {
 		let Params {
 			diagnostics,
 			mut render_cameras,
-			mut editor_settings,
 			mut inspector_settings,
 			graph,
 			mut images,
@@ -104,8 +102,6 @@ impl EditorUi for DiagnosticsUi {
 			&mut inspector_settings.highlight_changes,
 			"Highlight Component Changes",
 		);
-
-		ui.toggle_value(&mut editor_settings.render_ui, "Render Ui");
 
 		ui.separator();
 

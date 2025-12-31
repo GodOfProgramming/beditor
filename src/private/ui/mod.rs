@@ -3,8 +3,10 @@ pub mod misc;
 
 use crate::{
 	DataTable, EditorOwned, EditorState, EditorUiBundle, PersistentData, ProjectSettings,
-	RuntimeSettings,
-	inspector::ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
+	inspector::{
+		add_single,
+		ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
+	},
 	panels::{
 		assets, components, diagnostics, editor_view, hierarchy, inspector, menu_bar, prefabs,
 		resources,
@@ -37,9 +39,6 @@ use serde::{Deserialize, Serialize};
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
 use transform_gizmo_bevy::GizmoTarget;
 
-#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct EditorUiSystems;
-
 #[derive(Component)]
 #[require(EditorOwned)]
 pub struct EditorUiHitCaptureNode;
@@ -66,7 +65,6 @@ impl Plugin for EditorUiPlugin {
 			.add_message::<OpenUiMessage>()
 			.add_message::<OpenSingleUiMessage>()
 			.add_message::<ShowUiMessage>()
-			.configure_sets(EguiPrimaryContextPass, EditorUiSystems)
 			.add_plugins(EguiPlugin::default())
 			.add_observer(on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
@@ -86,12 +84,13 @@ impl Plugin for EditorUiPlugin {
 			)
 			.add_systems(
 				EguiPrimaryContextPass,
-				(
-					KeyboardFocus::set_state,
-					(reset_ui_state, render).chain().run_if(should_render_ui),
-				)
-					.in_set(EditorUiSystems),
+				(KeyboardFocus::set_state, (reset_ui_state, render).chain()),
 			);
+
+		let type_registry = app.world().resource::<AppTypeRegistry>();
+		let mut type_registry = type_registry.write();
+
+		add_single::<UiState>(&mut type_registry);
 	}
 }
 
@@ -465,10 +464,11 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 	#[profiling::function]
 	fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
 		(tab.vtable.render)(tab.entity, ui, &mut self.world.borrow_mut());
-
-		self.ui_state_mut(tab.entity, |state| {
-			state.hovered = ui.ui_contains_pointer();
-		});
+		if ui.ui_contains_pointer() {
+			self.ui_state_mut(tab.entity, |state| {
+				state.mark_hovered();
+			});
+		}
 	}
 
 	#[profiling::function]
@@ -743,9 +743,9 @@ pub fn on_new_ctx(
 	ctx_settings.capture_pointer_input = false;
 }
 
-pub fn reset_ui_state(mut q_ui_infos: Query<&mut UiState>) {
-	q_ui_infos.par_iter_mut().for_each(|mut ui_info| {
-		ui_info.hovered = false;
+pub fn reset_ui_state(mut q_ui_state: Query<&mut UiState>) {
+	q_ui_state.par_iter_mut().for_each(|mut state| {
+		state.clear();
 	});
 }
 
@@ -783,8 +783,4 @@ pub fn on_app_exit(
 	}
 
 	Ok(())
-}
-
-fn should_render_ui(editor_settings: Res<RuntimeSettings>) -> bool {
-	editor_settings.render_ui
 }

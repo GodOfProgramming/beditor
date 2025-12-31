@@ -243,6 +243,12 @@ impl<'t, 'c> InspectorUi<'t, ImmutableContext<'c>> {
 }
 
 impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
+	pub fn as_immutable(&mut self, f: impl for<'a> FnOnce(InspectorUi<'a, ImmutableContext<'a>>)) {
+		let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
+		let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
+		(f)(InspectorUi::new(self.type_registry, &ctx))
+	}
+
 	/// Draws the inspector UI for the given value.
 	pub fn ui_for_reflect_mut(&mut self, value: &mut dyn PartialReflect, ui: &mut egui::Ui) -> bool {
 		self.ui_for_reflect_mut_with_options(value, ui, egui::Id::NULL, &())
@@ -988,12 +994,9 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				let ui_id = id.with(i);
 				i += 1;
 
-				{
-					let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
-					let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
-					let env = InspectorUi::new(self.type_registry, &ctx);
-					env.ui_for_reflect_with_options(key, ui, ui_id, &());
-				}
+				self.as_immutable(|this| {
+					this.ui_for_reflect_with_options(key, ui, ui_id, &());
+				});
 
 				changed |= self.ui_for_reflect_mut_with_options(value, ui, ui_id, &());
 				let delete = remove_button(ui).on_hover_text("Remove element").clicked();
@@ -1089,10 +1092,9 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			for (i, val) in set.iter().enumerate() {
 				egui::Grid::new((id, i)).show(ui, |ui| {
 					ui.horizontal_top(|ui| {
-						let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
-						let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
-						let env = InspectorUi::new(self.type_registry, &ctx);
-						env.ui_for_reflect_with_options(val, ui, id.with(i), options);
+						self.as_immutable(|this| {
+							this.ui_for_reflect_with_options(val, ui, id.with(i), options);
+						});
 					});
 					ui.horizontal_top(|ui| {
 						if remove_button(ui).on_hover_text("Remove element").clicked() {
@@ -1267,16 +1269,15 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 						}) {
 						// All sets contain this value: Show value
 						ui.horizontal_top(|ui| {
-							let world_view = RestrictedWorldView::to_immutable(&self.context.world_view);
-							let ctx = ImmutableContext::from_world_view(world_view, self.context.queue);
-							let env = InspectorUi::new(self.type_registry, &ctx);
-							env.ui_for_reflect_with_options(
-								value_to_check.borrow(),
-								ui,
-								// FIXME: is the id passed here correct?
-								id.with(i),
-								options,
-							);
+							self.as_immutable(|this| {
+								this.ui_for_reflect_with_options(
+									value_to_check.borrow(),
+									ui,
+									// FIXME: is the id passed here correct?
+									id.with(i),
+									options,
+								);
+							});
 						});
 						ui.horizontal_top(|ui| {
 							if remove_button(ui).on_hover_text("Remove element").clicked() {

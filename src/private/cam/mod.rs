@@ -446,9 +446,9 @@ fn startup(mut commands: Commands) {
 }
 
 pub fn mouse_hovered_in_editor_view(
-	q_editor_view_ui_info: Query<&UiState, With<EditorViewUi>>,
+	q_editor_view_ui_state: Query<&UiState, With<EditorViewUi>>,
 ) -> bool {
-	q_editor_view_ui_info.iter().any(UiState::hovered)
+	q_editor_view_ui_state.iter().any(UiState::hovered)
 }
 
 fn mouse_movement_active(orbit: Res<State<OrbitState>>, pan: Res<State<PanState>>) -> bool {

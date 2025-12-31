@@ -18,8 +18,33 @@ use std::{
 	any::{Any, TypeId},
 	borrow::BorrowMut,
 };
-use ui::{ImmutableContext, MutableContext, hierarchy::SelectedEntities};
-use ui::{InspectorUi, components, hierarchy};
+use ui::{
+	ImmutableContext, InspectorUi, InspectorUiVTable, MutableContext, components, hierarchy,
+	hierarchy::SelectedEntities,
+};
+
+pub fn add<T: InspectorPrimitive + TypePath + PartialEq + Clone + Default>(
+	type_registry: &mut TypeRegistry,
+) {
+	type_registry
+		.get_mut(TypeId::of::<T>())
+		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
+		.insert(InspectorUiVTable::new::<T>());
+}
+
+pub fn add_single<T: InspectorPrimitive>(type_registry: &mut TypeRegistry) {
+	type_registry
+		.get_mut(TypeId::of::<T>())
+		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
+		.insert(InspectorUiVTable::new_single::<T>());
+}
+
+pub fn add_multiedit<T: InspectorPrimitiveMultiedit + TypePath>(type_registry: &mut TypeRegistry) {
+	type_registry
+		.get_mut(TypeId::of::<T>())
+		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
+		.insert(InspectorUiVTable::new_many::<T>());
+}
 
 pub trait InspectorPrimitive: Reflect {
 	fn ui<'c>(

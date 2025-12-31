@@ -11,7 +11,7 @@ mod util;
 
 use crate::{
 	panels::managed_view::EditorManagedViewUiExtension,
-	settings::{EditorSettingsSetting, WindowMaximizedSetting, WindowSizeSetting},
+	settings::{WindowMaximizedSetting, WindowSizeSetting},
 	util::{
 		WorldExtensions as _,
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
@@ -43,7 +43,6 @@ use brefabs::{PrefabPlugin, Prefabs};
 use derive_new::new;
 use platform_dirs::AppDirs;
 use private::ui::UiManager;
-use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::LazyLock};
 use transform_gizmo_bevy::TransformGizmoPlugin;
 
@@ -174,7 +173,6 @@ impl Plugin for EditorPlugin {
 
 		app
 			.init_resource::<ComponentRegistry>()
-			.init_resource::<RuntimeSettings>()
 			.insert_state(EditorState::Editing)
 			.configure_sets(
 				Update,
@@ -214,7 +212,7 @@ impl Plugin for EditorPlugin {
 			.add_plugins(EditorExtensionPlugin::<panels::EditorPanelsExtension>::default())
 			.add_observer(EnableGameUiEvent::handle)
 			.add_observer(DisableGameUiEvent::handle)
-			.add_systems(Startup, (configure_windows, load_settings))
+			.add_systems(Startup, configure_windows)
 			.add_systems(PostStartup, show_window)
 			.add_systems(OnEnter(EditorState::Editing), show_window_cursor)
 			.add_systems(
@@ -227,7 +225,7 @@ impl Plugin for EditorPlugin {
 			)
 			.add_systems(
 				OnEnter(EditorState::Exiting),
-				(save_editor_settings, finish_exit).in_set(EditorGlobalSystems),
+				finish_exit.in_set(EditorGlobalSystems),
 			);
 
 		if !self.skip_registering_reflected_components {
@@ -344,29 +342,6 @@ struct EditorOwned;
 
 #[derive(Component)]
 struct Simulated;
-
-#[derive(Resource, Reflect, Serialize, Deserialize, Clone)]
-#[reflect(Resource, Default)]
-pub struct RuntimeSettings {
-	render_ui: bool,
-}
-
-impl Default for RuntimeSettings {
-	fn default() -> Self {
-		Self { render_ui: true }
-	}
-}
-
-fn save_editor_settings(
-	mut settings: ProjectSettings,
-	editor_settings: Res<RuntimeSettings>,
-) -> Result {
-	settings.set(EditorSettingsSetting, editor_settings.clone())
-}
-
-fn load_settings(mut settings: ProjectSettings, mut editor_settings: ResMut<RuntimeSettings>) {
-	*editor_settings = settings.get(EditorSettingsSetting).unwrap_or_default();
-}
 
 fn auto_register_components(world: &mut World) {
 	world.resource_scope(|world, mut component_registry: Mut<ComponentRegistry>| {

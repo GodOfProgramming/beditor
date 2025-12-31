@@ -1,5 +1,5 @@
 use crate::{
-	DataTable, RuntimeSettings,
+	DataTable,
 	private::{
 		cam::{ActiveEditorCamera, cam2d, cam3d},
 		util::log::LogLevel,
@@ -60,14 +60,6 @@ pub struct EditorSettingsGroup;
 impl SettingsGroup for EditorSettingsGroup {
 	type Table = SettingsTable;
 	const NAME: &str = "editor";
-}
-
-pub struct EditorSettingsSetting;
-
-impl Setting for EditorSettingsSetting {
-	type Type = RuntimeSettings;
-	type Group = EditorSettingsGroup;
-	const NAME: &str = "settings";
 }
 
 pub struct EditorEguiSettings;

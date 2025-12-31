@@ -1,5 +1,11 @@
 use super::{LayoutInfo, TabState, VTable};
-use crate::{EditorOwned, EditorUi, EditorUiBundle, NoParams, UiManager};
+use crate::{
+	EditorOwned, EditorUi, EditorUiBundle, NoParams, UiManager,
+	inspector::{
+		InspectorPrimitive,
+		ui::{ImmutableContext, InspectorUi, MutableContext},
+	},
+};
 use bevy::{
 	ecs::{
 		component::Mutable,
@@ -18,12 +24,48 @@ use uuid::{Uuid, uuid};
 
 #[derive(Component, Default, Reflect)]
 pub struct UiState {
-	pub(super) hovered: bool,
+	hovered: bool,
+	was_hovered: bool,
 }
 
 impl UiState {
 	pub fn hovered(&self) -> bool {
 		self.hovered
+	}
+
+	pub fn mark_hovered(&mut self) {
+		self.hovered = true;
+	}
+
+	pub fn clear(&mut self) {
+		self.was_hovered = self.hovered;
+		self.hovered = false;
+	}
+}
+
+impl InspectorPrimitive for UiState {
+	fn ui<'c>(
+		&self,
+		ui: &mut egui::Ui,
+		_: &dyn std::any::Any,
+		_: egui::Id,
+		_: &InspectorUi<'_, ImmutableContext<'c>>,
+	) {
+		let mut hovered = self.was_hovered;
+		ui.add_enabled(false, egui::Checkbox::new(&mut hovered, "hovered"));
+	}
+
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		options: &dyn std::any::Any,
+		id: egui::Id,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool {
+		env.as_immutable(|env| {
+			Self::ui(self, ui, options, id, &env);
+		});
+		false
 	}
 }
 
@@ -83,8 +125,10 @@ pub unsafe trait UiExtensions: EditorUi {
 
 	fn register_params(entity: Entity, world: &mut World) {
 		if !world.entity(entity).contains::<UiParams<Self>>() {
-			let state = SystemState::<<Self as EditorUi>::Params<'_, '_>>::new(world);
-			world.entity_mut(entity).insert(UiComponentState(state));
+			let state = SystemState::<Self::Params<'_, '_>>::new(world);
+			world
+				.entity_mut(entity)
+				.insert(UiParams::<Self>::new(state));
 		}
 	}
 
@@ -103,7 +147,7 @@ pub unsafe trait UiExtensions: EditorUi {
 
 unsafe impl<T> UiExtensions for T where Self: EditorUi {}
 
-#[derive(Component, Deref, DerefMut)]
+#[derive(new, Component, Deref, DerefMut)]
 struct UiComponentState<P>(SystemState<P>)
 where
 	P: SystemParam + 'static;

@@ -1,7 +1,10 @@
-use crate::inspector::{
-	InspectorPrimitive, InspectorPrimitiveMultiedit,
-	options::{InspectorOptionsType, NumberDisplay, NumberOptions, RangeOptions},
-	ui::{ImmutableContext, InspectorUi, MutableContext, change_slider, get_one_if_all_equal},
+use crate::{
+	inspector::{
+		InspectorPrimitive, InspectorPrimitiveMultiedit,
+		options::{InspectorOptionsType, NumberDisplay, NumberOptions, RangeOptions},
+		ui::{ImmutableContext, InspectorUi, MutableContext, change_slider, get_one_if_all_equal},
+	},
+	util::egui::layout_job,
 };
 use bevy::{platform::time::Instant, prelude::*};
 use egui::{DragValue, RichText, TextBuffer, emath::Numeric};
@@ -507,26 +510,55 @@ impl InspectorPrimitive for PathBuf {
 }
 
 impl InspectorPrimitive for TypeId {
-	fn ui_mut<'c>(
-		&mut self,
-		ui: &mut egui::Ui,
-		_: &dyn Any,
-		_: egui::Id,
-		_: &mut InspectorUi<'_, MutableContext<'c>>,
-	) -> bool {
-		let str = format!("{:?}", self);
-		ui.label(str);
-		false
-	}
-
 	fn ui<'c>(
 		&self,
 		ui: &mut egui::Ui,
 		_: &dyn Any,
-		_: egui::Id,
-		_: &InspectorUi<'_, ImmutableContext<'c>>,
+		id: egui::Id,
+		env: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
-		let str = format!("{:?}", self);
-		ui.label(str);
+		use std::sync::Arc;
+
+		let data_id = id.with("type-id-str");
+
+		let text = match ui.data_mut(|data| data.remove_temp::<egui::WidgetText>(data_id)) {
+			Some(label) => label,
+			None => {
+				let job = env
+					.type_registry
+					.get_type_info(*self)
+					.map(|ti| {
+						let type_str = ti.type_path();
+						layout_job(&[
+							(egui::FontId::proportional(12.0), "TypeId("),
+							(egui::FontId::monospace(13.0), type_str),
+							(egui::FontId::proportional(12.0), ")"),
+						])
+					})
+					.unwrap_or_else(|| {
+						let type_str = format!("{:?}", self);
+						layout_job(&[(egui::FontId::default(), &type_str)])
+					});
+
+				egui::WidgetText::LayoutJob(Arc::new(job))
+			}
+		};
+
+		ui.label(text.clone());
+
+		ui.data_mut(|data| data.insert_temp(data_id, text));
+	}
+
+	fn ui_mut<'c>(
+		&mut self,
+		ui: &mut egui::Ui,
+		options: &dyn Any,
+		id: egui::Id,
+		env: &mut InspectorUi<'_, MutableContext<'c>>,
+	) -> bool {
+		env.as_immutable(|env| {
+			Self::ui(self, ui, options, id, &env);
+		});
+		false
 	}
 }

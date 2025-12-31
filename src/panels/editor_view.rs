@@ -1,8 +1,8 @@
 use crate::{
-	EditorExtension, EditorExtensionPlugin, EditorOwned, EditorState, EditorUi,
+	EditorExtension, EditorOwned, EditorState, EditorUi,
 	panels::{
 		BundleDnd,
-		managed_view::{self, EditorManagedViewUi, EditorManagedViewUiExtension},
+		managed_view::{self, EditorManagedViewUi},
 	},
 	private::{cam::EditorCamera, scene::PrimaryScene, ui::misc::UiState},
 	util::WorldExtensions as _,
@@ -23,9 +23,8 @@ impl EditorExtension for EditorViewUiExtension {
 
 	fn build_app(&self, app: &mut App) {
 		app
-			.add_plugins((
-				SingletonPlugin::<TemporaryEntity>::new(SingletonBehavior::RemoveOther),
-				EditorExtensionPlugin::<EditorManagedViewUiExtension<EditorCamera>>::default(),
+			.add_plugins(SingletonPlugin::<TemporaryEntity>::new(
+				SingletonBehavior::RemoveOther,
 			))
 			.add_systems(OnExit(EditorState::Editing), despawn_temporaries)
 			.add_systems(
@@ -67,7 +66,7 @@ impl EditorUi for EditorViewUi {
 	type Params<'w, 's> = Params<'w, 's>;
 
 	fn spawn(params: Self::Params<'_, '_>) -> Self {
-		EditorManagedViewUi::<EditorCamera>::spawn(params.managed_view_params);
+		let _ = EditorManagedViewUi::<EditorCamera>::spawn(params.managed_view_params);
 		default()
 	}
 
@@ -88,7 +87,9 @@ impl EditorUi for EditorViewUi {
 
 		let (_, Some(payload)) = super::panel_dnd_drop_ui::<BundleDnd, ()>(ui, |ui| {
 			let has_camera = managed_view_params.has_camera();
+
 			managed_view.ui(ui, managed_view_params);
+
 			if !has_camera {
 				return;
 			}

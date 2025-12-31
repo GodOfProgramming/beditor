@@ -101,20 +101,8 @@ where
 
 	type Params<'w, 's> = Params<'w, 's, C>;
 
-	fn spawn(mut params: Self::Params<'_, '_>) -> Self {
-		if let Some(mut camera) = params.managed_camera.p0() {
-			camera.is_active = true;
-		};
-
+	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		default()
-	}
-
-	fn on_despawn(&mut self, mut params: Self::Params<'_, '_>) {
-		let Some(mut camera) = params.managed_camera.p0() else {
-			return;
-		};
-
-		camera.is_active = false;
 	}
 
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {

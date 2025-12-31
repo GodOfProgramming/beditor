@@ -3,9 +3,8 @@ mod glam_impls;
 mod std_impls;
 
 use crate::inspector::{
-	InspectorPrimitive, InspectorPrimitiveMultiedit,
+	add, add_multiedit, add_single,
 	options::{NumberOptions, insert_options_enum, insert_options_struct},
-	ui::InspectorUiVTable,
 };
 use bevy::{
 	camera::{Camera3dDepthLoadOp, visibility::RenderLayers},
@@ -432,29 +431,4 @@ fn register_bevy_impls(type_registry: &mut TypeRegistry) {
 	add::<uuid::Uuid>(type_registry);
 
 	add::<Name>(type_registry);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-fn add<T: InspectorPrimitive + TypePath + PartialEq + Clone + Default>(
-	type_registry: &mut TypeRegistry,
-) {
-	type_registry
-		.get_mut(TypeId::of::<T>())
-		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
-		.insert(InspectorUiVTable::new::<T>());
-}
-
-fn add_single<T: InspectorPrimitive>(type_registry: &mut TypeRegistry) {
-	type_registry
-		.get_mut(TypeId::of::<T>())
-		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
-		.insert(InspectorUiVTable::new_single::<T>());
-}
-
-fn add_multiedit<T: InspectorPrimitiveMultiedit + TypePath>(type_registry: &mut TypeRegistry) {
-	type_registry
-		.get_mut(TypeId::of::<T>())
-		.unwrap_or_else(|| panic!("{} not registered", std::any::type_name::<T>()))
-		.insert(InspectorUiVTable::new_many::<T>());
 }

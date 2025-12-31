@@ -15,30 +15,21 @@ mod util;
 
 use crate::{
 	panels::managed_view::EditorManagedViewUiExtension,
-	settings::{WindowMaximizedSetting, WindowSizeSetting},
 	util::{
 		WorldExtensions as _,
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
-		storage::{Global, GlobalEditorSettings},
+		storage::Global,
 	},
 };
 use bevy::{
 	app::PluginGroupBuilder,
-	dev_tools::{
-		frame_time_graph::FrameTimeGraphPlugin, picking_debug::DebugPickingPlugin,
-		states::log_transitions,
-	},
+	dev_tools::{frame_time_graph::FrameTimeGraphPlugin, picking_debug::DebugPickingPlugin},
 	diagnostic::{
 		EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
 	},
-	ecs::{
-		entity_disabling::Disabled,
-		system::{NonSendMarker, SystemParam},
-	},
 	prelude::*,
 	remote::{RemotePlugin, http::RemoteHttpPlugin},
-	window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
-	winit::WINIT_WINDOWS,
+	window::WindowMode,
 };
 use bevy_axes_gizmo::AxesGizmoPlugin;
 use bevy_infinite_grid::InfiniteGridPlugin;
@@ -57,7 +48,7 @@ pub mod prelude {
 		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
 		ui::{EditorUi, EditorUiBundle},
 		util::{
-			AppExtensions, RegisterableType, TypeGroups, TypeList,
+			AppExtensions, NoParams, TypeGroups, TypeList,
 			storage::{
 				DataTable, PersistentData, Project, ProjectSettings, SettingChanged, Settings, settings,
 			},
@@ -102,7 +93,6 @@ type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
 
 #[derive(Default)]
 pub struct EditorPlugin {
-	skip_registering_reflected_components: bool,
 	default_plugins: Option<AppRegistrationFn>,
 	camera_registrations: Vec<fn(&mut App)>,
 }
@@ -110,11 +100,6 @@ pub struct EditorPlugin {
 impl EditorPlugin {
 	pub fn new() -> Self {
 		Self::default()
-	}
-
-	pub fn skip_registering_reflected_components(mut self) -> Self {
-		self.skip_registering_reflected_components = true;
-		self
 	}
 
 	pub fn configure_defaults<P, F>(mut self, f: F) -> Self
@@ -178,24 +163,6 @@ impl Plugin for EditorPlugin {
 		app
 			.init_resource::<ComponentRegistry>()
 			.insert_state(EditorState::Editing)
-			.configure_sets(
-				Update,
-				(
-					EditorGlobalSystems,
-					EditingSystems
-						.in_set(EditorGlobalSystems)
-						.run_if(in_state(EditorState::Editing)),
-				),
-			)
-			.configure_sets(
-				FixedUpdate,
-				(
-					EditorGlobalSystems,
-					EditingSystems
-						.in_set(EditorGlobalSystems)
-						.run_if(in_state(EditorState::Editing)),
-				),
-			)
 			// bevy
 			.try_add_plugin(MeshPickingPlugin)
 			.try_add_plugin(DebugPickingPlugin)
@@ -210,43 +177,11 @@ impl Plugin for EditorPlugin {
 			.try_add_plugin(InfiniteGridPlugin)
 			.try_add_plugin(OutlinePlugin)
 			.try_add_plugin(TransformGizmoPlugin)
+			.try_add_plugin(PrefabPlugin::default())
 			// internal
-			.add_plugins(private::PrivatePlugins)
+			.add_plugins(private::InternalPlugin)
 			// extensions
-			.add_plugins(EditorExtensionPlugin::<panels::EditorPanelsExtension>::default())
-			.add_observer(EnableGameUiEvent::handle)
-			.add_observer(DisableGameUiEvent::handle)
-			.add_systems(Startup, configure_windows)
-			.add_systems(PostStartup, show_window)
-			.add_systems(OnEnter(EditorState::Editing), show_window_cursor)
-			.add_systems(
-				FixedUpdate,
-				(
-					on_close_requested,
-					handle_window_events,
-					log_transitions::<EditorState>,
-				),
-			)
-			.add_systems(
-				OnEnter(EditorState::Exiting),
-				finish_exit.in_set(EditorGlobalSystems),
-			);
-
-		if !self.skip_registering_reflected_components {
-			app.add_systems(Startup, auto_register_components);
-		}
-	}
-
-	fn finish(&self, app: &mut App) {
-		app.try_add_plugin(PrefabPlugin::default());
-
-		let mut schedules = app.world_mut().resource_mut::<Schedules>();
-
-		for (_, schedule) in schedules.iter_mut() {
-			schedule.configure_sets(
-				AppSystems.run_if(in_state(EditorState::Simulating(SimulationState::Live))),
-			);
-		}
+			.add_plugins(EditorExtensionPlugin::<panels::EditorPanelsExtension>::default());
 	}
 }
 
@@ -333,139 +268,4 @@ impl<'w> EditorExtensionContext<'w> {
 		self.ui_manager.register::<U>();
 		self
 	}
-}
-
-#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct EditorGlobalSystems;
-
-#[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-struct EditingSystems;
-
-#[derive(Component, Default)]
-struct EditorOwned;
-
-#[derive(Component)]
-struct Simulated;
-
-fn auto_register_components(world: &mut World) {
-	world.resource_scope(|world, mut component_registry: Mut<ComponentRegistry>| {
-		let app_type_registry = world.resource::<AppTypeRegistry>().clone();
-		let type_registry = app_type_registry.read();
-
-		for entry in type_registry.iter() {
-			component_registry.register_raw(world, entry);
-		}
-	});
-}
-
-fn show_window(mut q_windows: Query<&mut Window>) {
-	for mut window in &mut q_windows {
-		window.visible = true;
-	}
-}
-
-fn finish_exit(mut app_exit: MessageWriter<AppExit>) {
-	app_exit.write(AppExit::Success);
-}
-
-fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
-	for mut cursor in &mut q_cursors {
-		private::util::window::show_cursor(&mut cursor);
-	}
-}
-
-fn configure_windows(
-	mut settings: GlobalEditorSettings,
-	mut window: Single<&mut Window, With<PrimaryWindow>>,
-) -> Result<()> {
-	let maximized = settings.get(WindowMaximizedSetting).unwrap_or_default();
-	window.set_maximized(maximized);
-
-	if let Ok(size) = settings.get(WindowSizeSetting) {
-		window.resolution.set(size.x, size.y);
-	}
-
-	Ok(())
-}
-
-#[derive(Event)]
-pub struct EnableGameUiEvent;
-
-impl EnableGameUiEvent {
-	/// This will likely need further logic to account for game logic that wants to disable UI but needs to not be managed by this
-	/// Maybe a marker component that signals that the editor should not disable or enable the UI as a first pass
-	fn handle(
-		_: On<Self>,
-		mut commands: Commands,
-		q_ui: Query<Entity, (With<Node>, Allow<Disabled>)>,
-	) {
-		for entity in q_ui {
-			commands
-				.entity(entity)
-				.remove_recursive::<Children, Disabled>();
-		}
-	}
-}
-
-#[derive(Event)]
-pub struct DisableGameUiEvent;
-
-impl DisableGameUiEvent {
-	fn handle(_: On<Self>, mut commands: Commands, q_ui: Query<Entity, With<Node>>) {
-		for entity in q_ui {
-			commands
-				.entity(entity)
-				.insert_recursive::<Children>(Disabled);
-		}
-	}
-}
-
-#[derive(SystemParam)]
-pub struct NoParams;
-
-fn on_close_requested(
-	mut close_requests: MessageReader<WindowCloseRequested>,
-	mut next_editor_state: ResMut<NextState<EditorState>>,
-) {
-	if !close_requests.is_empty() {
-		close_requests.clear();
-		next_editor_state.set(EditorState::Exiting)
-	}
-}
-
-fn handle_window_events(
-	mut settings: GlobalEditorSettings,
-	mut events: MessageReader<bevy::window::WindowResized>,
-	window: Single<&mut Window, With<PrimaryWindow>>,
-	mut was_maximized: Local<Option<bool>>,
-	mut last_size: Local<Option<Vec2>>,
-	_non_send_marker: NonSendMarker, // forces main thread
-) -> Result {
-	WINIT_WINDOWS.with_borrow(|windows| -> Result {
-		for event in events.read() {
-			let Some(winit_window) = windows.get_window(event.window) else {
-				continue;
-			};
-
-			{
-				let is_maximized = winit_window.is_maximized();
-				if *was_maximized != Some(is_maximized) {
-					settings.set(WindowMaximizedSetting, is_maximized)?;
-					*was_maximized = Some(is_maximized);
-				}
-			}
-		}
-
-		Ok(())
-	})?;
-
-	{
-		let size = window.resolution.size();
-		if *last_size != Some(size) {
-			settings.set(WindowSizeSetting, size)?;
-			*last_size = Some(size);
-		}
-	}
-
-	Ok(())
 }

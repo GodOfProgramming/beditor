@@ -1,4 +1,8 @@
-use crate::{EditorExtension, EditorOwned, private::ui::InspectorSelection, ui::EditorUi};
+use crate::{
+	EditorExtension,
+	private::{EditorOwned, ui::InspectorSelection},
+	ui::EditorUi,
+};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::marker::PhantomData;
 use uuid::uuid;

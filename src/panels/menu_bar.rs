@@ -1,7 +1,7 @@
 use crate::{
 	EditorState, SimulationState,
 	panels::settings::{EditorSettingsUi, ProjectSettingsUi},
-	private::{scene::PrimaryScene, ui::events::OpenSingleUiMessage},
+	private::{EditorInternalQuery, scene::PrimaryScene, ui::events::OpenSingleUiMessage},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use egui_phosphor_icons::icons;
@@ -14,8 +14,8 @@ pub struct Params<'w, 's> {
 	editor_state: Res<'w, State<EditorState>>,
 	next_editor_state: ResMut<'w, NextState<EditorState>>,
 
-	q_editor_settings_ui: Query<'w, 's, (), With<EditorSettingsUi>>,
-	q_project_settings_ui: Query<'w, 's, (), With<ProjectSettingsUi>>,
+	q_editor_settings_ui: EditorInternalQuery<'w, 's, (), With<EditorSettingsUi>>,
+	q_project_settings_ui: EditorInternalQuery<'w, 's, (), With<ProjectSettingsUi>>,
 }
 
 #[derive(Resource, Reflect, Default)]

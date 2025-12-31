@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-	EditorExtension, EditorOwned,
+	EditorExtension,
 	inspector::{
 		WorldExtensions as _,
 		ui::hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
@@ -13,7 +13,7 @@ use crate::{
 			commands::{LookAt, MoveTo},
 		},
 		scene,
-		ui::InspectorSelection,
+		ui::InspectorSelection, EditorInternalFilter, EditorOwned,
 	},
 	ui::EditorUiBundle,
 	util::WorldExtensions as _,
@@ -103,7 +103,11 @@ impl HierarchyUi {
 		let bg_fill = ui.style().visuals.window_fill();
 		ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
 
-		let Some(response) = world.hierarchy_ui::<(), BundleDnd>(ui, selected, dnd_handler) else {
+		let Some(response) = (if cfg!(feature = "editor-dev") {
+			world.hierarchy_ui::<EditorInternalFilter, BundleDnd>(ui, selected, dnd_handler)
+		} else {
+			world.hierarchy_ui::<(), BundleDnd>(ui, selected, dnd_handler)
+		}) else {
 			return false;
 		};
 

@@ -1,7 +1,7 @@
 use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 
 use crate::{
-	EditorExtension, EditorOwned,
+	EditorExtension, private::EditorOwned,
 	panels::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
 	ui::EditorUiBundle,
 };

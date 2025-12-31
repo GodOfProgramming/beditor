@@ -2,7 +2,7 @@ pub mod events;
 pub mod misc;
 
 use crate::{
-	DataTable, EditorOwned, EditorState, EditorUiBundle, PersistentData, ProjectSettings,
+	DataTable, EditorState, EditorUiBundle, PersistentData, ProjectSettings,
 	inspector::{
 		add_single,
 		ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
@@ -11,7 +11,10 @@ use crate::{
 		assets, components, diagnostics, editor_view, hierarchy, inspector, menu_bar, prefabs,
 		resources,
 	},
-	private::cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
+	private::{
+		EditorInternalQuery, EditorInternalSingle, EditorOwned,
+		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
+	},
 	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
 	util::{entity::insert_bundle_from_world, storage::GlobalEditorSettings},
 };
@@ -233,8 +236,8 @@ impl UiManager {
 
 	fn save_state(
 		&self,
-		q_uuids: &Query<&PersistentId, Without<MissingUi>>,
-		q_missing: &Query<&MissingUi>,
+		q_uuids: &EditorInternalQuery<&PersistentId, Without<MissingUi>>,
+		q_missing: &EditorInternalQuery<&MissingUi>,
 	) -> DockState<LayoutInfo> {
 		self.state.decouple(self, q_uuids, q_missing)
 	}
@@ -633,7 +636,7 @@ impl FromWorld for Highlight {
 fn handle_click_events(
 	mut event: On<Pointer<Click>>,
 	mut commands: Commands,
-	editor_camera_pointer_id: Single<&PointerId, With<EditorCamera>>,
+	editor_camera_pointer_id: EditorInternalSingle<&PointerId, With<EditorCamera>>,
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
 ) {
@@ -738,7 +741,7 @@ pub fn on_new_ctx(
 		.unwrap_or(ctx_settings.scale_factor);
 }
 
-pub fn reset_ui_state(mut q_ui_state: Query<&mut UiState>) {
+pub fn reset_ui_state(mut q_ui_state: EditorInternalQuery<&mut UiState>) {
 	q_ui_state.par_iter_mut().for_each(|mut state| {
 		state.clear();
 	});
@@ -752,8 +755,8 @@ pub fn render(world: &mut World) {
 
 pub fn on_app_exit(
 	ui_manager: Res<UiManager>,
-	q_uuids: Query<&PersistentId, Without<MissingUi>>,
-	q_missing: Query<&MissingUi>,
+	q_uuids: EditorInternalQuery<&PersistentId, Without<MissingUi>>,
+	q_missing: EditorInternalQuery<&MissingUi>,
 	mut settings: ProjectSettings,
 ) -> Result {
 	let save_on_exit = settings.get(SaveLayoutOnExitSetting).unwrap_or(true);

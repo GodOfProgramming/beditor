@@ -6,9 +6,15 @@ pub mod ron;
 pub mod storage;
 pub mod world;
 
-use crate::{EditorOwned, EditorState, Simulated};
+use crate::{
+	EditorState,
+	private::{EditorInternalQuery, EditorOwned, Simulated},
+};
 use bevy::{
-	ecs::{system::entity_command, world::CommandQueue},
+	ecs::{
+		system::{SystemParam, entity_command},
+		world::CommandQueue,
+	},
 	prelude::*,
 	reflect::GetTypeRegistration,
 };
@@ -16,6 +22,9 @@ use std::{
 	borrow::{Borrow, BorrowMut},
 	marker::PhantomData,
 };
+
+#[derive(SystemParam)]
+pub struct NoParams;
 
 pub fn pretty_type_name<T>() -> String {
 	format!("{:?}", disqualified::ShortName::of::<T>())
@@ -33,7 +42,7 @@ pub fn or(a: bool, b: bool) -> bool {
 pub fn one_of<C: Component>(
 	event: On<Add, C>,
 	mut commands: Commands,
-	q_others: Query<Entity, With<C>>,
+	q_others: EditorInternalQuery<Entity, With<C>>,
 ) {
 	for entity in q_others.iter().filter(|&e| e != event.event_target()) {
 		if let Ok(mut entity) = commands.get_entity(entity) {
@@ -196,7 +205,7 @@ variadics_please::all_tuples!(impl_resources_mut, 1, 12, T);
 
 /* Individual Types */
 
-pub trait RegisterableType {
+trait RegisterableType {
 	fn register(app: &mut App);
 }
 

@@ -1,3 +1,5 @@
+use crate::private::EditorInternalQuery;
+
 use super::EditorCamera;
 use bevy::prelude::*;
 use derive_new::new;
@@ -10,8 +12,8 @@ impl MoveTo {
 	pub(super) fn handle(
 		event: On<Self>,
 		mut commands: Commands,
-		mut q_transforms: Query<&mut Transform>,
-		q_cams: Query<Entity, With<EditorCamera>>,
+		mut q_transforms: EditorInternalQuery<&mut Transform>,
+		q_cams: EditorInternalQuery<Entity, With<EditorCamera>>,
 	) {
 		let entity = event.event_target();
 		let Ok(target) = q_transforms.get(entity).cloned() else {
@@ -46,8 +48,8 @@ impl LookAt {
 	pub(super) fn handle(
 		event: On<Self>,
 		mut commands: Commands,
-		mut q_transforms: Query<&mut Transform>,
-		q_cams: Query<Entity, With<EditorCamera>>,
+		mut q_transforms: EditorInternalQuery<&mut Transform>,
+		q_cams: EditorInternalQuery<Entity, With<EditorCamera>>,
 	) {
 		let entity = event.event_target();
 		let Ok(target) = q_transforms.get(entity).cloned() else {

@@ -1,7 +1,6 @@
 use super::{ActiveEditorCamera, EditorCamera, EditorManagedCamera, PanState};
 use crate::{
-	EditorOwned,
-	private::{input::EditorActions, util},
+	private::{EditorInternalQuery, EditorInternalSingle, EditorOwned, input::EditorActions, util},
 	settings::{ActiveEditorCameraSetting, CamStateSetting2d},
 	util::storage::ProjectSettings,
 };
@@ -51,7 +50,7 @@ pub fn enable(mut commands: Commands, mut settings: ProjectSettings) {
 
 pub fn save_settings(
 	mut settings: ProjectSettings,
-	q_cam: Query<(&Transform, &CameraSettings, &Projection), With<EditorCamera2d>>,
+	q_cam: EditorInternalQuery<(&Transform, &CameraSettings, &Projection), With<EditorCamera2d>>,
 ) -> Result {
 	for (cam_transform, cam_settings, cam_proj) in &q_cam {
 		if let Projection::Orthographic(cam_ortho) = &cam_proj {
@@ -71,8 +70,8 @@ pub fn save_settings(
 
 pub(super) fn mouse_input_actions(
 	mut commands: Commands,
-	mut q_cam_states: Query<&mut CameraState, With<EditorCamera2d>>,
-	q_action_states: Query<&ActionState<EditorActions>>,
+	mut q_cam_states: EditorInternalQuery<&mut CameraState, With<EditorCamera2d>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	primary_window: Single<(Entity, &Window), With<PrimaryWindow>>,
 	mut pan_state: ResMut<NextState<PanState>>,
 ) {
@@ -92,7 +91,7 @@ pub(super) fn mouse_input_actions(
 
 pub(super) fn released_mouse_input_actions(
 	mut commands: Commands,
-	q_action_states: Query<&ActionState<EditorActions>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	primary_window: Single<Entity, With<PrimaryWindow>>,
 	mut pan_state: ResMut<NextState<PanState>>,
 ) {
@@ -106,12 +105,12 @@ pub(super) fn released_mouse_input_actions(
 }
 
 pub fn movement_system(
-	q_action_states: Query<&ActionState<EditorActions>>,
-	mut q_cam: Single<(&CameraSettings, &mut Transform), With<EditorCamera2d>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
+	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Transform), With<EditorCamera2d>>,
 	time: Res<Time>,
 ) {
 	for action_state in &q_action_states {
-		let (cam_settings, cam_transform) = &mut *q_cam;
+		let (ref mut cam_settings, ref mut cam_transform) = *editor_camera;
 
 		let mut movement = Vec3::ZERO;
 
@@ -141,15 +140,13 @@ pub fn movement_system(
 }
 
 pub fn zoom_system(
-	q_action_states: Query<&ActionState<EditorActions>>,
-	mut q_cam: Query<(&CameraSettings, &mut Projection), With<EditorCamera2d>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
+	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Projection), With<EditorCamera2d>>,
 	time: Res<Time>,
 ) {
-	let Ok((cam_settings, mut projection)) = q_cam.single_mut() else {
-		return;
-	};
+	let (cam_settings, ref mut projection) = *editor_camera;
 
-	let Projection::Orthographic(projection) = &mut *projection else {
+	let Projection::Orthographic(ref mut projection) = **projection else {
 		return;
 	};
 
@@ -164,7 +161,7 @@ pub fn zoom_system(
 }
 
 pub fn pan_system(
-	mut camera: Single<
+	mut camera: EditorInternalSingle<
 		(
 			&Camera,
 			&EditorManagedCamera,

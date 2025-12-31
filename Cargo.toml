@@ -118,6 +118,7 @@ default = ["dev", "watch"]
 dev = ["bevy/track_location", "bevy/asset_processor"]
 profiling = ["bevy/trace_tracy", "dep:tracing-tracy"]
 watch = ["bevy/file_watcher"]
+editor-dev = []
 validate = []
 
 [dev-dependencies]

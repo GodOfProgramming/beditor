@@ -1,4 +1,7 @@
-use crate::{EditingSystems, EditorOwned, EditorState, private::ui::KeyboardFocus};
+use crate::{
+	EditorState,
+	private::{EditorInternalQuery, EditorOwned, ui::KeyboardFocus},
+};
 use bevy::prelude::*;
 use leafwing_input_manager::{
 	Actionlike,
@@ -43,12 +46,7 @@ impl EditorInputPlugin {
 impl Plugin for EditorInputPlugin {
 	fn build(&self, app: &mut App) {
 		app
-			.configure_sets(
-				Update,
-				Unfocused
-					.in_set(EditingSystems)
-					.run_if(in_state(KeyboardFocus::Unfocused)),
-			)
+			.configure_sets(Update, Unfocused.run_if(in_state(KeyboardFocus::Unfocused)))
 			.add_plugins(InputManagerPlugin::<EditorActions>::default())
 			.add_systems(Startup, Self::init_input)
 			.add_systems(Update, global_input_actions.in_set(Unfocused));
@@ -56,7 +54,7 @@ impl Plugin for EditorInputPlugin {
 }
 
 pub fn global_input_actions(
-	q_action_states: Query<&ActionState<EditorActions>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	current_state: Res<State<EditorState>>,
 	mut next_editor_state: ResMut<NextState<EditorState>>,
 ) {

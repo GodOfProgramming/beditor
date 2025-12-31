@@ -1,10 +1,11 @@
 use super::{LayoutInfo, TabState, VTable};
 use crate::{
-	EditorOwned, EditorUi, EditorUiBundle, NoParams, UiManager,
+	EditorUi, EditorUiBundle, NoParams, UiManager,
 	inspector::{
 		InspectorPrimitive,
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
+	private::{EditorInternalQuery, EditorOwned},
 };
 use bevy::{
 	ecs::{
@@ -207,8 +208,8 @@ pub(crate) trait DockExtensions:
 	fn decouple(
 		&self,
 		ui_manager: &UiManager,
-		q_persistent_ids: &Query<&PersistentId, Without<MissingUi>>,
-		q_missing: &Query<&MissingUi>,
+		q_persistent_ids: &EditorInternalQuery<&PersistentId, Without<MissingUi>>,
+		q_missing: &EditorInternalQuery<&MissingUi>,
 	) -> DockState<LayoutInfo> {
 		self.borrow().map_tabs(|tab| {
 			let id;

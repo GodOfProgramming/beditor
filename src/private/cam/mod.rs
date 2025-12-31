@@ -3,10 +3,10 @@ pub mod cam3d;
 pub mod commands;
 
 use crate::{
-	EditorOwned, EditorState,
+	EditorState,
 	panels::editor_view::EditorViewUi,
 	private::{
-		input,
+		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned, input,
 		ui::{EditorUiHitCaptureNode, misc::UiState},
 	},
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
@@ -54,8 +54,10 @@ impl Plugin for EditorCamPlugin {
 
 		app
 			.add_plugins((
-				SingletonPlugin::<EditorCamera>::new(SingletonBehavior::RemoveOther),
-				SingletonPlugin::<EditorUiCamera>::new(SingletonBehavior::RemoveOther),
+				SingletonPlugin::<EditorCamera, EditorInternalFilter>::new(SingletonBehavior::RemoveOther),
+				SingletonPlugin::<EditorUiCamera, EditorInternalFilter>::new(
+					SingletonBehavior::RemoveOther,
+				),
 			))
 			.configure_sets(
 				Update,
@@ -167,25 +169,27 @@ fn on_manage_camera(
 	event: On<Add, EditorManagedCamera>,
 	mut contexts: bevy_egui::EguiContexts,
 	mut images: ResMut<Assets<Image>>,
-	mut q_cameras: Query<&mut Camera>,
+	mut q_cameras: EditorInternalQuery<&mut Camera>,
 ) {
-	if let Ok(mut camera) = q_cameras.get_mut(event.event_target()) {
-		let image_handle = if let RenderTarget::Image(render_target) = &camera.target {
-			render_target.handle.clone()
-		} else {
-			let image = Image::new_target_texture(1, 1, TextureFormat::bevy_default());
-			let handle = images.add(image);
-			camera.target = RenderTarget::Image(handle.clone().into());
-			handle
-		};
+	let Ok(mut camera) = q_cameras.get_mut(event.event_target()) else {
+		return;
+	};
 
-		contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
-	}
+	let image_handle = if let RenderTarget::Image(render_target) = &camera.target {
+		render_target.handle.clone()
+	} else {
+		let image = Image::new_target_texture(1, 1, TextureFormat::bevy_default());
+		let handle = images.add(image);
+		camera.target = RenderTarget::Image(handle.clone().into());
+		handle
+	};
+
+	contexts.add_image(bevy_egui::EguiTextureHandle::Weak(image_handle.id()));
 }
 
 fn on_unmanage_camera(
 	event: On<Remove, EditorManagedCamera>,
-	q_cameras: Query<&Camera>,
+	q_cameras: EditorInternalQuery<&Camera>,
 	mut contexts: bevy_egui::EguiContexts,
 ) {
 	if let Ok(camera) = q_cameras.get(event.event_target())
@@ -196,7 +200,7 @@ fn on_unmanage_camera(
 }
 
 fn spawn_axis_ui(
-	q_new_editor_cameras: Query<Entity, Added<EditorCamera>>,
+	q_new_editor_cameras: EditorInternalQuery<Entity, Added<EditorCamera>>,
 	mut commands: Commands,
 	axes_gizmo_image: Res<AxesGizmoTexture>,
 ) {
@@ -322,8 +326,8 @@ impl EditorManagedCamera {
 
 	fn viewport_picking(
 		mut commands: Commands,
-		q_managed_cameras: Query<(&Camera, &PointerId, &Self)>,
-		ui_hit_node: Single<Entity, With<EditorUiHitCaptureNode>>,
+		q_managed_cameras: EditorInternalQuery<(&Camera, &PointerId, &Self)>,
+		ui_hit_node: EditorInternalSingle<Entity, With<EditorUiHitCaptureNode>>,
 		hover_map: Res<HoverMap>,
 		mut pointer_inputs: MessageReader<PointerInput>,
 	) {
@@ -382,13 +386,13 @@ impl EditorManagedCamera {
 	}
 
 	fn sync_gizmos(
-		gizmo_camera: Single<&Self, With<GizmoCamera>>,
+		gizmo_camera: EditorInternalSingle<&Self, With<GizmoCamera>>,
 		mut gizmos_options: ResMut<GizmoOptions>,
 	) {
 		gizmos_options.viewport_rect = gizmo_camera.viewport_rect;
 	}
 
-	fn on_frame_end(mut q_managed_cameras: Query<&mut Self>) {
+	fn on_frame_end(mut q_managed_cameras: EditorInternalQuery<&mut Self>) {
 		for mut cam in &mut q_managed_cameras {
 			cam.last_viewport = cam.viewport_rect.take();
 			cam.set_ctx_menu_open(false);
@@ -446,7 +450,7 @@ fn startup(mut commands: Commands) {
 }
 
 pub fn mouse_hovered_in_editor_view(
-	q_editor_view_ui_state: Query<&UiState, With<EditorViewUi>>,
+	q_editor_view_ui_state: EditorInternalQuery<&UiState, With<EditorViewUi>>,
 ) -> bool {
 	q_editor_view_ui_state.iter().any(UiState::hovered)
 }
@@ -469,17 +473,19 @@ pub fn should_show_cameras(render_cameras: Res<RenderCameras>) -> bool {
 #[allow(clippy::type_complexity)]
 pub fn render_2d_cameras(
 	mut gizmos: Gizmos,
-	q_cam: Query<
+	q_app_cameras: Query<
 		(&Transform, &Projection),
 		(
 			With<Camera2d>,
 			With<EditorManagedCamera>,
+			// to support this in both dev & user mode
 			Without<EditorCamera>,
 		),
 	>,
 	cam_color: Res<GameCameraColor>,
 ) {
-	for (transform, projection) in &q_cam {
+	// TODO render only to editor camera
+	for (transform, projection) in &q_app_cameras {
 		if let Projection::Orthographic(ortho) = projection {
 			let rect_pos = transform.translation;
 			gizmos.rect(rect_pos, ortho.area.max - ortho.area.min, **cam_color);
@@ -490,17 +496,19 @@ pub fn render_2d_cameras(
 #[allow(clippy::type_complexity)]
 pub fn render_3d_cameras(
 	mut gizmos: Gizmos,
-	q_cam: Query<
+	q_app_cameras: Query<
 		(&Transform, &Projection),
 		(
 			With<Camera3d>,
 			With<EditorManagedCamera>,
+			// to support this in both dev & user mode
 			Without<EditorCamera>,
 		),
 	>,
 	cam_color: Res<GameCameraColor>,
 ) {
-	for (transform, projection) in &q_cam {
+	// TODO render only to editor camera
+	for (transform, projection) in &q_app_cameras {
 		match projection {
 			Projection::Perspective(perspective) => {
 				render_3d_camera(

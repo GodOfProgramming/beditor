@@ -1,7 +1,6 @@
 use super::{ActiveEditorCamera, EditorCamera, OrbitState, PanState};
 use crate::{
-	EditorOwned,
-	private::{input::EditorActions, util},
+	private::{EditorInternalQuery, EditorInternalSingle, EditorOwned, input::EditorActions, util},
 	settings::{ActiveEditorCameraSetting, CamStateSetting3d},
 	util::storage::ProjectSettings,
 };
@@ -45,7 +44,7 @@ pub fn enable(mut commands: Commands, mut settings: ProjectSettings) {
 
 pub fn save_settings(
 	mut settings: ProjectSettings,
-	q_cam: Query<(&Transform, &CameraSettings), With<EditorCamera3d>>,
+	q_cam: EditorInternalQuery<(&Transform, &CameraSettings), With<EditorCamera3d>>,
 ) -> Result {
 	for (cam_transform, cam_settings) in &q_cam {
 		settings.set(
@@ -61,7 +60,7 @@ pub fn save_settings(
 }
 
 pub(super) fn mouse_input_actions(
-	q_action_states: Query<&ActionState<EditorActions>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	mut q_cursors: Query<&mut CursorOptions>,
 	mut orbit_state: ResMut<NextState<OrbitState>>,
 	mut pan_state: ResMut<NextState<PanState>>,
@@ -87,7 +86,7 @@ pub(super) fn mouse_input_actions(
 }
 
 pub(super) fn released_mouse_input_actions(
-	q_action_states: Query<&ActionState<EditorActions>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	mut q_cursors: Query<&mut CursorOptions>,
 	mut orbit_state: ResMut<NextState<OrbitState>>,
 	mut pan_state: ResMut<NextState<PanState>>,
@@ -115,12 +114,12 @@ pub(super) fn released_mouse_input_actions(
 }
 
 pub fn movement_system(
-	q_action_states: Query<&ActionState<EditorActions>>,
-	mut q_cam: Single<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
+	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
 	time: Res<Time>,
 ) {
 	for action_state in &q_action_states {
-		let (cam_settings, cam_transform) = &mut *q_cam;
+		let (ref mut cam_settings, ref mut cam_transform) = *editor_camera;
 
 		let forward = cam_transform.forward().as_vec3();
 		let mut movement = Vec3::ZERO;
@@ -151,11 +150,11 @@ pub fn movement_system(
 }
 
 pub fn orbit_system(
-	mut q_cam: Single<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
+	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
 	mut mouse_motion: MessageReader<MouseMotion>,
 	time: Res<Time>,
 ) {
-	let (settings, transform) = &mut *q_cam;
+	let (ref mut settings, ref mut transform) = *editor_camera;
 
 	let orbit = mouse_motion
 		.read()
@@ -177,11 +176,11 @@ pub fn orbit_system(
 }
 
 pub fn pan_system(
-	mut q_cam: Single<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
+	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
 	mut mouse_motion: MessageReader<MouseMotion>,
 	time: Res<Time>,
 ) {
-	let (cam_settings, cam_transform) = &mut *q_cam;
+	let (ref mut cam_settings, ref mut cam_transform) = *editor_camera;
 
 	let pan = mouse_motion
 		.read()
@@ -198,13 +197,11 @@ pub fn pan_system(
 }
 
 pub fn zoom_system(
-	q_action_states: Query<&ActionState<EditorActions>>,
-	mut q_cam: Query<(&CameraSettings, &mut Projection), With<EditorCamera3d>>,
+	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
+	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Projection), With<EditorCamera3d>>,
 	time: Res<Time>,
 ) {
-	let Ok((cam_settings, mut projection)) = q_cam.single_mut() else {
-		return;
-	};
+	let (cam_settings, ref mut projection) = *editor_camera;
 
 	for action_state in &q_action_states {
 		let zoom = 1.0
@@ -212,11 +209,11 @@ pub fn zoom_system(
 				* cam_settings.zoom_sensitivity
 				* time.delta_secs();
 
-		match &mut *projection {
-			Projection::Perspective(perspective_projection) => {
+		match **projection {
+			Projection::Perspective(ref mut perspective_projection) => {
 				perspective_projection.fov *= zoom;
 			}
-			Projection::Orthographic(orthographic_projection) => {
+			Projection::Orthographic(ref mut orthographic_projection) => {
 				orthographic_projection.scale *= zoom;
 			}
 			_ => (),

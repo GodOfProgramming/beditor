@@ -1,9 +1,9 @@
 use super::BundleDnd;
 use crate::{
-	EditorExtension, EditorOwned,
+	EditorExtension,
 	inspector::{WorldExtensions as _, ui::components::ComponentInfo},
 	panels::panel_dnd_drop_ui,
-	private::ui::InspectorSelection,
+	private::{ ui::InspectorSelection, EditorOwned },
 	ui::EditorUiBundle,
 	util::{WorldExtensions as _, egui::show_docs},
 };

@@ -1,7 +1,8 @@
 use crate::{
-	EditorExtension, EditorOwned, EditorUiBundle,
+	EditorExtension, EditorUiBundle,
 	inspector::WorldExtensions,
 	private::{
+		EditorInternalQuery, EditorOwned,
 		reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 		ui::{TabState, UiManager},
 	},
@@ -221,7 +222,7 @@ impl Command for OpenTypeEditor {
 
 fn on_editor_state_insert(
 	event: On<Add, TypeEditorState>,
-	mut q_states: Query<&mut TypeEditorState>,
+	mut q_states: EditorInternalQuery<&mut TypeEditorState>,
 	cache: Res<ReflectDefaultCache>,
 ) {
 	let Ok(mut state) = q_states.get_mut(event.event_target()) else {
@@ -237,7 +238,7 @@ fn on_editor_state_insert(
 // for future me, moving this to ui() is not worth it
 fn show_dialogs(
 	mut commands: Commands,
-	mut q_states: Query<(Entity, &mut TypeEditorState)>,
+	mut q_states: EditorInternalQuery<(Entity, &mut TypeEditorState)>,
 	mut contexts: bevy_egui::EguiContexts,
 	cache: Res<ReflectDefaultCache>,
 	app_type_registry: Res<AppTypeRegistry>,
@@ -334,7 +335,7 @@ struct OpenFileMessage {
 impl OpenFileMessage {
 	fn handle(
 		mut messages: MessageReader<Self>,
-		mut q_states: Query<&mut TypeEditorState>,
+		mut q_states: EditorInternalQuery<&mut TypeEditorState>,
 		loaders: Res<SerdeRegistry>,
 		app_type_registry: Res<AppTypeRegistry>,
 	) -> Result {
@@ -380,7 +381,7 @@ struct SaveFileMessage {
 impl SaveFileMessage {
 	fn handle(
 		mut messages: MessageReader<Self>,
-		mut q_states: Query<&mut TypeEditorState>,
+		mut q_states: EditorInternalQuery<&mut TypeEditorState>,
 		registry: Res<SerdeRegistry>,
 		app_type_registry: Res<AppTypeRegistry>,
 	) -> Result {

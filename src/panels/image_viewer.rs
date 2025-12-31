@@ -1,6 +1,9 @@
 use crate::{
-	EditorExtension, EditorOwned,
-	private::ui::{TabState, events::ShowUiMessage},
+	EditorExtension,
+	private::{
+		EditorOwned,
+		ui::{TabState, events::ShowUiMessage},
+	},
 	ui::EditorUi,
 	util::egui::ContextExtensions,
 };

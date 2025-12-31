@@ -1,5 +1,6 @@
 use crate::{
-	APP_DIR, EditorExtension, EditorOwned, EditorState, EditorUi, Settings,
+	APP_DIR, EditorExtension, EditorState, EditorUi, Settings,
+	private::EditorOwned,
 	settings::{CurrentThemeSetting, EditorEguiSettings, EditorUiScale},
 	util::storage::{Global, GlobalEditorSettings},
 };

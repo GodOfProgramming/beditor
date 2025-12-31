@@ -1,5 +1,6 @@
 use crate::{
-	EditorExtension, EditorOwned, EditorUi, private::cam::EditorManagedCamera,
+	EditorExtension, EditorUi,
+	private::{EditorInternalQuery, EditorInternalSingle, EditorOwned, cam::EditorManagedCamera},
 	util::egui::ContextExtensions,
 };
 use bevy::{
@@ -67,8 +68,15 @@ where
 		'w,
 		's,
 		(
-			Option<Single<'w, 's, &'static mut Camera, With<C>>>,
-			Option<Single<'w, 's, (&'static mut Camera, &'static mut EditorManagedCamera), With<C>>>,
+			Option<EditorInternalSingle<'w, 's, &'static mut Camera, With<C>>>,
+			Option<
+				EditorInternalSingle<
+					'w,
+					's,
+					(&'static mut Camera, &'static mut EditorManagedCamera),
+					With<C>,
+				>,
+			>,
 		),
 	>,
 	contexts: EguiContexts<'w, 's>,
@@ -246,7 +254,7 @@ fn take_ownership_of_camera<C: Component>(event: On<Add, C>, mut commands: Comma
 fn transfer_ownership_of_camera<C: Component>(
 	_: On<Add, EditorManagedViewUi<C>>,
 	mut commands: Commands,
-	q_cameras: Query<Entity, With<C>>,
+	q_cameras: EditorInternalQuery<Entity, With<C>>,
 ) {
 	for entity in q_cameras {
 		commands

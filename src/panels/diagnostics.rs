@@ -1,7 +1,7 @@
 use crate::{
-	EditorExtension, EditorOwned, ProjectSettings,
+	EditorExtension, ProjectSettings,
 	panels::inspector::InspectorSettings,
-	private::{cam::RenderCameras, util::log::LogLevel},
+	private::{cam::RenderCameras, util::log::LogLevel,  EditorOwned},
 	settings::RenderCamerasSetting,
 	ui::EditorUi,
 	util::egui::ContextExtensions,

@@ -1,6 +1,9 @@
 use crate::{
-	EditorExtension, EditorOwned, EditorUi, ProjectSettings, SettingChanged,
-	private::util::log::{EventCollectorHandle, LogLevel},
+	EditorExtension, EditorUi, ProjectSettings, SettingChanged,
+	private::{
+		EditorInternalQuery, EditorOwned,
+		util::log::{EventCollectorHandle, LogLevel},
+	},
 	settings::LogLevelSetting,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -86,7 +89,7 @@ fn on_log_level_changed(event: On<SettingChanged<LogLevelSetting>>) -> LogLevel 
 	event.value
 }
 
-fn apply_new_level(log_level: In<LogLevel>, mut q_logs: Query<&mut LogUi>) {
+fn apply_new_level(log_level: In<LogLevel>, mut q_logs: EditorInternalQuery<&mut LogUi>) {
 	for mut log_ui in &mut q_logs {
 		log_ui.log_level = *log_level;
 	}

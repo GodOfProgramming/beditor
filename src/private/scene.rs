@@ -1,5 +1,6 @@
 use crate::{
-	EditorOwned, EditorState, Simulated, SimulationState, private::ui::InspectorSelection,
+	EditorState, SimulationState,
+	private::{EditorInternalQuery, EditorOwned, Simulated, ui::InspectorSelection},
 	util::one_of,
 };
 use bevy::{
@@ -53,7 +54,10 @@ fn show_infinite_grid(mut commands: Commands) {
 	));
 }
 
-fn remove_infinite_grid(mut commands: Commands, q_grids: Query<Entity, With<InfiniteGrid>>) {
+fn remove_infinite_grid(
+	mut commands: Commands,
+	q_grids: EditorInternalQuery<Entity, With<InfiniteGrid>>,
+) {
 	for entity in &q_grids {
 		commands.entity(entity).despawn();
 	}

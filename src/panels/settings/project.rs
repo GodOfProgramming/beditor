@@ -1,6 +1,7 @@
 use crate::{
-	EditorExtension, EditorOwned, EditorUi,
+	EditorExtension, EditorUi,
 	private::{
+		EditorInternalQuery, EditorOwned,
 		cam::ActiveEditorCamera,
 		ui::{
 			LayoutManager, LoadLayout, SavedLayout, UiManager,
@@ -226,8 +227,8 @@ impl SaveLayoutMessage {
 		mut reader: MessageReader<Self>,
 		ui_manager: Res<UiManager>,
 		mut layout_manager: ResMut<LayoutManager>,
-		q_uuids: Query<&PersistentId, Without<MissingUi>>,
-		q_missing: Query<&MissingUi>,
+		q_uuids: EditorInternalQuery<&PersistentId, Without<MissingUi>>,
+		q_missing: EditorInternalQuery<&MissingUi>,
 		mut settings: ProjectSettings,
 	) {
 		for msg in reader.read() {

@@ -1,10 +1,11 @@
 use crate::{
-	EditorExtension, EditorOwned, EditorState, EditorUi,
+	EditorExtension,
+	EditorState, EditorUi,
 	panels::{
 		BundleDnd,
 		managed_view::{self, EditorManagedViewUi},
 	},
-	private::{cam::EditorCamera, scene::PrimaryScene, ui::misc::UiState},
+	private::{cam::EditorCamera, scene::PrimaryScene, ui::misc::UiState, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned},
 	util::WorldExtensions as _,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -24,9 +25,11 @@ impl EditorExtension for EditorViewUiExtension {
 
 	fn build_app(&self, app: &mut App) {
 		app
-			.add_plugins(SingletonPlugin::<TemporaryEntity>::new(
-				SingletonBehavior::RemoveOther,
-			))
+			.add_plugins(
+				SingletonPlugin::<TemporaryEntity, EditorInternalFilter>::new(
+					SingletonBehavior::RemoveOther,
+				),
+			)
 			.add_systems(OnExit(EditorState::Editing), despawn_temporaries)
 			.add_systems(
 				FixedUpdate,
@@ -48,9 +51,12 @@ pub struct Params<'w, 's> {
 	managed_view_params: managed_view::Params<'w, 's, EditorCamera>,
 	managed_view: Local<'s, EditorManagedViewUi<EditorCamera>>,
 	gizmo_options: ResMut<'w, GizmoOptions>,
-	temporary: Option<Single<'w, 's, (Entity, Option<&'static Transform>), With<TemporaryEntity>>>,
+	temporary: Option<
+		EditorInternalSingle<'w, 's, (Entity, Option<&'static Transform>), With<TemporaryEntity>>,
+	>,
 
-	editor_camera: Option<Single<'w, 's, (Has<Camera2d>, Has<Camera3d>), With<EditorCamera>>>,
+	editor_camera:
+		Option<EditorInternalSingle<'w, 's, (Has<Camera2d>, Has<Camera3d>), With<EditorCamera>>>,
 }
 
 impl EditorUi for EditorViewUi {
@@ -186,9 +192,9 @@ impl EditorUi for EditorViewUi {
 struct TemporaryEntity;
 
 fn move_temporaries(
-	editor_camera: Single<Entity, With<EditorCamera>>,
+	editor_camera: EditorInternalSingle<Entity, With<EditorCamera>>,
 	pointers: Query<&bevy::picking::pointer::PointerInteraction>,
-	mut q_temporaries: Query<&mut Transform, With<TemporaryEntity>>,
+	mut q_temporaries: EditorInternalQuery<&mut Transform, With<TemporaryEntity>>,
 ) {
 	for point in pointers
 		.iter()
@@ -204,8 +210,8 @@ fn move_temporaries(
 
 fn detect_enter(
 	mut commands: Commands,
-	temporary: Option<Single<Entity, With<TemporaryEntity>>>,
-	editor_view_state: Single<&UiState, With<EditorViewUi>>,
+	temporary: Option<EditorInternalSingle<Entity, With<TemporaryEntity>>>,
+	editor_view_state: EditorInternalSingle<&UiState, With<EditorViewUi>>,
 	mut hovered: Local<bool>,
 	mut contexts: EguiContexts,
 ) {

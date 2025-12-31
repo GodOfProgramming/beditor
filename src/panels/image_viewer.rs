@@ -1,6 +1,7 @@
 use crate::{
 	EditorExtension, EditorOwned,
-	ui::{EditorUi, TabState, events::ShowUiMessage},
+	private::ui::{TabState, events::ShowUiMessage},
+	ui::EditorUi,
 	util::egui::ContextExtensions,
 };
 use bevy::{

@@ -1,4 +1,5 @@
 use beditor::{
+	NoParams,
 	prelude::*,
 	uuid::{Uuid, uuid},
 };

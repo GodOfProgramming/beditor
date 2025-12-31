@@ -1,8 +1,10 @@
 use crate::{
 	EditorExtension, EditorOwned, EditorUiBundle,
 	inspector::WorldExtensions,
-	ui::{TabState, UiManager, widgets},
-	util::reflection::{ReflectDefaultCache, serde::SerdeRegistry},
+	private::{
+		reflection::{ReflectDefaultCache, serde::SerdeRegistry},
+		ui::{TabState, UiManager},
+	},
 };
 use bevy::{prelude::*, reflect::TypeInfo};
 use derive_new::new;

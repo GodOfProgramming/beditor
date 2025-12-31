@@ -1,16 +1,18 @@
 use crate::{
-	EditorExtension, EditorOwned, EditorUi, Notification,
-	settings::SaveLayoutOnExitSetting,
-	ui::{
-		LayoutManager, LoadLayout, SavedLayout, UiManager,
-		misc::{DockExtensions, MissingUi},
-		widgets,
+	EditorExtension, EditorOwned, EditorUi,
+	private::{
+		cam::ActiveEditorCamera,
+		ui::{
+			LayoutManager, LoadLayout, SavedLayout, UiManager,
+			misc::{DockExtensions as _, MissingUi},
+		},
 	},
+	settings::SaveLayoutOnExitSetting,
 	util::storage::ProjectSettings,
-	view::cam::ActiveEditorCamera,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use egui::TextBuffer;
+use notify::Notification;
 use persistent_id::PersistentId;
 use strum::IntoEnumIterator;
 use strum_macros::{Display, EnumIter};

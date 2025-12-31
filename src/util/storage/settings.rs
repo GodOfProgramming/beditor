@@ -1,7 +1,10 @@
 use crate::{
 	DataTable, RuntimeSettings,
-	util::{log::LogLevel, storage::PersistentData},
-	view::{cam::ActiveEditorCamera, view2d, view3d},
+	private::{
+		cam::{ActiveEditorCamera, cam2d, cam3d},
+		util::log::LogLevel,
+	},
+	util::storage::PersistentData,
 };
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -180,15 +183,15 @@ impl Setting for ActiveEditorCameraSetting {
 pub struct CamStateSetting2d;
 
 impl Setting for CamStateSetting2d {
-	type Type = view2d::CameraSaveData;
+	type Type = cam2d::CameraSaveData;
 	type Group = ViewSettingsGroup;
-	const NAME: &str = "2d_cam_state";
+	const NAME: &str = "cam2d_state";
 }
 
 pub struct CamStateSetting3d;
 
 impl Setting for CamStateSetting3d {
-	type Type = view3d::CameraSaveData;
+	type Type = cam3d::CameraSaveData;
 	type Group = ViewSettingsGroup;
-	const NAME: &str = "3d_cam_state";
+	const NAME: &str = "cam3d_state";
 }

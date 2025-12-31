@@ -1,11 +1,12 @@
 use crate::{
-	APP_DIR, EditorExtension, EditorOwned, EditorState, EditorUi, Notification, Settings,
+	APP_DIR, EditorExtension, EditorOwned, EditorState, EditorUi, Settings,
 	settings::{CurrentThemeSetting, EditorEguiSettings},
 	util::storage::{Global, GlobalEditorSettings},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContexts, PrimaryEguiContext};
 use itertools::Itertools;
+use notify::Notification;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 use strum::IntoEnumIterator;

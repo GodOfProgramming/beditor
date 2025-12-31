@@ -2,12 +2,12 @@ use super::BundleDnd;
 use crate::{
 	EditorExtension, EditorUi,
 	panels::SearchableVfs,
-	ui::widgets::Card,
 	util::components::{ComponentRegistry, RegisteredComponent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::{marker::PhantomData, num::NonZeroUsize};
 use uuid::uuid;
+use widgets::Card;
 
 #[derive(Default)]
 pub struct ComponentsUiExtension;

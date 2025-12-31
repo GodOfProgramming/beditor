@@ -1,0 +1,9 @@
+[package]
+name = "widgets"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+egui.workspace = true
+egui_phosphor_icons.workspace = true
+itertools.workspace = true

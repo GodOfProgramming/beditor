@@ -3,7 +3,8 @@ use crate::{
 	EditorExtension, EditorOwned,
 	inspector::{WorldExtensions as _, ui::components::ComponentInfo},
 	panels::panel_dnd_drop_ui,
-	ui::{EditorUiBundle, InspectorSelection},
+	private::ui::InspectorSelection,
+	ui::EditorUiBundle,
 	util::{WorldExtensions as _, egui::show_docs},
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};

@@ -2,15 +2,25 @@ use std::sync::Arc;
 
 use crate::{
 	EditorExtension, EditorOwned,
-	inspector::{WorldExtensions as _, ui::hierarchy::SelectedEntities},
+	inspector::{
+		WorldExtensions as _,
+		ui::hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
+	},
 	panels::{BundleDnd, image_viewer::OpenImageViewer},
-	scene::serialize_to_scene,
-	ui::{EditorUiBundle, InspectorSelection, notifications::Notification},
+	private::{
+		cam::{
+			ActiveEditorCamera, EditorManagedCamera,
+			commands::{LookAt, MoveTo},
+		},
+		scene,
+		ui::InspectorSelection,
+	},
+	ui::EditorUiBundle,
 	util::WorldExtensions as _,
-	view::cam::{ActiveEditorCamera, EditorManagedCamera, LookAt, MoveTo},
 };
 use bevy::prelude::*;
 use egui_file_dialog::FileDialog;
+use notify::Notification;
 use uuid::{Uuid, uuid};
 
 #[derive(Default)]
@@ -27,6 +37,7 @@ impl EditorExtension for HierarchyExtension {
 			.add_message::<ReparentMessage>()
 			.add_message::<ClearSelectedMessage>()
 			.add_message::<DespawnEntityMessage>()
+			.add_observer(SelectedEntitiesChangedEvent::on_event)
 			.add_systems(bevy_egui::EguiPrimaryContextPass, show_dialogs)
 			.add_systems(
 				FixedUpdate,
@@ -142,7 +153,7 @@ impl HierarchyUi {
 
 				ui.add_enabled_ui(state != egui_file_dialog::DialogState::Open, |ui| {
 					if ui.button("Save As Scene").clicked() {
-						match serialize_to_scene(entity, world) {
+						match scene::serialize_to_scene(entity, world) {
 							Ok(data) => {
 								let mut state = world.resource_mut::<HierarchyState>();
 								state.scene_file_dialog.save_file();

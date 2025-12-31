@@ -1,6 +1,6 @@
 use crate::{
-	EditorExtension, EditorOwned, ui::EditorUi, util::egui::ContextExtensions,
-	view::cam::EditorManagedCamera,
+	EditorExtension, EditorOwned, EditorUi, private::cam::EditorManagedCamera,
+	util::egui::ContextExtensions,
 };
 use bevy::{
 	camera::RenderTarget, ecs::system::SystemParam, prelude::*, render::render_resource::Extent3d,

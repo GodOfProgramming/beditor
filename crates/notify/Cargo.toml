@@ -1,0 +1,10 @@
+[package]
+name = "notify"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy.workspace = true
+bevy_egui.workspace = true
+egui.workspace = true
+egui-toast = "0.19.0"

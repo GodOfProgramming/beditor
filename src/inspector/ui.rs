@@ -1,9 +1,9 @@
 pub mod components;
 pub mod hierarchy;
 
+use super::{InspectorPrimitive, InspectorPrimitiveMultiedit};
 use crate::{
 	inspector::{
-		data::{InspectorPrimitive, InspectorPrimitiveMultiedit, many_unimplemented},
 		errors::{self, name_of_type, reflect::TypeDataError},
 		options::{InspectorOptions, ReflectInspectorOptions, Target},
 	},
@@ -2317,4 +2317,16 @@ impl SetOp {
 
 		changed
 	}
+}
+
+pub fn many_unimplemented<T>(
+	ui: &mut egui::Ui,
+	_: &dyn Any,
+	_: egui::Id,
+	_: &mut InspectorUi<MutableContext>,
+	_: &mut [&mut dyn PartialReflect],
+	_: &dyn ProjectorReflect,
+) -> bool {
+	errors::reflect::no_multiedit(ui, std::any::type_name::<T>());
+	false
 }

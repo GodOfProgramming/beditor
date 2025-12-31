@@ -3,25 +3,18 @@
 //! For systems that may actually be more readable without abstraction
 #![allow(clippy::too_many_arguments)]
 
-mod assets;
-mod input;
 pub mod inspector;
 mod panels;
-mod scene;
-mod ui;
+mod private;
+pub mod ui;
 mod util;
-mod view;
 
 use crate::{
-	inspector::EditorInspectorPlugin,
-	panels::managed_view::{EditorManagedViewUi, EditorManagedViewUiExtension},
-	scene::EditorScenePlugin,
+	panels::managed_view::EditorManagedViewUiExtension,
 	settings::{EditorSettingsSetting, WindowMaximizedSetting, WindowSizeSetting},
 	util::{
 		WorldExtensions as _,
 		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
-		log::LogPlugin,
-		reflection::ReflectionExtensionsPlugin,
 		storage::{Global, GlobalEditorSettings},
 	},
 };
@@ -34,46 +27,47 @@ use bevy::{
 	diagnostic::{
 		EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
 	},
-	ecs::{entity_disabling::Disabled, system::NonSendMarker},
+	ecs::{
+		entity_disabling::Disabled,
+		system::{NonSendMarker, SystemParam},
+	},
 	prelude::*,
-	reflect::Reflectable,
 	remote::{RemotePlugin, http::RemoteHttpPlugin},
 	window::{CursorOptions, PrimaryWindow, WindowCloseRequested, WindowMode},
 	winit::WINIT_WINDOWS,
 };
 use bevy_axes_gizmo::AxesGizmoPlugin;
 use bevy_infinite_grid::InfiniteGridPlugin;
-use bevy_mesh_outline::MeshOutlinePlugin;
+use bevy_mod_outline::OutlinePlugin;
 use brefabs::{PrefabPlugin, Prefabs};
 use derive_new::new;
-use input::EditorInputPlugin;
 use platform_dirs::AppDirs;
-pub use prelude::*;
+use private::ui::UiManager;
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, sync::LazyLock};
 use transform_gizmo_bevy::TransformGizmoPlugin;
-use ui::EditorUiPlugin;
-use view::EditorViewPlugin;
+
+pub use prelude::*;
 
 pub mod prelude {
 	pub use crate::{
 		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
-		ui::{EditorUi, EditorUiBundle, NoParams, UiManager, notifications::Notification, widgets},
+		ui::{EditorUi, EditorUiBundle},
 		util::{
 			AppExtensions, RegisterableType, TypeGroups, TypeList,
-			reflection::{ReflectDefaultCache, serde::SerdeRegistry},
 			storage::{
 				DataTable, PersistentData, Project, ProjectSettings, SettingChanged, Settings, settings,
 			},
 		},
-		view::cam::EditorCamera,
 	};
 	pub use bevy_egui;
 	pub use brefabs;
+	pub use egui;
 	pub use macros::{self, Identifiable};
 	pub use persistent_id::{self, Identifiable};
 	pub use serde;
 	pub use uuid;
+	pub use widgets;
 }
 
 /// All application systems that need to be editor controlled should be a part of this set
@@ -166,7 +160,7 @@ impl Plugin for EditorPlugin {
 		app
 			.insert_resource(Settings::<Global>::new().unwrap())
 			.insert_resource(Settings::<Project>::new().unwrap())
-			.add_plugins(LogPlugin);
+			.add_plugins(private::util::log::LogPlugin);
 
 		if let Some(config_fn) = &self.default_plugins {
 			(config_fn)(app);
@@ -179,7 +173,6 @@ impl Plugin for EditorPlugin {
 		}
 
 		app
-			.init_resource::<UiManager>()
 			.init_resource::<ComponentRegistry>()
 			.init_resource::<RuntimeSettings>()
 			.insert_state(EditorState::Editing)
@@ -213,25 +206,15 @@ impl Plugin for EditorPlugin {
 			// crates
 			.try_add_plugin(AxesGizmoPlugin::default())
 			.try_add_plugin(InfiniteGridPlugin)
-			.try_add_plugin(MeshOutlinePlugin)
+			.try_add_plugin(OutlinePlugin)
 			.try_add_plugin(TransformGizmoPlugin)
 			// internal
-			.add_plugins((
-				EditorScenePlugin,
-				EditorViewPlugin,
-				EditorInputPlugin,
-				EditorUiPlugin,
-				EditorInspectorPlugin,
-				ReflectionExtensionsPlugin,
-			))
+			.add_plugins(private::PrivatePlugins)
 			// extensions
 			.add_plugins(EditorExtensionPlugin::<panels::EditorPanelsExtension>::default())
 			.add_observer(EnableGameUiEvent::handle)
 			.add_observer(DisableGameUiEvent::handle)
-			.add_systems(
-				Startup,
-				(configure_windows, load_settings, assets::add_primitives),
-			)
+			.add_systems(Startup, (configure_windows, load_settings))
 			.add_systems(PostStartup, show_window)
 			.add_systems(OnEnter(EditorState::Editing), show_window_cursor)
 			.add_systems(
@@ -408,7 +391,7 @@ fn finish_exit(mut app_exit: MessageWriter<AppExit>) {
 
 fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 	for mut cursor in &mut q_cursors {
-		util::window::show_cursor(&mut cursor);
+		private::util::window::show_cursor(&mut cursor);
 	}
 }
 
@@ -457,6 +440,9 @@ impl DisableGameUiEvent {
 		}
 	}
 }
+
+#[derive(SystemParam)]
+pub struct NoParams;
 
 fn on_close_requested(
 	mut close_requests: MessageReader<WindowCloseRequested>,

@@ -1,10 +1,10 @@
-use crate::ui::notifications::Notification;
 use bevy::{
 	ecs::{component::ComponentId, world::FromWorld},
 	prelude::*,
 	reflect::{GetTypeRegistration, Reflectable, TypeRegistration},
 	utils::TypeIdMap,
 };
+use notify::Notification;
 use std::any::TypeId;
 use vfs::Vfs;
 

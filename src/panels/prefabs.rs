@@ -3,12 +3,14 @@ use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 use crate::{
 	EditorExtension, EditorOwned,
 	panels::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
-	ui::{EditorUiBundle, notifications::Notification, widgets::Card},
+	ui::EditorUiBundle,
 };
 use bevy::prelude::*;
 use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
+use notify::Notification;
 use uuid::{Uuid, uuid};
 use vfs::Vfs;
+use widgets::Card;
 
 #[derive(Default)]
 pub struct PrefabsUiExtension;

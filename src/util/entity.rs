@@ -1,3 +1,4 @@
+use crate::util::world::{RestrictedWorldView, WorldView};
 use bevy::{
 	ecs::archetype::Archetype,
 	picking::pointer::PointerId,
@@ -6,7 +7,12 @@ use bevy::{
 };
 use std::any::TypeId;
 
-use crate::util::world::{RestrictedWorldView, WorldView};
+pub fn insert_bundle_from_world<T: Bundle + FromWorld>() -> impl EntityCommand {
+	move |mut entity: EntityWorldMut| {
+		let value = entity.world_scope(|world| T::from_world(world));
+		entity.insert(value);
+	}
+}
 
 /// Guesses an appropriate entity name like `Light (6)` or falls back to `Entity (8)`
 pub fn guess_entity_name(world: &World, entity: Entity) -> String {

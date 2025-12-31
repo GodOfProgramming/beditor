@@ -1,9 +1,10 @@
 use crate::{
-	EditorExtension, EditorOwned, RuntimeSettings,
+	EditorExtension, EditorOwned, ProjectSettings, RuntimeSettings,
 	panels::inspector::InspectorSettings,
+	private::{cam::RenderCameras, util::log::LogLevel},
+	settings::RenderCamerasSetting,
 	ui::EditorUi,
-	util::{egui::ContextExtensions, log::LogLevel},
-	view::cam::{RenderCameras, SyncRenderCamerasEvent},
+	util::egui::ContextExtensions,
 };
 use bevy::{
 	camera::{ImageRenderTarget, RenderTarget},
@@ -44,13 +45,13 @@ impl DiagnosticsUi {}
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
-	commands: Commands<'w, 's>,
 	diagnostics: Res<'w, DiagnosticsStore>,
 	render_cameras: ResMut<'w, RenderCameras>,
 	editor_settings: ResMut<'w, RuntimeSettings>,
 	inspector_settings: ResMut<'w, InspectorSettings>,
 	graph: Res<'w, FrameTimeGraph>,
 	images: ResMut<'w, Assets<Image>>,
+	project_settings: ProjectSettings<'w, 's>,
 }
 
 impl EditorUi for DiagnosticsUi {
@@ -67,13 +68,13 @@ impl EditorUi for DiagnosticsUi {
 
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
-			mut commands,
 			diagnostics,
 			mut render_cameras,
 			mut editor_settings,
 			mut inspector_settings,
 			graph,
 			mut images,
+			mut project_settings,
 		} = params;
 
 		egui::Grid::new("sys-diagnostics").show(ui, |ui| {
@@ -94,7 +95,9 @@ impl EditorUi for DiagnosticsUi {
 		ui.separator();
 
 		if ui.checkbox(&mut render_cameras, "Render Cameras").clicked() {
-			commands.trigger(SyncRenderCamerasEvent);
+			project_settings
+				.set(RenderCamerasSetting, **render_cameras)
+				.ok();
 		}
 
 		let _ = ui.checkbox(

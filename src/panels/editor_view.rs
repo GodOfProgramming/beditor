@@ -4,13 +4,12 @@ use crate::{
 		BundleDnd,
 		managed_view::{self, EditorManagedViewUi, EditorManagedViewUiExtension},
 	},
-	scene::PrimaryScene,
-	ui::misc::UiState,
-	util::{WorldExtensions as _, ensure_singleton},
-	view::cam::EditorCamera,
+	private::{cam::EditorCamera, scene::PrimaryScene, ui::misc::UiState},
+	util::WorldExtensions as _,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContexts;
+use singleton::{SingletonBehavior, SingletonPlugin};
 use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
 use uuid::uuid;
 
@@ -24,10 +23,10 @@ impl EditorExtension for EditorViewUiExtension {
 
 	fn build_app(&self, app: &mut App) {
 		app
-			.add_plugins(EditorExtensionPlugin::<
-				EditorManagedViewUiExtension<EditorCamera>,
-			>::default())
-			.add_observer(ensure_singleton::<TemporaryEntity>)
+			.add_plugins((
+				SingletonPlugin::<TemporaryEntity>::new(SingletonBehavior::RemoveOther),
+				EditorExtensionPlugin::<EditorManagedViewUiExtension<EditorCamera>>::default(),
+			))
 			.add_systems(OnExit(EditorState::Editing), despawn_temporaries)
 			.add_systems(
 				FixedUpdate,

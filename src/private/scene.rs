@@ -20,14 +20,14 @@ impl Plugin for EditorScenePlugin {
 		app
 			.init_resource::<RelationshipRegistry>()
 			.add_observer(one_of::<PrimaryScene>)
-			.add_observer(on_entity_spawned)
 			.add_systems(Startup, startup)
 			.add_systems(
 				OnEnter(EditorState::Editing),
 				(show_infinite_grid, restore_scene),
 			)
 			.add_systems(OnExit(EditorState::Editing), remove_infinite_grid)
-			.add_systems(OnEnter(EditorState::SimulationPrep), on_sim_prep);
+			.add_systems(OnEnter(EditorState::SimulationPrep), on_sim_prep)
+			.add_systems(First, mark_entities);
 	}
 }
 
@@ -59,25 +59,20 @@ fn remove_infinite_grid(mut commands: Commands, q_grids: Query<Entity, With<Infi
 	}
 }
 
-fn on_entity_spawned(
-	event: On<Add>,
+fn mark_entities(
 	mut commands: Commands,
+	q_unmarked_entities: Query<Entity, (Without<Simulated>, Without<EditorOwned>)>,
 	state: Res<State<EditorState>>,
-	q_marked_entities: Query<(), Or<(With<Simulated>, With<EditorOwned>)>>,
 ) {
-	if q_marked_entities.contains(event.event_target()) {
-		return;
-	}
-
 	match state.get() {
 		EditorState::Editing => {
-			if let Ok(mut entity) = commands.get_entity(event.event_target()) {
-				entity.insert(EditorOwned);
+			for entity in &q_unmarked_entities {
+				commands.entity(entity).insert(EditorOwned);
 			}
 		}
 		EditorState::SimulationPrep | EditorState::Simulating(_) => {
-			if let Ok(mut entity) = commands.get_entity(event.event_target()) {
-				entity.insert(Simulated);
+			for entity in &q_unmarked_entities {
+				commands.entity(entity).insert(Simulated);
 			}
 		}
 		_ => {}

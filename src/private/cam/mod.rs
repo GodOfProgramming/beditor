@@ -8,7 +8,7 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
 		input,
-		ui::{EditorEguiContext, EditorUiHitCaptureNode, misc::UiState},
+		ui::{EditorEguiContext, misc::UiState},
 	},
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
 	util::storage::ProjectSettings,
@@ -22,7 +22,6 @@ use bevy::{
 	ecs::system::SystemState,
 	picking::{
 		PickingSystems,
-		hover::HoverMap,
 		pointer::{Location, PointerId, PointerInput},
 	},
 	prelude::*,
@@ -81,6 +80,7 @@ impl Plugin for EditorCamPlugin {
 			.init_resource::<GameCameraColor>()
 			.add_observer(LookAt::handle)
 			.add_observer(MoveTo::handle)
+			.add_observer(manage_camera)
 			.add_observer(on_manage_camera)
 			.add_observer(on_unmanage_camera)
 			.add_systems(OnEnter(ActiveEditorCamera::Cam2D), cam2d::enable)
@@ -99,7 +99,7 @@ impl Plugin for EditorCamPlugin {
 					spawn_axis_ui,
 					(
 						(
-							EditorManagedCamera::viewport_picking.in_set(PickingSystems::PostInput),
+							editor_picking_forwarding.in_set(PickingSystems::PostInput),
 							EditorManagedCamera::sync_gizmos,
 						),
 						EditorManagedCamera::on_frame_end,
@@ -114,47 +114,43 @@ impl Plugin for EditorCamPlugin {
 			.add_systems(
 				Update,
 				(
-					render_2d_cameras
-						.in_set(Cam2dSystems)
-						.run_if(should_show_cameras),
-					render_3d_cameras
-						.in_set(Cam3dSystems)
-						.run_if(should_show_cameras),
-				),
-			)
-			.add_systems(
-				Update,
-				(
 					(
-						cam2d::released_mouse_input_actions,
-						cam2d::mouse_input_actions,
-						(cam2d::pan_system.in_set(PanSystems), cam2d::zoom_system),
-					)
-						.chain()
-						.in_set(CameraInputSystems::Mouse),
-					cam2d::movement_system.in_set(CameraInputSystems::Keyboard),
-				)
-					.chain()
-					.in_set(Cam2dSystems),
-			)
-			.add_systems(
-				Update,
-				(
+						render_2d_cameras
+							.in_set(Cam2dSystems)
+							.run_if(should_show_cameras),
+						render_3d_cameras
+							.in_set(Cam3dSystems)
+							.run_if(should_show_cameras),
+					),
 					(
-						cam3d::released_mouse_input_actions,
-						cam3d::mouse_input_actions,
 						(
-							cam3d::orbit_system.in_set(OrbitSystems),
-							cam3d::pan_system.in_set(PanSystems),
-							cam3d::zoom_system,
-						),
+							cam2d::released_mouse_input_actions,
+							cam2d::mouse_input_actions,
+							(cam2d::pan_system.in_set(PanSystems), cam2d::zoom_system),
+						)
+							.chain()
+							.in_set(CameraInputSystems::Mouse),
+						cam2d::movement_system.in_set(CameraInputSystems::Keyboard),
 					)
 						.chain()
-						.in_set(CameraInputSystems::Mouse),
-					cam3d::movement_system.in_set(CameraInputSystems::Keyboard),
-				)
-					.chain()
-					.in_set(Cam3dSystems),
+						.in_set(Cam2dSystems),
+					(
+						(
+							cam3d::released_mouse_input_actions,
+							cam3d::mouse_input_actions,
+							(
+								cam3d::orbit_system.in_set(OrbitSystems),
+								cam3d::pan_system.in_set(PanSystems),
+								cam3d::zoom_system,
+							),
+						)
+							.chain()
+							.in_set(CameraInputSystems::Mouse),
+						cam3d::movement_system.in_set(CameraInputSystems::Keyboard),
+					)
+						.chain()
+						.in_set(Cam3dSystems),
+				),
 			);
 	}
 }
@@ -172,6 +168,7 @@ fn on_manage_camera(
 	mut images: ResMut<Assets<Image>>,
 	mut q_cameras: EditorInternalQuery<&mut Camera>,
 	mut user_textures: ResMut<EguiUserTextures>,
+	mut commands: Commands,
 ) {
 	let Ok(mut camera) = q_cameras.get_mut(event.event_target()) else {
 		return;
@@ -187,6 +184,12 @@ fn on_manage_camera(
 	};
 
 	user_textures.add_image(EguiTextureHandle::Weak(image_handle.id()));
+
+	commands
+		.entity(event.event_target())
+		.observe(|e: On<Pointer<Click>>| {
+			info!("MANAGED\n{e:?}");
+		});
 }
 
 fn on_unmanage_camera(
@@ -273,6 +276,7 @@ pub struct EditorCamera;
   Camera2d,
   Camera = Camera { order: isize::MAX, ..default() },
   RenderLayers = RenderLayers::layer(EDITOR_UI_RENDER_LAYER),
+  PointerId = PointerId::Custom(Uuid::new_v4()),
 )]
 pub struct EditorUiCamera;
 
@@ -324,67 +328,6 @@ impl EditorManagedCamera {
 
 	pub fn sync_viewport_size(&mut self) {
 		self.ignore_size_mismatch = false;
-	}
-
-	fn viewport_picking(
-		mut commands: Commands,
-		q_managed_cameras: EditorInternalQuery<(&Camera, &PointerId, &Self)>,
-		ui_hit_node: EditorInternalSingle<Entity, With<EditorUiHitCaptureNode>>,
-		hover_map: Res<HoverMap>,
-		mut pointer_inputs: MessageReader<PointerInput>,
-	) {
-		let node_pointers = hover_map.iter().flat_map(|(pointer_id, hits)| {
-			hits.keys().filter_map(|entity| {
-				if *entity == *ui_hit_node {
-					Some(*pointer_id)
-				} else {
-					None
-				}
-			})
-		});
-
-		let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
-
-		let filtered_inputs = node_pointers
-			.flat_map(|node_pointer_id| {
-				inputs
-					.iter()
-					.filter(move |input| input.pointer_id == node_pointer_id)
-			})
-			.collect::<SmallVec<[_; 2]>>();
-
-		let iter = q_managed_cameras
-			.iter()
-			.filter_map(|(camera, managed_camera_pointer_id, managed_camera)| {
-				if !managed_camera.hovered || managed_camera.context_menu_opened {
-					None
-				} else {
-					managed_camera
-						.viewport_rect
-						.zip(camera.target.as_image())
-						.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
-				}
-			})
-			.flat_map(|(target, viewport_rect, managed_camera_pointer_id)| {
-				filtered_inputs
-					.iter()
-					.map(move |input| (target, viewport_rect, managed_camera_pointer_id, input))
-			});
-
-		for (target, viewport_rect, managed_camera_pointer_id, input) in iter {
-			let location = Location {
-				position: input.location.position - viewport_rect.min,
-				target: NormalizedRenderTarget::Image(target.clone().into()),
-			};
-
-			let msg = PointerInput {
-				pointer_id: *managed_camera_pointer_id,
-				location,
-				action: input.action,
-			};
-
-			commands.write_message(msg);
-		}
 	}
 
 	fn sync_gizmos(
@@ -448,7 +391,11 @@ fn track_editor_camera_changes(
 }
 
 fn startup(mut commands: Commands) {
-	commands.spawn((Name::new("Editor UI Camera"), EditorUiCamera));
+	commands
+		.spawn((Name::new("Editor UI Camera"), EditorUiCamera))
+		.observe(|e: On<Pointer<Click>>| {
+			info!("UI\n{e:?}");
+		});
 }
 
 pub fn mouse_hovered_in_editor_view(
@@ -557,5 +504,68 @@ fn render_3d_camera(
 
 	for corner in rect_corners {
 		gizmos.line(start, corner, **cam_color);
+	}
+}
+
+fn manage_camera(
+	event: On<Add, Camera>,
+	mut commands: Commands,
+	editor_ui_camera: EditorInternalSingle<Entity, Without<EditorUiCamera>>,
+) {
+	let entity = event.event_target();
+
+	if entity == *editor_ui_camera {
+		return;
+	}
+
+	commands
+		.entity(entity)
+		.insert(EditorManagedCamera::default());
+}
+
+fn editor_picking_forwarding(
+	mut commands: Commands,
+	q_managed_cameras: EditorInternalQuery<(&Camera, &PointerId, &EditorManagedCamera)>,
+	mut pointer_inputs: MessageReader<PointerInput>,
+	q_editor_view: EditorInternalQuery<Entity, With<EditorViewUi>>,
+) {
+	let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
+
+	let editor_camera_inputs = inputs
+		.iter()
+		.filter(move |input| matches!(input.pointer_id, PointerId::Mouse | PointerId::Touch(_)))
+		.collect::<SmallVec<[_; 2]>>();
+
+	let iter = q_managed_cameras
+		.iter()
+		.filter_map(|(camera, managed_camera_pointer_id, managed_camera)| {
+			if managed_camera.hovered && !managed_camera.context_menu_opened {
+				managed_camera
+					.viewport_rect
+					.zip(camera.target.as_image())
+					.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
+			} else {
+				None
+			}
+		})
+		.flat_map(|(target, viewport_rect, &managed_camera_pointer_id)| {
+			editor_camera_inputs
+				.iter()
+				.map(move |input| (target, viewport_rect, managed_camera_pointer_id, input))
+		});
+
+	for (image_target, viewport_rect, managed_camera_pointer_id, pointer_input) in iter {
+		let location = Location {
+			position: pointer_input.location.position - viewport_rect.min,
+			target: NormalizedRenderTarget::Image(image_target.clone().into()),
+		};
+
+		let msg = PointerInput {
+			pointer_id: managed_camera_pointer_id,
+			location,
+			action: pointer_input.action,
+		};
+
+		commands.write_message(msg);
 	}
 }

@@ -14,7 +14,6 @@ pub mod ui;
 mod util;
 
 use crate::{
-	panels::managed_view::EditorManagedViewUiExtension,
 	private::{EditorInternalFilter, ui::EditorUiEguiContextPass},
 	util::{
 		WorldExtensions as _,
@@ -113,16 +112,6 @@ impl EditorPlugin {
 			let plugins = (f)(app, DefaultPlugins).into();
 			app.add_plugins(Self::override_defaults(plugins));
 		}));
-		self
-	}
-
-	pub fn register_camera<C>(mut self) -> Self
-	where
-		C: Component + Identifiable,
-	{
-		self.camera_registrations.push(|app| {
-			app.add_plugins(EditorExtensionPlugin::<EditorManagedViewUiExtension<C>>::default());
-		});
 		self
 	}
 

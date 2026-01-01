@@ -9,16 +9,14 @@ use crate::{
 };
 use bevy::{
 	ecs::system::SystemParam,
-	platform::collections::HashSet,
 	prelude::*,
 	render::view::screenshot::{Screenshot, save_to_disk},
-	time::common_conditions::on_timer,
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
-use derive_more::derive::{Deref, DerefMut};
+use derive_more::derive::Deref;
 use derive_new::new;
+use egui::Widget;
 use egui_file_dialog::FileDialog;
-use std::time::Duration;
 use uuid::uuid;
 
 #[derive(Default)]
@@ -28,35 +26,27 @@ impl EditorExtension for ImageViewerUiExtension {
 	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
 		ctx.register_ui::<ImageViewerUi>();
 	}
-
-	fn build_app(&self, app: &mut App) {
-		app.init_resource::<TrackedImages>().add_systems(
-			First,
-			remove_texture_images.run_if(on_timer(Duration::from_secs(1))),
-		);
-	}
 }
 
 #[derive(Component, Default)]
 #[require(EditorInternal)]
 pub struct ImageViewerUi {
-	image: Handle<Image>,
-	tex: egui::TextureId,
+	pub(crate) image_id: AssetId<Image>,
 }
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
 	commands: Commands<'w, 's>,
-	egui_textures: ResMut<'w, EguiUserTextures>,
-	images: Res<'w, Assets<Image>>,
-	file_dialog: Local<'s, FileDialog>,
+	images: ResMut<'w, Assets<Image>>,
+	user_textures: ResMut<'w, EguiUserTextures>,
+	screenshot_file_dialog: Local<'s, FileDialog>,
 }
 
 impl EditorUi for ImageViewerUi {
 	const NAME: &str = "Image View";
 	const ID: uuid::Uuid = uuid!("5cf9e67a-df8e-4070-a21f-c6301f0ce26f");
 
-	const CAN_CLEAR: bool = true;
+	const HIDDEN: bool = true;
 
 	const POPOUT: bool = true;
 
@@ -70,33 +60,19 @@ impl EditorUi for ImageViewerUi {
 		default()
 	}
 
-	fn on_despawn(&mut self, params: Self::Params<'_, '_>) {
-		let Params {
-			mut egui_textures, ..
-		} = params;
-		egui_textures.remove_image(self.image.id());
-	}
-
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
-		let Self::Params {
+		let Params {
 			mut commands,
-			images,
-			mut file_dialog,
+			mut images,
+			mut screenshot_file_dialog,
+			mut user_textures,
 			..
 		} = params;
 
-		let Some(image) = images.get(self.image.id()) else {
+		let Some(image) = images.get(self.image_id) else {
 			ui.label("No Image Selected");
 			return;
 		};
-
-		file_dialog.update(ui.ctx());
-
-		if let Some(path) = file_dialog.take_picked() {
-			commands
-				.spawn((UserHidden, Screenshot::image(self.image.clone())))
-				.observe(save_to_disk(path));
-		}
 
 		let image_size = image.size();
 		let image_size_vec2 = image_size.as_vec2();
@@ -114,16 +90,17 @@ impl EditorUi for ImageViewerUi {
 			egui::vec2(size_in_points.x, size_in_points.y),
 		);
 
-		ui.scope_builder(
-			egui::UiBuilder::new()
-				.max_rect(texture_rect)
-				.layout(egui::Layout::centered_and_justified(
-					egui::Direction::TopDown,
-				)),
-			|ui| {
-				ui.image(egui::load::SizedTexture::new(self.tex, texture_rect.size()));
-			},
-		);
+		self.show(ui, texture_rect, &mut user_textures);
+
+		screenshot_file_dialog.update(ui.ctx());
+
+		if let Some(path) = screenshot_file_dialog.take_picked() {
+			let copy = image.clone();
+			let handle = images.add(copy);
+			commands
+				.spawn((UserHidden, Screenshot::image(handle)))
+				.observe(save_to_disk(path));
+		}
 	}
 
 	fn context_menu(
@@ -134,7 +111,8 @@ impl EditorUi for ImageViewerUi {
 		_node: egui_dock::NodeIndex,
 	) {
 		let Self::Params {
-			mut file_dialog, ..
+			screenshot_file_dialog: mut file_dialog,
+			..
 		} = params;
 
 		if ui.button("Capture").clicked() {
@@ -143,9 +121,26 @@ impl EditorUi for ImageViewerUi {
 	}
 }
 
-#[derive(Resource, Default, Deref, DerefMut)]
-struct TrackedImages {
-	set: HashSet<AssetId<Image>>,
+impl ImageViewerUi {
+	pub(crate) fn show(
+		&self,
+		ui: &mut egui::Ui,
+		location: egui::Rect,
+		user_textures: &mut EguiUserTextures,
+	) -> egui::InnerResponse<egui::Response> {
+		ui.scope_builder(
+			egui::UiBuilder::new()
+				.max_rect(location)
+				.layout(egui::Layout::centered_and_justified(
+					egui::Direction::TopDown,
+				)),
+			|ui| {
+				let tex = user_textures.add_image(EguiTextureHandle::Weak(self.image_id));
+				let tex = egui::load::SizedTexture::new(tex, location.size());
+				egui::Image::new(tex).sense(egui::Sense::all()).ui(ui)
+			},
+		)
+	}
 }
 
 #[derive(new, Deref)]
@@ -153,33 +148,12 @@ pub struct OpenImageViewer(pub Handle<Image>);
 
 impl Command for OpenImageViewer {
 	fn apply(self, world: &mut World) {
-		let tex_id = world
-			.resource_mut::<EguiUserTextures>()
-			.add_image(EguiTextureHandle::Weak(self.id()));
-
-		world.resource_mut::<TrackedImages>().insert(self.id());
-
 		let tab = TabState::new::<ImageViewerUi>(world);
 
 		world.entity_mut(tab.entity()).insert(ImageViewerUi {
-			image: self.0,
-			tex: tex_id,
+			image_id: self.id(),
 		});
 
 		world.write_message(ShowUiMessage(tab));
-	}
-}
-
-fn remove_texture_images(
-	mut messages: MessageReader<AssetEvent<Image>>,
-	mut tracked_images: ResMut<TrackedImages>,
-	mut user_textures: ResMut<EguiUserTextures>,
-) {
-	for msg in messages.read() {
-		if let AssetEvent::Removed { id } = msg
-			&& tracked_images.remove(id)
-		{
-			user_textures.remove_image(*id);
-		}
 	}
 }

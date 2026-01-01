@@ -9,8 +9,8 @@ use serde::Deserialize;
 fn main() {
 	App::new()
 		.add_plugins((
-			EditorPlugin::new(),
 			PrefabPlugin::default().with_prefab::<SamplePrefab>(),
+			EditorPlugin::new(),
 		))
 		.run();
 }

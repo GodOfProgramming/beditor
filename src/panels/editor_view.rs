@@ -2,7 +2,7 @@ use crate::{
 	EditorExtension, EditorState, EditorUi,
 	panels::{
 		BundleDnd,
-		managed_view::{self, EditorManagedViewUi},
+		camera_view::{self, CameraViewUi},
 	},
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
@@ -53,61 +53,59 @@ pub struct EditorViewUi;
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
 	commands: Commands<'w, 's>,
-	managed_view_params: managed_view::Params<'w, 's, EditorCamera>,
-	managed_view: Local<'s, EditorManagedViewUi<EditorCamera>>,
+	camera_view_params: camera_view::Params<'w, 's>,
+	camera_view: Local<'s, CameraViewUi>,
 	gizmo_options: ResMut<'w, GizmoOptions>,
-	temporary: Option<
+
+	temporary_dnd_entity: Option<
 		EditorInternalSingle<'w, 's, (Entity, Option<&'static Transform>), With<TemporaryEntity>>,
 	>,
 
-	editor_camera:
-		Option<EditorInternalSingle<'w, 's, (Has<Camera2d>, Has<Camera3d>), With<EditorCamera>>>,
+	editor_camera: Option<
+		EditorInternalSingle<'w, 's, (Entity, Has<Camera2d>, Has<Camera3d>), With<EditorCamera>>,
+	>,
 }
 
 impl EditorUi for EditorViewUi {
-	const NAME: &str = "Edior View";
+	const NAME: &str = "Editor View";
 
 	const ID: uuid::Uuid = uuid!("c910a397-a017-4a29-99bc-6282b4b1a214");
 
-	const CAN_CLEAR: bool = EditorManagedViewUi::<EditorCamera>::CAN_CLEAR;
+	const UNIQUE: bool = true;
 
-	const UNIQUE: bool = EditorManagedViewUi::<EditorCamera>::UNIQUE;
+	const POPOUT: bool = true;
 
-	const POPOUT: bool = EditorManagedViewUi::<EditorCamera>::POPOUT;
-
-	const SCROLL_BARS: [bool; 2] = EditorManagedViewUi::<EditorCamera>::SCROLL_BARS;
+	const SCROLL_BARS: [bool; 2] = [false, false];
 
 	type Params<'w, 's> = Params<'w, 's>;
 
-	fn spawn(params: Self::Params<'_, '_>) -> Self {
-		let _ = EditorManagedViewUi::<EditorCamera>::spawn(params.managed_view_params);
+	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		default()
-	}
-
-	fn on_despawn(&mut self, mut params: Self::Params<'_, '_>) {
-		params.managed_view.on_despawn(params.managed_view_params);
 	}
 
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
 			mut commands,
-			mut managed_view_params,
-			mut managed_view,
+			camera_view_params,
+			mut camera_view,
 			mut gizmo_options,
-			temporary,
+			temporary_dnd_entity,
 			editor_camera,
 		} = params;
+
+		let Some(editor_camera) = editor_camera else {
+			ui.label("No editor camera");
+			return;
+		};
+
+		let (entity, is_2d, is_3d) = *editor_camera;
+
+		camera_view.entity = entity;
 
 		let window_rect = ui.clip_rect();
 
 		let (_, Some(payload)) = super::panel_dnd_drop_ui::<BundleDnd, ()>(ui, |ui| {
-			let has_camera = managed_view_params.has_camera();
-
-			managed_view.ui(ui, managed_view_params);
-
-			if !has_camera {
-				return;
-			}
+			camera_view.ui(ui, camera_view_params);
 
 			let margin = ui.style().spacing.window_margin;
 			let outer_ui = egui::Rect::from_min_max(
@@ -116,13 +114,6 @@ impl EditorUi for EditorViewUi {
 			);
 
 			ui.scope_builder(egui::UiBuilder::new().max_rect(outer_ui), |ui| {
-				let Some(editor_camera) = editor_camera else {
-					ui.label("No editor camera");
-					return;
-				};
-
-				let (is_2d, is_3d) = *editor_camera;
-
 				match (is_2d, is_3d) {
 					(true, false) => {
 						overlay2d();
@@ -142,9 +133,10 @@ impl EditorUi for EditorViewUi {
 			return;
 		};
 
-		let Some(temp) = temporary else {
+		let Some(temp) = temporary_dnd_entity else {
 			return;
 		};
+
 		let (temp_entity, transform) = *temp;
 
 		// spawn a new entity in case it has its own picking rules
@@ -187,8 +179,8 @@ impl EditorUi for EditorViewUi {
 		node: egui_dock::NodeIndex,
 	) {
 		params
-			.managed_view
-			.context_menu(ui, params.managed_view_params, surface, node);
+			.camera_view
+			.context_menu(ui, params.camera_view_params, surface, node);
 	}
 }
 

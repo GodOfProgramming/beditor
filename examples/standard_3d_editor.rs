@@ -9,8 +9,8 @@ static GLOBAL: MiMalloc = MiMalloc;
 fn main() {
 	App::new()
 		.add_plugins((
-			EditorPlugin::new().register_camera::<GameCamera>(),
 			PrefabPlugin::default().with_static_prefab::<Cube>(),
+			EditorPlugin::new(),
 		))
 		.add_systems(Startup, startup)
 		.run();

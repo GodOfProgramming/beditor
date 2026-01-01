@@ -1,4 +1,5 @@
 pub mod assets;
+pub mod camera_view;
 pub mod components;
 pub mod diagnostics;
 pub mod editor_view;
@@ -6,7 +7,6 @@ pub mod hierarchy;
 pub mod image_viewer;
 pub mod inspector;
 pub mod logs;
-pub mod managed_view;
 pub mod menu_bar;
 pub mod prefabs;
 pub mod resources;
@@ -39,6 +39,7 @@ impl EditorExtension for EditorPanelsExtension {
 	fn build_app(&self, app: &mut App) {
 		app.add_plugins((
 			EditorExtensionPlugin::<assets::AssetsUiExtension>::default(),
+			EditorExtensionPlugin::<camera_view::CameraViewUiExtension>::default(),
 			EditorExtensionPlugin::<components::ComponentsUiExtension>::default(),
 			EditorExtensionPlugin::<diagnostics::DiagnosticsUiExtension>::default(),
 			EditorExtensionPlugin::<editor_view::EditorViewUiExtension>::default(),

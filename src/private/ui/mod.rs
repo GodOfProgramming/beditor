@@ -13,7 +13,6 @@ use crate::{
 	},
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned,
-		UserHidden,
 		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
 	},
 	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
@@ -29,7 +28,6 @@ use bevy::{
 	picking::pointer::PointerId,
 	platform::collections::HashMap,
 	prelude::*,
-	ui::FocusPolicy,
 };
 use bevy_egui::{
 	EguiContext, EguiContextSettings, EguiGlobalSettings, EguiMultipassSchedule, EguiPlugin,
@@ -47,10 +45,6 @@ use persistent_id::PersistentId;
 use serde::{Deserialize, Serialize};
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
 use transform_gizmo_bevy::GizmoTarget;
-
-#[derive(Component)]
-#[require(UserHidden)]
-pub struct EditorUiHitCaptureNode;
 
 pub(crate) struct EditorUiPlugin;
 
@@ -80,7 +74,7 @@ impl Plugin for EditorUiPlugin {
 			.add_observer(handle_click_events)
 			.add_observer(handle_selected)
 			.add_observer(handle_deselected)
-			.add_systems(Startup, (startup, UiManager::init))
+			.add_systems(Startup, UiManager::init)
 			.add_systems(
 				OnEnter(EditorState::Exiting),
 				(save_context_options, save_scale_factor, save_layouts),
@@ -718,19 +712,6 @@ impl KeyboardFocus {
 	}
 }
 
-pub fn startup(mut commands: Commands) {
-	commands.spawn((
-		Name::new("Editor Ui Pointer Capture"),
-		EditorUiHitCaptureNode,
-		FocusPolicy::Pass,
-		Node {
-			width: vw(100),
-			height: vh(100),
-			..default()
-		},
-	));
-}
-
 pub fn on_new_ctx(
 	event: On<Add, EditorEguiContext>,
 	mut q_ctx: EditorInternalQuery<(&mut EguiContext, &mut bevy_egui::EguiContextSettings)>,
@@ -752,7 +733,6 @@ pub fn on_new_ctx(
 		});
 	}
 
-	ctx_settings.capture_pointer_input = false;
 	ctx_settings.scale_factor = settings
 		.get(EditorUiScale)
 		.unwrap_or(ctx_settings.scale_factor);

@@ -3,7 +3,7 @@ use bevy::prelude::*;
 
 fn main() {
 	App::new()
-		.add_plugins(EditorPlugin::new().register_camera::<GameCamera>())
+		.add_plugins(EditorPlugin::new())
 		.add_systems(Startup, startup)
 		.run();
 }

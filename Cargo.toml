@@ -17,7 +17,7 @@ members = [
 
 [workspace.dependencies]
 bevy = "0.17.3"
-bevy_egui = "0.38.0"
+bevy_egui = { version = "0.38.0", default-features = false }
 derive_more = "1.0.0"
 egui = "0.33.2"
 egui_phosphor_icons = "0.2.0"
@@ -49,7 +49,13 @@ bevy = { workspace = true, features = [
   "bevy_dev_tools",
 ] }
 bevy-axes-gizmo = "0.2.0"
-bevy_egui = { workspace = true }
+bevy_egui = { workspace = true, features = [
+  "bevy_ui",
+  "default_fonts",
+  "manage_clipboard",
+  "open_url",
+  "render",
+] }
 bevy_infinite_grid = "0.17.0"
 bevy_mod_outline = { git = "https://github.com/komadori/bevy_mod_outline", rev = "9b509abe41ac1d2b882adaf63855e24a20ced3ff" }
 brefabs = "0.7.0"

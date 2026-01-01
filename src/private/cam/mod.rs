@@ -6,8 +6,7 @@ use crate::{
 	EditorState,
 	panels::editor_view::EditorViewUi,
 	private::{
-		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
-		input,
+		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden, input,
 		ui::{EditorEguiContext, misc::UiState},
 	},
 	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
@@ -212,7 +211,7 @@ fn spawn_axis_ui(
 	for editor_camera in &q_new_editor_cameras {
 		commands.spawn((
 			Name::new("Axis Image"),
-			EditorInternal,
+			UserHidden,
 			Pickable::IGNORE,
 			FocusPolicy::Pass,
 			UiTargetCamera(editor_camera),

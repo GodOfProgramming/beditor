@@ -80,8 +80,6 @@ impl EditorUi for CameraViewUi {
 			return;
 		};
 
-		image_viewer.image_id = handle.id();
-
 		let image_size = image.size();
 		let image_size_vec2 = image_size.as_vec2();
 		let size_in_points = ui.ctx().to_points(image_size_vec2);
@@ -97,6 +95,8 @@ impl EditorUi for CameraViewUi {
 			ui_area.center(),
 			egui::vec2(size_in_points.x, size_in_points.y),
 		);
+
+		image_viewer.image_id = handle.id();
 
 		let response = image_viewer
 			.show(ui, texture_rect, &mut user_textures)

@@ -16,6 +16,7 @@ use crate::{
 		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
 	},
 	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
+	ui::OpenUi,
 	util::{entity::insert_bundle_from_world, storage::GlobalEditorSettings},
 };
 use bevy::{
@@ -34,10 +35,8 @@ use bevy_egui::{
 };
 use bevy_mod_outline::{OutlineMode, OutlineRenderLayers, OutlineVolume};
 use derive_new::new;
-use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex};
-use events::AppendUiMessage;
-use events::RemoveUiEvent;
-use events::{OpenSingleUiMessage, OpenUiMessage, ShowUiMessage};
+use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex, TabIndex};
+use events::{AppendUiMessage, RemoveUiEvent};
 use itertools::Itertools;
 use misc::{DockExtensions, EditorUiExtensions, UiResourceState};
 use misc::{MissingUi, UiState};
@@ -63,11 +62,9 @@ impl Plugin for EditorUiPlugin {
 			.init_resource::<UiManager>()
 			.init_resource::<InspectorSelection>()
 			.init_resource::<LayoutManager>()
+			.init_resource::<NewTabs>()
 			.init_state::<KeyboardFocus>()
 			.add_message::<AppendUiMessage>()
-			.add_message::<OpenUiMessage>()
-			.add_message::<OpenSingleUiMessage>()
-			.add_message::<ShowUiMessage>()
 			.add_plugins(EguiPlugin::default())
 			.add_observer(on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
@@ -81,19 +78,11 @@ impl Plugin for EditorUiPlugin {
 			)
 			.add_systems(
 				FixedUpdate,
-				(
-					AppendUiMessage::handle,
-					OpenUiMessage::handle,
-					OpenSingleUiMessage::handle,
-					ShowUiMessage::handle,
-				),
+				(AppendUiMessage::handle, handle_open_ui_requests),
 			)
 			.add_systems(
 				EditorUiEguiContextPass,
-				(
-					KeyboardFocus::set_state,
-					(reset_ui_state, editor_ui).chain(),
-				),
+				(reset_ui_state, editor_ui, KeyboardFocus::set_state).chain(),
 			);
 
 		let type_registry = app.world().resource::<AppTypeRegistry>();
@@ -141,7 +130,7 @@ impl UiManager {
 		self.state.add_window(tabs)
 	}
 
-	pub fn add_tab(&mut self, surface: SurfaceIndex, node: NodeIndex, tab: TabState) -> bool {
+	pub fn append_tab(&mut self, surface: SurfaceIndex, node: NodeIndex, tab: TabState) -> bool {
 		let Some(surface) = self.state.get_surface_mut(surface) else {
 			return false;
 		};
@@ -157,12 +146,34 @@ impl UiManager {
 		true
 	}
 
+	pub fn insert_and_focus(
+		&mut self,
+		surface: SurfaceIndex,
+		node: NodeIndex,
+		neighbor: TabIndex,
+		tab: TabState,
+	) -> bool {
+		let Some(surface) = self.state.get_surface_mut(surface) else {
+			return false;
+		};
+
+		let Some(nodes) = surface.node_tree_mut() else {
+			return false;
+		};
+
+		let node = &mut nodes[node];
+
+		node.insert_tab(neighbor, tab);
+
+		true
+	}
+
 	pub fn add_tab_to_focused(&mut self, tab: TabState) -> bool {
 		let Some((surface, node)) = self.state.focused_leaf() else {
 			return false;
 		};
 
-		self.add_tab(surface, node, tab)
+		self.append_tab(surface, node, tab)
 	}
 
 	fn init(world: &mut World) -> Result {
@@ -295,10 +306,15 @@ impl UiManager {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Resource, Default, Deref, DerefMut)]
+pub struct NewTabs {
+	requests: Vec<OpenUi>,
+}
+
+#[derive(Clone, Copy)]
 pub struct TabState {
 	entity: Entity,
-	vtable: &'static VTable,
+	pub(crate) vtable: &'static VTable,
 }
 
 impl TabState {
@@ -377,22 +393,22 @@ impl Command for LoadLayout {
 
 #[derive(Clone)]
 pub(crate) struct VTable {
-	name: &'static str,
-	closeable: bool,
-	hidden: bool,
-	can_clear: bool,
-	scroll_bars: [bool; 2],
-	unique: bool,
-	popout: bool,
-	reopen_on_startup: bool,
-	spawn: fn(&mut World) -> Entity,
-	despawn: fn(Entity, &mut World),
-	title: fn(Entity, &mut World) -> egui::WidgetText,
-	render: fn(Entity, &mut egui::Ui, &mut World),
-	context_menu: fn(Entity, &mut egui::Ui, &mut World, SurfaceIndex, NodeIndex),
-	handle_tab_response: fn(Entity, &mut World, &egui::Response),
-	on_panel_changed: fn(Entity, &mut World),
-	count: fn(&mut World) -> usize,
+	pub(crate) name: &'static str,
+	pub(crate) closeable: bool,
+	pub(crate) hidden: bool,
+	pub(crate) can_clear: bool,
+	pub(crate) scroll_bars: [bool; 2],
+	pub(crate) unique: bool,
+	pub(crate) popout: bool,
+	pub(crate) reopen_on_startup: bool,
+	pub(crate) spawn: fn(&mut World) -> Entity,
+	pub(crate) despawn: fn(Entity, &mut World),
+	pub(crate) title: fn(Entity, &mut World) -> egui::WidgetText,
+	pub(crate) render: fn(Entity, &mut egui::Ui, &mut World),
+	pub(crate) context_menu: fn(Entity, &mut egui::Ui, &mut World, SurfaceIndex, NodeIndex),
+	pub(crate) handle_tab_response: fn(Entity, &mut World, &egui::Response),
+	pub(crate) on_panel_changed: fn(Entity, &mut World),
+	pub(crate) count: fn(&mut World) -> usize,
 }
 
 impl VTable {
@@ -690,29 +706,35 @@ fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 /// Component that stores all ui components as children for organization
 #[derive(Component)]
 #[require(EditorInternal)]
-pub struct UiPanels;
+struct UiPanels;
 
+/// This exists as a state because you need to have immutable data in a run_if
+/// and egui contexts need mutable access
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States, Default)]
 pub enum KeyboardFocus {
 	#[default]
 	Unfocused,
-	Focused(egui::Id),
+	Focused,
 }
 
 impl KeyboardFocus {
 	fn set_state(
-		mut q_contexts: Query<&mut EguiContext>,
+		mut q_contexts: EditorInternalQuery<&mut EguiContext>,
 		mut keyboard_focus: ResMut<NextState<Self>>,
 	) {
-		let focus = q_contexts
+		let none_focused = q_contexts
 			.iter_mut()
-			.find_map(|mut ctx| ctx.get_mut().memory(|memory| memory.focused()));
+			.all(|mut ctx| !ctx.get_mut().wants_keyboard_input());
 
-		keyboard_focus.set(focus.map(Self::Focused).unwrap_or(Self::Unfocused))
+		if none_focused {
+			keyboard_focus.set(KeyboardFocus::Unfocused);
+		} else {
+			keyboard_focus.set(KeyboardFocus::Focused);
+		}
 	}
 }
 
-pub fn on_new_ctx(
+fn on_new_ctx(
 	event: On<Add, EditorEguiContext>,
 	mut q_ctx: EditorInternalQuery<(&mut EguiContext, &mut bevy_egui::EguiContextSettings)>,
 	mut settings: GlobalEditorSettings,
@@ -738,13 +760,13 @@ pub fn on_new_ctx(
 		.unwrap_or(ctx_settings.scale_factor);
 }
 
-pub fn reset_ui_state(mut q_ui_state: EditorInternalQuery<&mut UiState>) {
+fn reset_ui_state(mut q_ui_state: EditorInternalQuery<&mut UiState>) {
 	q_ui_state.par_iter_mut().for_each(|mut state| {
 		state.clear();
 	});
 }
 
-pub fn editor_ui(world: &mut World) {
+fn editor_ui(world: &mut World) {
 	world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
 		ui_manager.ui(world);
 	});
@@ -766,7 +788,7 @@ fn save_scale_factor(
 	settings.set(EditorUiScale, ctx_settings.scale_factor).ok();
 }
 
-pub fn save_layouts(
+fn save_layouts(
 	ui_manager: Res<UiManager>,
 	q_uuids: EditorInternalQuery<&PersistentId, Without<MissingUi>>,
 	q_missing: EditorInternalQuery<&MissingUi>,
@@ -794,4 +816,12 @@ pub fn save_layouts(
 	}
 
 	Ok(())
+}
+
+fn handle_open_ui_requests(mut commands: Commands, mut new_tabs: ResMut<NewTabs>) {
+	for request in new_tabs.requests.drain(..) {
+		commands.queue(move |world: &mut World| {
+			(request.0)(world);
+		});
+	}
 }

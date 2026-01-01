@@ -288,7 +288,7 @@ struct EditorCameraUis(Vec<Entity>);
 #[relationship(relationship_target = EditorCameraUis)]
 struct EditorCameraUi(Entity);
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Reflect)]
 #[require(
   Camera,
   PointerId = PointerId::Custom(Uuid::new_v4()),
@@ -527,7 +527,6 @@ fn editor_picking_forwarding(
 	mut commands: Commands,
 	q_managed_cameras: EditorInternalQuery<(&Camera, &PointerId, &EditorManagedCamera)>,
 	mut pointer_inputs: MessageReader<PointerInput>,
-	q_editor_view: EditorInternalQuery<Entity, With<EditorViewUi>>,
 ) {
 	let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
 

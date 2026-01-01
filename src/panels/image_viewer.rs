@@ -1,9 +1,6 @@
 use crate::{
 	EditorExtension,
-	private::{
-		EditorInternal, UserHidden,
-		ui::{TabState, events::ShowUiMessage},
-	},
+	private::{EditorInternal, UserHidden},
 	ui::EditorUi,
 	util::egui::ContextExtensions,
 };
@@ -13,7 +10,6 @@ use bevy::{
 	render::view::screenshot::{Screenshot, save_to_disk},
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
-use derive_more::derive::Deref;
 use derive_new::new;
 use egui::Widget;
 use egui_file_dialog::FileDialog;
@@ -28,7 +24,7 @@ impl EditorExtension for ImageViewerUiExtension {
 	}
 }
 
-#[derive(Component, Default)]
+#[derive(new, Component, Default)]
 #[require(EditorInternal)]
 pub struct ImageViewerUi {
 	pub(crate) image_id: AssetId<Image>,
@@ -140,20 +136,5 @@ impl ImageViewerUi {
 				egui::Image::new(tex).sense(egui::Sense::all()).ui(ui)
 			},
 		)
-	}
-}
-
-#[derive(new, Deref)]
-pub struct OpenImageViewer(pub Handle<Image>);
-
-impl Command for OpenImageViewer {
-	fn apply(self, world: &mut World) {
-		let tab = TabState::new::<ImageViewerUi>(world);
-
-		world.entity_mut(tab.entity()).insert(ImageViewerUi {
-			image_id: self.id(),
-		});
-
-		world.write_message(ShowUiMessage(tab));
 	}
 }

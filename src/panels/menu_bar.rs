@@ -1,7 +1,8 @@
 use crate::{
 	EditorState, SimulationState,
 	panels::settings::{EditorSettingsUi, ProjectSettingsUi},
-	private::{EditorInternalQuery, scene::PrimaryScene, ui::events::OpenSingleUiMessage},
+	private::{EditorInternalQuery, scene::PrimaryScene},
+	ui::{OpenMode, OpenUi},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use egui_phosphor_icons::icons;
@@ -52,7 +53,7 @@ fn edit_menu(ui: &mut egui::Ui, params: &mut Params<'_, '_>) {
 			if ui.button("Editor Settings").clicked() {
 				params
 					.commands
-					.write_message(OpenSingleUiMessage::new::<EditorSettingsUi>());
+					.queue(OpenUi::open::<EditorSettingsUi>(OpenMode::Window));
 			}
 		});
 
@@ -60,7 +61,7 @@ fn edit_menu(ui: &mut egui::Ui, params: &mut Params<'_, '_>) {
 			if ui.button("Project Settings").clicked() {
 				params
 					.commands
-					.write_message(OpenSingleUiMessage::new::<ProjectSettingsUi>());
+					.queue(OpenUi::open::<ProjectSettingsUi>(OpenMode::Window));
 			}
 		});
 	});

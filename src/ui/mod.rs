@@ -1,9 +1,10 @@
-use crate::private::ui::misc::UiExtensions;
+use crate::private::ui::{NewTabs, TabState, UiManager, misc::UiExtensions};
 use bevy::{
 	ecs::{component::Mutable, system::SystemParam},
 	prelude::*,
 };
-use egui_dock::{NodeIndex, SurfaceIndex};
+use egui_dock::{NodeIndex, SurfaceIndex, TabIndex};
+use notify::Notification;
 use uuid::Uuid;
 
 pub trait EditorUiWorld: Bundle + Send + Sync + Sized {
@@ -188,5 +189,67 @@ where
 
 	fn on_despawn(entity: Entity, world: &mut World) {
 		Self::with_entity_params(entity, world, <Self as EditorUi>::on_despawn)
+	}
+}
+
+#[derive(Deref, DerefMut)]
+pub struct OpenUi(pub(crate) Box<dyn 'static + Send + Sync + FnOnce(&mut World)>);
+
+impl OpenUi {
+	pub fn open<T: EditorUiWorld>(mode: OpenMode) -> Self {
+		Self::new(move |world| {
+			let tab = TabState::new::<T>(world);
+			mode.open(world, tab);
+		})
+	}
+
+	pub fn open_with<T: EditorUiWorld>(mode: OpenMode, value: T) -> Self {
+		Self::new(move |world| {
+			let tab = TabState::new::<T>(world);
+			world.entity_mut(tab.entity()).insert(value);
+			mode.open(world, tab);
+		})
+	}
+
+	fn new<F>(f: F) -> Self
+	where
+		F: 'static + Send + Sync + FnOnce(&mut World),
+	{
+		Self(Box::new(f))
+	}
+}
+
+impl Command for OpenUi {
+	fn apply(self, world: &mut World) {
+		world.resource_mut::<NewTabs>().push(self);
+	}
+}
+
+#[derive(Clone, Copy)]
+pub enum OpenMode {
+	AppendToFocused,
+	Window,
+	FocusAt(SurfaceIndex, NodeIndex, TabIndex),
+}
+
+impl OpenMode {
+	fn open(self, world: &mut World, tab: TabState) {
+		let mut ui_manager = world.resource_mut::<UiManager>();
+
+		let success = match self {
+			Self::AppendToFocused => ui_manager.add_tab_to_focused(tab),
+			Self::Window => {
+				ui_manager.add_detached(vec![tab]);
+				return;
+			}
+			Self::FocusAt(surface, node, neighbor) => {
+				ui_manager.insert_and_focus(surface, node, neighbor, tab)
+			}
+		};
+
+		if !success {
+			let name = tab.vtable.name;
+			world.trigger(Notification::error("Failed to create Ui").with_context(name))
+		}
 	}
 }

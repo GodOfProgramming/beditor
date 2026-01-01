@@ -6,7 +6,7 @@ use crate::{
 		WorldExtensions as _,
 		ui::hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
 	},
-	panels::{BundleDnd, image_viewer::OpenImageViewer},
+	panels::{BundleDnd, camera_view::CameraViewUi, image_viewer::ImageViewerUi},
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalSingle, UserHidden,
 		cam::{
@@ -16,7 +16,7 @@ use crate::{
 		scene,
 		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
 	},
-	ui::EditorUiWorld,
+	ui::{EditorUiWorld, OpenMode, OpenUi},
 	util::WorldExtensions as _,
 };
 use bevy::prelude::*;
@@ -139,11 +139,29 @@ impl HierarchyUi {
 					}
 
 					if let Some(camera) = entity_ref.get::<Camera>()
-						&& entity_ref.get::<EditorManagedCamera>().is_none()
 						&& let Some(image) = camera.target.as_image()
-						&& ui.button("View").clicked()
 					{
-						queue.push(OpenImageViewer(image.clone()));
+						if entity_ref.contains::<EditorManagedCamera>() {
+							if ui.button("Open Live").clicked() {
+								queue.push(OpenUi::open_with(
+									OpenMode::Window,
+									CameraViewUi::new(entity),
+								));
+							}
+						} else if ui.button("Add To Editor").clicked() {
+							queue.push(move |world: &mut World| {
+								world
+									.entity_mut(entity)
+									.insert(EditorManagedCamera::default());
+							});
+						}
+
+						if ui.button("Observe").clicked() {
+							queue.push(OpenUi::open_with(
+								OpenMode::Window,
+								ImageViewerUi::new(image.id()),
+							));
+						}
 					}
 				}
 

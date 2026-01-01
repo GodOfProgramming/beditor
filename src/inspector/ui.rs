@@ -7,7 +7,6 @@ use crate::{
 		errors::{self, name_of_type, reflect::TypeDataError},
 		options::{InspectorOptions, ReflectInspectorOptions, Target},
 	},
-	private::EditorInternalFilter,
 	util::{
 		self,
 		egui::{

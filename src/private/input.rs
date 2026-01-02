@@ -6,20 +6,12 @@ use bevy::prelude::*;
 use leafwing_input_manager::{
 	Actionlike,
 	plugin::InputManagerPlugin,
-	prelude::{ActionState, InputMap, MouseScrollAxis},
+	prelude::{ActionState, InputMap},
 };
 
 #[derive(Actionlike, PartialEq, Eq, Hash, Clone, Copy, Debug, Reflect)]
 pub enum EditorActions {
 	Play,
-	PanCamera,
-	OrbitCamera,
-	#[actionlike(Axis)]
-	Zoom,
-	MoveNorth,
-	MoveSouth,
-	MoveWest,
-	MoveEast,
 }
 
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
@@ -29,15 +21,7 @@ pub struct EditorInputPlugin;
 
 impl EditorInputPlugin {
 	fn init_input(mut commands: Commands) {
-		let inputs = InputMap::default()
-			.with(EditorActions::Play, KeyCode::F5)
-			.with(EditorActions::OrbitCamera, MouseButton::Right)
-			.with(EditorActions::PanCamera, MouseButton::Middle)
-			.with_axis(EditorActions::Zoom, MouseScrollAxis::Y)
-			.with(EditorActions::MoveNorth, KeyCode::KeyW)
-			.with(EditorActions::MoveSouth, KeyCode::KeyS)
-			.with(EditorActions::MoveWest, KeyCode::KeyA)
-			.with(EditorActions::MoveEast, KeyCode::KeyD);
+		let inputs = InputMap::default().with(EditorActions::Play, KeyCode::F5);
 
 		commands.spawn((Name::new("Editor Input"), UserHidden, inputs));
 	}

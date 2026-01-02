@@ -32,7 +32,10 @@ impl Plugin for InternalPlugin {
 				reflection::ReflectionExtensionsPlugin,
 				assets::AssetsPlugin,
 			))
-			.add_systems(Startup, (configure_windows, auto_register_components))
+			.add_systems(
+				Startup,
+				(spawn_scene, configure_windows, auto_register_components),
+			)
 			.add_systems(PostStartup, show_window)
 			.add_systems(OnEnter(EditorState::Editing), show_window_cursor)
 			.add_systems(
@@ -82,6 +85,10 @@ pub type EditorInternalQuery<'w, 's, Q, F = ()> = Query<'w, 's, Q, EditorInterna
 
 pub type EditorInternalSingle<'w, 's, Q, F = ()> = Single<'w, 's, Q, EditorInternalFilter<F>>;
 
+#[derive(Component)]
+#[require(SceneRoot, UserHidden, Name = Name::new("Editor Scene"))]
+pub struct EditorScene;
+
 /// Entities that are owned by the editor
 #[derive(Component, Reflect, Default)]
 pub struct EditorOwned;
@@ -115,6 +122,10 @@ fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 	for mut cursor in &mut q_cursors {
 		util::window::show_cursor(&mut cursor);
 	}
+}
+
+fn spawn_scene(mut commands: Commands) {
+	commands.spawn(EditorScene);
 }
 
 fn configure_windows(

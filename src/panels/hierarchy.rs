@@ -117,7 +117,7 @@ impl HierarchyUi {
 		response.header_response.context_menu(|ui| {
 			world.queue(|world, queue| {
 				{
-					let camera_state = world.state::<ActiveEditorCamera>();
+					let camera_state = *world.resource::<ActiveEditorCamera>();
 
 					let mut entity_ref = world.entity_mut(entity);
 

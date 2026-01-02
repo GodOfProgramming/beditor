@@ -33,12 +33,7 @@ impl Plugin for EditorScenePlugin {
 }
 
 #[derive(Component, Reflect, Default, Clone, Copy)]
-#[require(
-  SceneRoot,
-  Transform,
-  Visibility,
-  Name = Name::new("Scene")
-)]
+#[require(SceneRoot, Name = Name::new("Scene"))]
 #[reflect(Clone, Default)]
 pub struct PrimaryScene;
 

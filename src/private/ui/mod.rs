@@ -12,7 +12,7 @@ use crate::{
 		resources,
 	},
 	private::{
-		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned,
+		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned, EditorScene,
 		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
 	},
 	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
@@ -66,6 +66,7 @@ impl Plugin for EditorUiPlugin {
 			.init_state::<KeyboardFocus>()
 			.add_message::<AppendUiMessage>()
 			.add_plugins(EguiPlugin::default())
+			.add_observer(on_new_scene)
 			.add_observer(on_new_ctx)
 			.add_observer(RemoveUiEvent::on_event)
 			.add_observer(handle_click_events)
@@ -78,7 +79,11 @@ impl Plugin for EditorUiPlugin {
 			)
 			.add_systems(
 				FixedUpdate,
-				(AppendUiMessage::handle, handle_open_ui_requests),
+				(
+					AppendUiMessage::handle,
+					handle_open_ui_requests,
+					reparent_editor_ui,
+				),
 			)
 			.add_systems(
 				EditorUiEguiContextPass,
@@ -98,6 +103,10 @@ pub struct EditorUiEguiContextPass;
 #[derive(Component, Default, Clone)]
 #[require(EguiContext, EguiMultipassSchedule::new(EditorUiEguiContextPass))]
 pub struct EditorEguiContext;
+
+#[derive(Component)]
+#[require(Name = Name::new("Editor Ui"), Visibility)]
+struct EditorUiContainer;
 
 #[derive(Resource)]
 pub struct UiManager {
@@ -179,7 +188,6 @@ impl UiManager {
 	fn init(world: &mut World) -> Result {
 		let state = SystemState::<menu_bar::Params<'_, '_>>::new(world);
 		world.insert_resource(UiResourceState::new(state));
-		world.spawn((Name::new("Editor Ui Panels"), UiPanels));
 		world.resource_scope(|world, mut this: Mut<Self>| this.restore_or_init(world))
 	}
 
@@ -447,13 +455,6 @@ impl VTable {
 			))
 			.id();
 
-		let ui_scene = world
-			.query_filtered::<Entity, EditorInternalFilter<With<UiPanels>>>()
-			.iter(world)
-			.next()
-			.unwrap();
-		world.entity_mut(ui_scene).add_child(entity);
-
 		let instance = T::spawn(entity, world);
 		world.entity_mut(entity).insert(instance).id()
 	}
@@ -703,11 +704,6 @@ fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 	}
 }
 
-/// Component that stores all ui components as children for organization
-#[derive(Component)]
-#[require(EditorInternal)]
-struct UiPanels;
-
 /// This exists as a state because you need to have immutable data in a run_if
 /// and egui contexts need mutable access
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States, Default)]
@@ -732,6 +728,10 @@ impl KeyboardFocus {
 			keyboard_focus.set(KeyboardFocus::Focused);
 		}
 	}
+}
+
+fn on_new_scene(event: On<Add, EditorScene>, mut commands: Commands) {
+	commands.spawn((EditorUiContainer, ChildOf(event.event_target())));
 }
 
 fn on_new_ctx(
@@ -823,5 +823,15 @@ fn handle_open_ui_requests(mut commands: Commands, mut new_tabs: ResMut<NewTabs>
 		commands.queue(move |world: &mut World| {
 			(request.0)(world);
 		});
+	}
+}
+
+fn reparent_editor_ui(
+	mut commands: Commands,
+	editor_ui: EditorInternalSingle<Entity, With<EditorUiContainer>>,
+	q_uis: EditorInternalQuery<Entity, (With<UiState>, Without<ChildOf>)>,
+) {
+	for ui in &q_uis {
+		commands.entity(*editor_ui).add_child(ui);
 	}
 }

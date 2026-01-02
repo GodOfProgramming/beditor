@@ -5,7 +5,8 @@ pub mod cam3d;
 use crate::{
 	panels::editor_view::EditorViewUi,
 	private::{
-		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden, input,
+		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorScene, UserHidden,
+		input,
 		ui::{EditorEguiContext, misc::UiState},
 	},
 	settings::{Setting, SettingsGroup, SettingsTable},
@@ -31,7 +32,6 @@ use cam2d::EditorCam2dPlugin;
 use cam3d::EditorCam3dPlugin;
 use derive_more::derive::Deref;
 use derive_new::new;
-use macros::Identifiable;
 use notify::Notification;
 use serde::{Deserialize, Serialize};
 use singleton::{SingletonBehavior, SingletonPlugin};
@@ -53,8 +53,10 @@ impl Plugin for EditorCamPlugin {
 
 		app
 			.add_plugins((
-				SingletonPlugin::<EditorCamera, EditorInternalFilter>::new(SingletonBehavior::RemoveOther),
-				SingletonPlugin::<EditorUiCamera, EditorInternalFilter>::new(
+				SingletonPlugin::<EditorCameraScene, EditorInternalFilter>::new(
+					SingletonBehavior::RemoveOther,
+				),
+				SingletonPlugin::<EditorWindowCamera, EditorInternalFilter>::new(
 					SingletonBehavior::RemoveOther,
 				),
 				EditorCam2dPlugin,
@@ -72,16 +74,17 @@ impl Plugin for EditorCamPlugin {
 						.run_if(mouse_movement_active),
 				),
 			)
-			.insert_state(active_cam_state)
 			.insert_state(OrbitState::Inactive)
 			.insert_state(PanState::Inactive)
+			.insert_resource(active_cam_state)
 			.init_resource::<RenderCameras>()
 			.init_resource::<GameCameraColor>()
 			.add_observer(MoveTo::handle)
 			.add_observer(manage_camera)
 			.add_observer(on_manage_camera)
 			.add_observer(on_unmanage_camera)
-			.add_systems(Startup, (startup, retrieve_show_cameras_value))
+			.add_observer(on_new_editor_scene)
+			.add_systems(Startup, retrieve_show_cameras_value)
 			.add_systems(PostStartup, init_camera)
 			.add_systems(
 				First,
@@ -96,15 +99,7 @@ impl Plugin for EditorCamPlugin {
 			)
 			.add_systems(
 				FixedUpdate,
-				track_editor_camera_changes.run_if(state_changed::<ActiveEditorCamera>),
-			)
-			.add_systems(
-				Update,
-				(
-					render_2d_cameras.run_if(in_state(ActiveEditorCamera::Cam2D)),
-					render_3d_cameras.run_if(in_state(ActiveEditorCamera::Cam3D)),
-				)
-					.run_if(should_show_cameras),
+				on_active_camera_change.run_if(resource_changed::<ActiveEditorCamera>),
 			);
 	}
 }
@@ -145,12 +140,9 @@ impl Command for MoveTo {
 	}
 }
 
-fn init_camera(
-	mut settings: ProjectSettings,
-	mut next_state: ResMut<NextState<ActiveEditorCamera>>,
-) {
-	let state = settings.get(ActiveEditorCameraSetting).unwrap_or_default();
-	next_state.set(state);
+fn init_camera(mut settings: ProjectSettings, mut active_camera: ResMut<ActiveEditorCamera>) {
+	let setting = settings.get(ActiveEditorCameraSetting).unwrap_or_default();
+	*active_camera = setting;
 }
 
 fn on_manage_camera(
@@ -218,15 +210,18 @@ enum PanState {
 	Inactive,
 }
 
-#[derive(Default, Component, Reflect, Identifiable)]
+#[derive(Default, Component, Reflect)]
 #[require(
   UserHidden,
   MeshPickingCamera,
   EditorManagedCamera,
   RenderLayers = RenderLayers::from_layers(&[0, EDITOR_VIEW_RENDER_LAYER]),
 )]
-#[id("00000000-0000-0000-0000-000000000000")]
 pub struct EditorCamera;
+
+#[derive(Component)]
+#[require(SceneRoot, Name = Name::new("Editor Camera Scene"))]
+pub struct EditorCameraScene;
 
 #[derive(Default, Component, Reflect)]
 #[require(
@@ -236,8 +231,9 @@ pub struct EditorCamera;
   Camera = Camera { order: isize::MAX, ..default() },
   RenderLayers = RenderLayers::layer(EDITOR_UI_RENDER_LAYER),
   PointerId = PointerId::Custom(Uuid::new_v4()),
+  Name = Name::new("Editor Window Camera"),
 )]
-pub struct EditorUiCamera;
+pub struct EditorWindowCamera;
 
 #[derive(Component, Default, Reflect)]
 #[require(
@@ -297,9 +293,7 @@ impl EditorManagedCamera {
 	}
 }
 
-#[derive(
-	Debug, Clone, Copy, PartialEq, Eq, Hash, States, Default, Serialize, Deserialize, Reflect,
-)]
+#[derive(Resource, Reflect, Default, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ActiveEditorCamera {
 	Cam2D,
 	#[default]
@@ -320,19 +314,20 @@ impl Default for GameCameraColor {
 #[reflect(Resource, Default)]
 pub struct RenderCameras(bool);
 
-fn track_editor_camera_changes(
-	cam_state: Res<State<ActiveEditorCamera>>,
+fn on_active_camera_change(
+	mut commands: Commands,
+	cam_state: Res<ActiveEditorCamera>,
 	mut settings: ProjectSettings,
-) -> Result {
-	settings.set(ActiveEditorCameraSetting, **cam_state)
+	editor_scene: EditorInternalSingle<Entity, With<EditorScene>>,
+) {
+	settings.set(ActiveEditorCameraSetting, *cam_state).ok();
+	commands.spawn((EditorCameraScene, ChildOf(*editor_scene)));
 }
 
-fn startup(mut commands: Commands) {
-	commands
-		.spawn((Name::new("Editor UI Camera"), EditorUiCamera))
-		.observe(|e: On<Pointer<Click>>| {
-			info!("UI\n{e:?}");
-		});
+fn on_new_editor_scene(event: On<Add, EditorScene>, mut commands: Commands) {
+	let scene = event.event_target();
+	commands.spawn((EditorWindowCamera, ChildOf(scene)));
+	commands.spawn((EditorCameraScene, ChildOf(scene)));
 }
 
 pub fn mouse_hovered_in_editor_view(
@@ -356,98 +351,10 @@ pub fn should_show_cameras(render_cameras: Res<RenderCameras>) -> bool {
 	**render_cameras
 }
 
-#[allow(clippy::type_complexity)]
-pub fn render_2d_cameras(
-	mut gizmos: Gizmos,
-	q_app_cameras: Query<
-		(&Transform, &Projection),
-		(
-			With<Camera2d>,
-			With<EditorManagedCamera>,
-			// to support this in both dev & user mode
-			Without<EditorCamera>,
-		),
-	>,
-	cam_color: Res<GameCameraColor>,
-) {
-	// TODO render only to editor camera
-	for (transform, projection) in &q_app_cameras {
-		if let Projection::Orthographic(ortho) = projection {
-			let rect_pos = transform.translation;
-			gizmos.rect(rect_pos, ortho.area.max - ortho.area.min, **cam_color);
-		}
-	}
-}
-
-#[allow(clippy::type_complexity)]
-pub fn render_3d_cameras(
-	mut gizmos: Gizmos,
-	q_app_cameras: Query<
-		(&Transform, &Projection),
-		(
-			With<Camera3d>,
-			With<EditorManagedCamera>,
-			// to support this in both dev & user mode
-			Without<EditorCamera>,
-		),
-	>,
-	cam_color: Res<GameCameraColor>,
-) {
-	// TODO render only to editor camera
-	for (transform, projection) in &q_app_cameras {
-		match projection {
-			Projection::Perspective(perspective) => {
-				render_3d_camera(
-					*transform,
-					perspective.aspect_ratio,
-					&mut gizmos,
-					&cam_color,
-				);
-			}
-			Projection::Orthographic(orthographic) => {
-				render_3d_camera(*transform, orthographic.scale, &mut gizmos, &cam_color);
-			}
-			_ => (),
-		}
-	}
-}
-
-fn render_3d_camera(
-	transform: Transform,
-	scaler: f32,
-	gizmos: &mut Gizmos,
-	cam_color: &GameCameraColor,
-) {
-	gizmos.cuboid(transform, **cam_color);
-
-	let forward = transform.forward().as_vec3();
-
-	let rect_pos = transform.translation + forward;
-	let rect_iso = Isometry3d::new(rect_pos, transform.rotation);
-	let rect_dim = Vec2::new(scaler, 1.0);
-
-	gizmos.rect(rect_iso, rect_dim, **cam_color);
-
-	let start = transform.translation + forward * transform.scale / 2.0;
-
-	let rect_corners = [
-		rect_dim,
-		-rect_dim,
-		rect_dim.with_x(-rect_dim.x),
-		rect_dim.with_y(-rect_dim.y),
-	]
-	.map(|corner| Vec3::from((corner / 2.0, 0.0)))
-	.map(|corner| rect_iso * corner);
-
-	for corner in rect_corners {
-		gizmos.line(start, corner, **cam_color);
-	}
-}
-
 fn manage_camera(
 	event: On<Add, Camera>,
 	mut commands: Commands,
-	editor_ui_camera: EditorInternalSingle<Entity, Without<EditorUiCamera>>,
+	editor_ui_camera: EditorInternalSingle<Entity, Without<EditorWindowCamera>>,
 ) {
 	let entity = event.event_target();
 

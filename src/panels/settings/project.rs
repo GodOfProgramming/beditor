@@ -1,7 +1,7 @@
 use crate::{
 	EditorExtension, EditorUi,
 	private::{
-		EditorInternalQuery, EditorInternal,
+		EditorInternal, EditorInternalQuery,
 		cam::ActiveEditorCamera,
 		ui::{
 			LayoutManager, LoadLayout, SavedLayout, UiManager,
@@ -55,8 +55,7 @@ pub struct ProjectSettingsUi {
 pub struct ProjectSettingsUiParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	project_settings: ProjectSettings<'w, 's>,
-	active_camera_state: Res<'w, State<ActiveEditorCamera>>,
-	next_active_camera: ResMut<'w, NextState<ActiveEditorCamera>>,
+	active_camera: ResMut<'w, ActiveEditorCamera>,
 	layout_manager: ResMut<'w, LayoutManager>,
 	layout_name: Local<'s, String>,
 
@@ -164,9 +163,9 @@ impl ProjectSettingCategory {
 						("2D", ActiveEditorCamera::Cam2D),
 						("3D", ActiveEditorCamera::Cam3D),
 					] {
-						ui.add_enabled_ui(*params.active_camera_state.get() != state, |ui| {
+						ui.add_enabled_ui(*params.active_camera != state, |ui| {
 							if ui.button(text).clicked() {
-								params.next_active_camera.set(state);
+								*params.active_camera = state;
 							}
 						});
 					}

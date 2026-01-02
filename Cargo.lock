@@ -518,7 +518,6 @@ dependencies = [
  "anyhow",
  "async-std",
  "bevy",
- "bevy-axes-gizmo",
  "bevy_egui",
  "bevy_infinite_grid",
  "bevy_mod_outline",
@@ -599,15 +598,6 @@ checksum = "76d3ee8652fe0577fd8a99054e147740850140d530be8e044a9be4e23a3e8a24"
 dependencies = [
  "bevy_internal",
  "tracing",
-]
-
-[[package]]
-name = "bevy-axes-gizmo"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "717f41c332128c0d190f643aeea47d6816892f415bd8e51fb1cf707a6f453245"
-dependencies = [
- "bevy",
 ]
 
 [[package]]

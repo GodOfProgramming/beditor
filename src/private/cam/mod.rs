@@ -1,17 +1,17 @@
+pub mod axes;
 pub mod cam2d;
 pub mod cam3d;
 
 use crate::{
 	panels::editor_view::EditorViewUi,
 	private::{
-		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
-		cam::{cam2d::EditorCam2dPlugin, cam3d::EditorCam3dPlugin},
-		input,
+		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden, input,
 		ui::{EditorEguiContext, misc::UiState},
 	},
 	settings::{Setting, SettingsGroup, SettingsTable},
 	util::storage::ProjectSettings,
 };
+use axes::AxesGizmoPlugin;
 use bevy::{
 	camera::{
 		NormalizedRenderTarget, RenderTarget,
@@ -25,10 +25,10 @@ use bevy::{
 	},
 	prelude::*,
 	render::render_resource::TextureFormat,
-	ui::FocusPolicy,
 };
-use bevy_axes_gizmo::{AxesGizmoSyncCamera, AxesGizmoTexture};
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
+use cam2d::EditorCam2dPlugin;
+use cam3d::EditorCam3dPlugin;
 use derive_more::derive::Deref;
 use derive_new::new;
 use macros::Identifiable;
@@ -41,7 +41,7 @@ use uuid::Uuid;
 
 pub const EDITOR_UI_RENDER_LAYER: Layer = 31;
 pub const EDITOR_VIEW_RENDER_LAYER: Layer = 30;
-pub const EDITOR_AXIS_RENDER_LAYER: Layer = 29;
+const EDITOR_AXIS_RENDER_LAYER: Layer = 29;
 
 pub struct EditorCamPlugin;
 
@@ -59,6 +59,7 @@ impl Plugin for EditorCamPlugin {
 				),
 				EditorCam2dPlugin,
 				EditorCam3dPlugin,
+				AxesGizmoPlugin,
 			))
 			.configure_sets(
 				Update,
@@ -85,16 +86,13 @@ impl Plugin for EditorCamPlugin {
 			.add_systems(
 				First,
 				(
-					spawn_axis_ui,
 					(
-						(
-							editor_picking_forwarding.in_set(PickingSystems::PostInput),
-							EditorManagedCamera::sync_gizmos,
-						),
-						EditorManagedCamera::on_frame_end,
-					)
-						.chain(),
-				),
+						editor_picking_forwarding.in_set(PickingSystems::PostInput),
+						EditorManagedCamera::sync_gizmos,
+					),
+					EditorManagedCamera::on_frame_end,
+				)
+					.chain(),
 			)
 			.add_systems(
 				FixedUpdate,
@@ -196,36 +194,6 @@ fn on_unmanage_camera(
 	}
 }
 
-fn spawn_axis_ui(
-	q_new_editor_cameras: EditorInternalQuery<Entity, Added<EditorCamera>>,
-	mut commands: Commands,
-	axes_gizmo_image: Res<AxesGizmoTexture>,
-) {
-	for editor_camera in &q_new_editor_cameras {
-		commands.spawn((
-			Name::new("Axis Image"),
-			UserHidden,
-			Pickable::IGNORE,
-			FocusPolicy::Pass,
-			UiTargetCamera(editor_camera),
-			EditorCameraUi(editor_camera),
-			BackgroundColor(Color::NONE),
-			Node {
-				position_type: PositionType::Absolute,
-				left: px(0),
-				bottom: px(0),
-				width: vmin(20),
-				height: vmin(20),
-				..default()
-			},
-			ImageNode {
-				image: axes_gizmo_image.0.clone(),
-				..default()
-			},
-		));
-	}
-}
-
 #[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
 enum CameraInputSystems {
 	Keyboard,
@@ -255,7 +223,6 @@ enum PanState {
   UserHidden,
   MeshPickingCamera,
   EditorManagedCamera,
-  AxesGizmoSyncCamera = AxesGizmoSyncCamera,
   RenderLayers = RenderLayers::from_layers(&[0, EDITOR_VIEW_RENDER_LAYER]),
 )]
 #[id("00000000-0000-0000-0000-000000000000")]
@@ -271,14 +238,6 @@ pub struct EditorCamera;
   PointerId = PointerId::Custom(Uuid::new_v4()),
 )]
 pub struct EditorUiCamera;
-
-#[derive(Component)]
-#[relationship_target(relationship = EditorCameraUi, linked_spawn)]
-struct EditorCameraUis(Vec<Entity>);
-
-#[derive(Component)]
-#[relationship(relationship_target = EditorCameraUis)]
-struct EditorCameraUi(Entity);
 
 #[derive(Component, Default, Reflect)]
 #[require(

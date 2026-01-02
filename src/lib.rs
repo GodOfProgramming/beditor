@@ -31,14 +31,13 @@ use bevy::{
 	remote::{RemotePlugin, http::RemoteHttpPlugin},
 	window::WindowMode,
 };
-use bevy_axes_gizmo::AxesGizmoPlugin;
 use bevy_infinite_grid::InfiniteGridPlugin;
 use bevy_mod_outline::OutlinePlugin;
 use brefabs::{PrefabPlugin, Prefabs};
 use derive_new::new;
 use notify::NotificationPlugin;
 use platform_dirs::AppDirs;
-use private::{cam::EDITOR_AXIS_RENDER_LAYER, ui::UiManager};
+use private::ui::UiManager;
 use std::{path::PathBuf, sync::LazyLock};
 use transform_gizmo_bevy::TransformGizmoPlugin;
 
@@ -167,10 +166,6 @@ impl Plugin for EditorPlugin {
 				NotificationPlugin::<EditorInternalFilter>::default().in_schedule(EditorUiEguiContextPass),
 			)
 			// crates
-			.try_add_plugin(AxesGizmoPlugin {
-				rendering_layer: EDITOR_AXIS_RENDER_LAYER,
-				..default()
-			})
 			.try_add_plugin(InfiniteGridPlugin)
 			.try_add_plugin(OutlinePlugin)
 			.try_add_plugin(TransformGizmoPlugin)

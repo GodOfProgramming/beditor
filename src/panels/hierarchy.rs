@@ -9,10 +9,7 @@ use crate::{
 	panels::{BundleDnd, camera_view::CameraViewUi, image_viewer::ImageViewerUi},
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalSingle, UserHidden,
-		cam::{
-			ActiveEditorCamera, EditorManagedCamera,
-			commands::{LookAt, MoveTo},
-		},
+		cam::{ActiveEditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
 		scene,
 		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
 	},
@@ -124,8 +121,8 @@ impl HierarchyUi {
 
 					let mut entity_ref = world.entity_mut(entity);
 
-					if camera_state.is_active() && entity_ref.contains::<Transform>() {
-						if camera_state.is_3d() && ui.button("Look At").clicked() {
+					if entity_ref.contains::<Transform>() {
+						if camera_state == ActiveEditorCamera::Cam3D && ui.button("Look At").clicked() {
 							queue.push(LookAt(entity_ref.id()));
 						}
 

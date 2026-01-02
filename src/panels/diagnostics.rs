@@ -1,8 +1,11 @@
 use crate::{
 	EditorExtension, ProjectSettings,
 	panels::inspector::InspectorSettings,
-	private::{EditorInternal, EditorInternalQuery, cam::RenderCameras, util::log::LogLevel},
-	settings::RenderCamerasSetting,
+	private::{
+		EditorInternal, EditorInternalQuery,
+		cam::{RenderCameras, RenderCamerasSetting},
+		util::log::LogLevel,
+	},
 	ui::EditorUi,
 	util::egui::ContextExtensions,
 };

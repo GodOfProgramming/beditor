@@ -1,15 +1,15 @@
 pub mod cam2d;
 pub mod cam3d;
-pub mod commands;
 
 use crate::{
-	EditorState,
 	panels::editor_view::EditorViewUi,
 	private::{
-		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden, input,
+		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
+		cam::{cam2d::EditorCam2dPlugin, cam3d::EditorCam3dPlugin},
+		input,
 		ui::{EditorEguiContext, misc::UiState},
 	},
-	settings::{ActiveEditorCameraSetting, RenderCamerasSetting},
+	settings::{Setting, SettingsGroup, SettingsTable},
 	util::storage::ProjectSettings,
 };
 use bevy::{
@@ -29,11 +29,10 @@ use bevy::{
 };
 use bevy_axes_gizmo::{AxesGizmoSyncCamera, AxesGizmoTexture};
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
-use cam2d::Cam2dSystems;
-use cam3d::Cam3dSystems;
-use commands::{LookAt, MoveTo};
 use derive_more::derive::Deref;
+use derive_new::new;
 use macros::Identifiable;
+use notify::Notification;
 use serde::{Deserialize, Serialize};
 use singleton::{SingletonBehavior, SingletonPlugin};
 use smallvec::SmallVec;
@@ -58,13 +57,13 @@ impl Plugin for EditorCamPlugin {
 				SingletonPlugin::<EditorUiCamera, EditorInternalFilter>::new(
 					SingletonBehavior::RemoveOther,
 				),
+				EditorCam2dPlugin,
+				EditorCam3dPlugin,
 			))
 			.configure_sets(
 				Update,
 				(
 					CameraInputSystems::Mouse.run_if(mouse_hovered_in_editor_view),
-					Cam2dSystems.run_if(in_state(ActiveEditorCamera::Cam2D)),
-					Cam3dSystems.run_if(in_state(ActiveEditorCamera::Cam3D)),
 					OrbitSystems.run_if(in_state(OrbitState::Active)),
 					PanSystems.run_if(in_state(PanState::Active)),
 					CameraInputSystems::Keyboard
@@ -77,21 +76,12 @@ impl Plugin for EditorCamPlugin {
 			.insert_state(PanState::Inactive)
 			.init_resource::<RenderCameras>()
 			.init_resource::<GameCameraColor>()
-			.add_observer(LookAt::handle)
 			.add_observer(MoveTo::handle)
 			.add_observer(manage_camera)
 			.add_observer(on_manage_camera)
 			.add_observer(on_unmanage_camera)
-			.add_systems(OnEnter(ActiveEditorCamera::Cam2D), cam2d::enable)
-			.add_systems(OnExit(ActiveEditorCamera::Cam2D), cam2d::save_settings)
-			.add_systems(OnEnter(ActiveEditorCamera::Cam3D), cam3d::enable)
-			.add_systems(OnExit(ActiveEditorCamera::Cam3D), cam3d::save_settings)
 			.add_systems(Startup, (startup, retrieve_show_cameras_value))
 			.add_systems(PostStartup, init_camera)
-			.add_systems(
-				OnEnter(EditorState::Exiting),
-				(cam2d::save_settings, cam3d::save_settings),
-			)
 			.add_systems(
 				First,
 				(
@@ -113,44 +103,47 @@ impl Plugin for EditorCamPlugin {
 			.add_systems(
 				Update,
 				(
-					(
-						render_2d_cameras
-							.in_set(Cam2dSystems)
-							.run_if(should_show_cameras),
-						render_3d_cameras
-							.in_set(Cam3dSystems)
-							.run_if(should_show_cameras),
-					),
-					(
-						(
-							cam2d::released_mouse_input_actions,
-							cam2d::mouse_input_actions,
-							(cam2d::pan_system.in_set(PanSystems), cam2d::zoom_system),
-						)
-							.chain()
-							.in_set(CameraInputSystems::Mouse),
-						cam2d::movement_system.in_set(CameraInputSystems::Keyboard),
-					)
-						.chain()
-						.in_set(Cam2dSystems),
-					(
-						(
-							cam3d::released_mouse_input_actions,
-							cam3d::mouse_input_actions,
-							(
-								cam3d::orbit_system.in_set(OrbitSystems),
-								cam3d::pan_system.in_set(PanSystems),
-								cam3d::zoom_system,
-							),
-						)
-							.chain()
-							.in_set(CameraInputSystems::Mouse),
-						cam3d::movement_system.in_set(CameraInputSystems::Keyboard),
-					)
-						.chain()
-						.in_set(Cam3dSystems),
+					render_2d_cameras.run_if(in_state(ActiveEditorCamera::Cam2D)),
+					render_3d_cameras.run_if(in_state(ActiveEditorCamera::Cam3D)),
+				)
+					.run_if(should_show_cameras),
+			);
+	}
+}
+
+#[derive(new, EntityEvent)]
+pub struct MoveTo(pub Entity);
+
+impl MoveTo {
+	pub(super) fn handle(
+		event: On<Self>,
+		mut commands: Commands,
+		mut q_transforms: EditorInternalQuery<&mut Transform>,
+		q_cams: EditorInternalQuery<Entity, With<EditorCamera>>,
+	) {
+		let entity = event.event_target();
+		let Ok(target) = q_transforms.get(entity).cloned() else {
+			commands.trigger(
+				Notification::warn("Tried to look at entity with no transform").with_context(
+					serde_json::json!({
+						"entity": entity
+					}),
 				),
 			);
+			return;
+		};
+
+		for cam in &q_cams {
+			if let Ok(mut transform) = q_transforms.get_mut(cam) {
+				transform.translation = target.translation;
+			}
+		}
+	}
+}
+
+impl Command for MoveTo {
+	fn apply(self, world: &mut World) {
+		world.trigger(self);
 	}
 }
 
@@ -354,20 +347,6 @@ pub enum ActiveEditorCamera {
 	Cam3D,
 }
 
-impl ActiveEditorCamera {
-	pub fn is_active(&self) -> bool {
-		matches!(self, Self::Cam2D | Self::Cam3D)
-	}
-
-	pub fn is_2d(&self) -> bool {
-		*self == Self::Cam2D
-	}
-
-	pub fn is_3d(&self) -> bool {
-		*self == Self::Cam3D
-	}
-}
-
 #[derive(Resource, Reflect, Deref)]
 #[reflect(Resource, Default)]
 pub struct GameCameraColor(Color);
@@ -566,4 +545,29 @@ fn editor_picking_forwarding(
 
 		commands.write_message(msg);
 	}
+}
+
+/* Camera Settings */
+
+pub struct CameraSettingsGroup;
+
+impl SettingsGroup for CameraSettingsGroup {
+	type Table = SettingsTable;
+	const NAME: &str = "view";
+}
+
+pub struct RenderCamerasSetting;
+
+impl Setting for RenderCamerasSetting {
+	type Type = bool;
+	type Group = CameraSettingsGroup;
+	const NAME: &str = "render_cameras";
+}
+
+pub struct ActiveEditorCameraSetting;
+
+impl Setting for ActiveEditorCameraSetting {
+	type Type = ActiveEditorCamera;
+	type Group = CameraSettingsGroup;
+	const NAME: &str = "active_editor_camera";
 }

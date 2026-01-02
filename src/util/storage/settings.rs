@@ -1,11 +1,4 @@
-use crate::{
-	DataTable,
-	private::{
-		cam::{ActiveEditorCamera, cam2d, cam3d},
-		util::log::LogLevel,
-	},
-	util::storage::PersistentData,
-};
+use crate::{DataTable, private::util::log::LogLevel, util::storage::PersistentData};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
@@ -156,42 +149,3 @@ impl Setting for LogLevelSetting {
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-
-pub struct ViewSettingsGroup;
-
-impl SettingsGroup for ViewSettingsGroup {
-	type Table = SettingsTable;
-	const NAME: &str = "view";
-}
-
-pub struct RenderCamerasSetting;
-
-impl Setting for RenderCamerasSetting {
-	type Type = bool;
-	type Group = ViewSettingsGroup;
-	const NAME: &str = "render_cameras";
-}
-
-pub struct ActiveEditorCameraSetting;
-
-impl Setting for ActiveEditorCameraSetting {
-	type Type = ActiveEditorCamera;
-	type Group = ViewSettingsGroup;
-	const NAME: &str = "active_editor_camera";
-}
-
-pub struct CamStateSetting2d;
-
-impl Setting for CamStateSetting2d {
-	type Type = cam2d::CameraSaveData;
-	type Group = ViewSettingsGroup;
-	const NAME: &str = "cam2d_state";
-}
-
-pub struct CamStateSetting3d;
-
-impl Setting for CamStateSetting3d {
-	type Type = cam3d::CameraSaveData;
-	type Group = ViewSettingsGroup;
-	const NAME: &str = "cam3d_state";
-}

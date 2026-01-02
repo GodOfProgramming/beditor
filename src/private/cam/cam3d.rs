@@ -1,16 +1,57 @@
-use super::{ActiveEditorCamera, EditorCamera, OrbitState, PanState};
+use super::{
+	ActiveEditorCamera, ActiveEditorCameraSetting, CameraInputSystems, CameraSettingsGroup,
+	EditorCamera, OrbitState, OrbitSystems, PanState, PanSystems,
+};
 use crate::{
+	EditorState,
 	private::{EditorInternalQuery, EditorInternalSingle, UserHidden, input::EditorActions, util},
-	settings::{ActiveEditorCameraSetting, CamStateSetting3d},
+	settings::Setting,
 	util::storage::ProjectSettings,
 };
 use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorOptions};
+use derive_new::new;
 use leafwing_input_manager::prelude::ActionState;
+use notify::Notification;
 use serde::{Deserialize, Serialize};
 use transform_gizmo_bevy::GizmoCamera;
 
+pub struct EditorCam3dPlugin;
+
+impl Plugin for EditorCam3dPlugin {
+	fn build(&self, app: &mut App) {
+		app
+			.configure_sets(
+				Update,
+				Cam3dSystems.run_if(in_state(ActiveEditorCamera::Cam3D)),
+			)
+			.add_observer(LookAt::handle)
+			.add_systems(OnEnter(ActiveEditorCamera::Cam3D), enable)
+			.add_systems(OnExit(ActiveEditorCamera::Cam3D), save_settings)
+			.add_systems(OnEnter(EditorState::Exiting), save_settings)
+			.add_systems(
+				Update,
+				(
+					(
+						released_mouse_input_actions,
+						mouse_input_actions,
+						(
+							orbit_system.in_set(OrbitSystems),
+							pan_system.in_set(PanSystems),
+							zoom_system,
+						),
+					)
+						.chain()
+						.in_set(CameraInputSystems::Mouse),
+					movement_system.in_set(CameraInputSystems::Keyboard),
+				)
+					.chain()
+					.in_set(Cam3dSystems),
+			);
+	}
+}
+
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub struct Cam3dSystems;
+struct Cam3dSystems;
 
 #[derive(Component, Default)]
 #[require(
@@ -20,9 +61,71 @@ pub struct Cam3dSystems;
   CameraSettings,
   GizmoCamera = GizmoCamera,
 )]
-pub struct EditorCamera3d;
+struct EditorCamera3d;
 
-pub fn enable(mut commands: Commands, mut settings: ProjectSettings) {
+#[derive(new, EntityEvent)]
+pub struct LookAt(pub Entity);
+
+impl LookAt {
+	fn handle(
+		event: On<Self>,
+		mut commands: Commands,
+		mut q_transforms: EditorInternalQuery<&mut Transform>,
+		q_cams: EditorInternalQuery<Entity, With<EditorCamera>>,
+	) {
+		let entity = event.event_target();
+		let Ok(target) = q_transforms.get(entity).cloned() else {
+			commands.trigger(
+				Notification::warn("Tried to look at entity with no transform").with_context(
+					serde_json::json!({
+						"entity": entity
+					}),
+				),
+			);
+			return;
+		};
+
+		for cam in &q_cams {
+			if let Ok(mut transform) = q_transforms.get_mut(cam) {
+				transform.look_at(target.translation, Vec3::Y);
+			}
+		}
+	}
+}
+
+impl Command for LookAt {
+	fn apply(self, world: &mut World) {
+		world.trigger(self);
+	}
+}
+
+#[derive(Default, Serialize, Deserialize, Clone)]
+pub struct CameraSaveData {
+	settings: CameraSettings,
+	transform: Transform,
+}
+
+#[derive(Component, Reflect, Serialize, Deserialize, Clone)]
+#[require(UserHidden)]
+pub struct CameraSettings {
+	move_speed: f32,
+	orbit_sensitivity: f32,
+	zoom_sensitivity: f32,
+	pan_sensitivity: f32,
+}
+
+impl Default for CameraSettings {
+	fn default() -> Self {
+		CameraSettings {
+			move_speed: 10.0,
+			orbit_sensitivity: 0.05,
+			zoom_sensitivity: 5.0,
+			pan_sensitivity: 0.2,
+		}
+	}
+}
+
+fn enable(mut commands: Commands, mut settings: ProjectSettings) {
 	info!("Using 3D Camera");
 
 	settings
@@ -42,7 +145,7 @@ pub fn enable(mut commands: Commands, mut settings: ProjectSettings) {
 	));
 }
 
-pub fn save_settings(
+fn save_settings(
 	mut settings: ProjectSettings,
 	q_cam: EditorInternalQuery<(&Transform, &CameraSettings), With<EditorCamera3d>>,
 ) -> Result {
@@ -59,7 +162,7 @@ pub fn save_settings(
 	Ok(())
 }
 
-pub(super) fn mouse_input_actions(
+fn mouse_input_actions(
 	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	mut q_cursors: Query<&mut CursorOptions>,
 	mut orbit_state: ResMut<NextState<OrbitState>>,
@@ -85,7 +188,7 @@ pub(super) fn mouse_input_actions(
 	}
 }
 
-pub(super) fn released_mouse_input_actions(
+fn released_mouse_input_actions(
 	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	mut q_cursors: Query<&mut CursorOptions>,
 	mut orbit_state: ResMut<NextState<OrbitState>>,
@@ -113,7 +216,7 @@ pub(super) fn released_mouse_input_actions(
 	}
 }
 
-pub fn movement_system(
+fn movement_system(
 	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
 	time: Res<Time>,
@@ -149,7 +252,7 @@ pub fn movement_system(
 	}
 }
 
-pub fn orbit_system(
+fn orbit_system(
 	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
 	mut mouse_motion: MessageReader<MouseMotion>,
 	time: Res<Time>,
@@ -175,7 +278,7 @@ pub fn orbit_system(
 	transform.rotation = transform.rotation.normalize();
 }
 
-pub fn pan_system(
+fn pan_system(
 	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Transform), With<EditorCamera3d>>,
 	mut mouse_motion: MessageReader<MouseMotion>,
 	time: Res<Time>,
@@ -196,7 +299,7 @@ pub fn pan_system(
 	cam_transform.translation -= vertical;
 }
 
-pub fn zoom_system(
+fn zoom_system(
 	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Projection), With<EditorCamera3d>>,
 	time: Res<Time>,
@@ -221,28 +324,12 @@ pub fn zoom_system(
 	}
 }
 
-#[derive(Default, Serialize, Deserialize, Clone)]
-pub struct CameraSaveData {
-	settings: CameraSettings,
-	transform: Transform,
-}
+/* Camera Settings */
 
-#[derive(Component, Reflect, Serialize, Deserialize, Clone)]
-#[require(UserHidden)]
-pub struct CameraSettings {
-	move_speed: f32,
-	orbit_sensitivity: f32,
-	zoom_sensitivity: f32,
-	pan_sensitivity: f32,
-}
+pub struct CamStateSetting3d;
 
-impl Default for CameraSettings {
-	fn default() -> Self {
-		CameraSettings {
-			move_speed: 10.0,
-			orbit_sensitivity: 0.05,
-			zoom_sensitivity: 5.0,
-			pan_sensitivity: 0.2,
-		}
-	}
+impl Setting for CamStateSetting3d {
+	type Type = CameraSaveData;
+	type Group = CameraSettingsGroup;
+	const NAME: &str = "cam3d_state";
 }

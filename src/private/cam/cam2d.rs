@@ -1,7 +1,11 @@
-use super::{ActiveEditorCamera, EditorCamera, EditorManagedCamera, PanState};
+use super::{
+	ActiveEditorCamera, ActiveEditorCameraSetting, CameraInputSystems, CameraSettingsGroup,
+	EditorCamera, EditorManagedCamera, PanState, PanSystems,
+};
 use crate::{
+	EditorState,
 	private::{EditorInternalQuery, EditorInternalSingle, UserHidden, input::EditorActions, util},
-	settings::{ActiveEditorCameraSetting, CamStateSetting2d},
+	settings::Setting,
 	util::storage::ProjectSettings,
 };
 use bevy::{
@@ -12,14 +16,75 @@ use bevy::{
 use leafwing_input_manager::prelude::*;
 use serde::{Deserialize, Serialize};
 
+pub struct EditorCam2dPlugin;
+
+impl Plugin for EditorCam2dPlugin {
+	fn build(&self, app: &mut App) {
+		app
+			.configure_sets(
+				Update,
+				Cam2dSystems.run_if(in_state(ActiveEditorCamera::Cam2D)),
+			)
+			.add_systems(OnEnter(ActiveEditorCamera::Cam2D), enable)
+			.add_systems(OnExit(ActiveEditorCamera::Cam2D), save_settings)
+			.add_systems(OnEnter(EditorState::Exiting), save_settings)
+			.add_systems(
+				Update,
+				(
+					(
+						released_mouse_input_actions,
+						mouse_input_actions,
+						(pan_system.in_set(PanSystems), zoom_system),
+					)
+						.chain()
+						.in_set(CameraInputSystems::Mouse),
+					movement_system.in_set(CameraInputSystems::Keyboard),
+				)
+					.chain()
+					.in_set(Cam2dSystems),
+			);
+	}
+}
+
 #[derive(SystemSet, Hash, PartialEq, Eq, Clone, Debug)]
-pub struct Cam2dSystems;
+struct Cam2dSystems;
 
 #[derive(Component, Default)]
 #[require(EditorCamera, UserHidden, Camera2d, CameraSettings)]
-pub struct EditorCamera2d;
+struct EditorCamera2d;
 
-pub fn enable(mut commands: Commands, mut settings: ProjectSettings) {
+#[derive(Default, Serialize, Deserialize, Clone)]
+pub struct CameraSaveData {
+	settings: CameraSettings,
+	transform: Transform,
+	orthographic_scale: Option<f32>,
+}
+
+#[derive(Component, Reflect, Serialize, Deserialize, Clone)]
+#[require(UserHidden)]
+struct CameraSettings {
+	move_speed: f32,
+	zoom_sensitivity: f32,
+	pan_sensitivity: f32,
+}
+
+impl Default for CameraSettings {
+	fn default() -> Self {
+		CameraSettings {
+			move_speed: 128.0,
+			zoom_sensitivity: 10.0,
+			pan_sensitivity: 1.0,
+		}
+	}
+}
+
+#[derive(Default, Component, Reflect, Serialize, Deserialize, Clone)]
+#[require(UserHidden)]
+struct CameraState {
+	pan_viewport_start: Option<Vec2>,
+}
+
+fn enable(mut commands: Commands, mut settings: ProjectSettings) {
 	info!("Using 2D Camera");
 
 	settings
@@ -48,7 +113,7 @@ pub fn enable(mut commands: Commands, mut settings: ProjectSettings) {
 	));
 }
 
-pub fn save_settings(
+fn save_settings(
 	mut settings: ProjectSettings,
 	q_cam: EditorInternalQuery<(&Transform, &CameraSettings, &Projection), With<EditorCamera2d>>,
 ) -> Result {
@@ -68,7 +133,7 @@ pub fn save_settings(
 	Ok(())
 }
 
-pub(super) fn mouse_input_actions(
+fn mouse_input_actions(
 	mut commands: Commands,
 	mut q_cam_states: EditorInternalQuery<&mut CameraState, With<EditorCamera2d>>,
 	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
@@ -89,7 +154,7 @@ pub(super) fn mouse_input_actions(
 	}
 }
 
-pub(super) fn released_mouse_input_actions(
+fn released_mouse_input_actions(
 	mut commands: Commands,
 	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	primary_window: Single<Entity, With<PrimaryWindow>>,
@@ -104,7 +169,7 @@ pub(super) fn released_mouse_input_actions(
 	}
 }
 
-pub fn movement_system(
+fn movement_system(
 	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Transform), With<EditorCamera2d>>,
 	time: Res<Time>,
@@ -139,7 +204,7 @@ pub fn movement_system(
 	}
 }
 
-pub fn zoom_system(
+fn zoom_system(
 	q_action_states: EditorInternalQuery<&ActionState<EditorActions>>,
 	mut editor_camera: EditorInternalSingle<(&CameraSettings, &mut Projection), With<EditorCamera2d>>,
 	time: Res<Time>,
@@ -160,7 +225,7 @@ pub fn zoom_system(
 	}
 }
 
-pub fn pan_system(
+fn pan_system(
 	mut camera: EditorInternalSingle<
 		(
 			&Camera,
@@ -208,33 +273,12 @@ pub fn pan_system(
 	transform.translation.y += delta.y;
 }
 
-#[derive(Default, Serialize, Deserialize, Clone)]
-pub struct CameraSaveData {
-	settings: CameraSettings,
-	transform: Transform,
-	orthographic_scale: Option<f32>,
-}
+/* Camera Settings */
 
-#[derive(Component, Reflect, Serialize, Deserialize, Clone)]
-#[require(UserHidden)]
-pub struct CameraSettings {
-	move_speed: f32,
-	zoom_sensitivity: f32,
-	pan_sensitivity: f32,
-}
+pub struct CamStateSetting2d;
 
-impl Default for CameraSettings {
-	fn default() -> Self {
-		CameraSettings {
-			move_speed: 128.0,
-			zoom_sensitivity: 10.0,
-			pan_sensitivity: 1.0,
-		}
-	}
-}
-
-#[derive(Default, Component, Reflect, Serialize, Deserialize, Clone)]
-#[require(UserHidden)]
-pub struct CameraState {
-	pan_viewport_start: Option<Vec2>,
+impl Setting for CamStateSetting2d {
+	type Type = CameraSaveData;
+	type Group = CameraSettingsGroup;
+	const NAME: &str = "cam2d_state";
 }

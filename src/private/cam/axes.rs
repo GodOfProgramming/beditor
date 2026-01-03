@@ -1,7 +1,7 @@
 // inspired by https://github.com/maximsnoep/bevy-axes-gizmo
 
 use super::{EDITOR_AXIS_RENDER_LAYER, EditorCamera};
-use crate::private::{EditorInternalSingle, UserHidden};
+use crate::private::{EditorInternalQuery, EditorInternalSingle, UserHidden};
 use bevy::{
 	camera::visibility::RenderLayers, prelude::*, render::render_resource::TextureFormat,
 	ui::FocusPolicy,
@@ -76,8 +76,13 @@ fn on_new_editor_camera(
 	event: On<Add, EditorCamera>,
 	mut commands: Commands,
 	mut images: ResMut<Assets<Image>>,
+	q_has_2d: EditorInternalQuery<Has<Camera2d>>,
 ) {
 	let editor_camera = event.event_target();
+
+	let Ok(is_2d) = q_has_2d.get(editor_camera) else {
+		return;
+	};
 
 	// Create the texture
 	let handle = images.add(Image::new_target_texture(
@@ -108,12 +113,17 @@ fn on_new_editor_camera(
 		},
 	));
 
-	// Spawn the camera
-	commands.spawn((
+	if is_2d {
+		commands.spawn(Camera2d)
+	} else {
+		commands.spawn((
+			Camera3d::default(),
+			Projection::Orthographic(OrthographicProjection::default_3d()),
+		))
+	}
+	.insert((
 		Name::new("Axes Gizmo Camera"),
-		Camera3d::default(),
 		AxesGizmoCamera,
-		Projection::Orthographic(OrthographicProjection::default_3d()),
 		Camera {
 			target: handle.into(),
 			clear_color: ClearColorConfig::Custom(Color::NONE),

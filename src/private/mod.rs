@@ -18,6 +18,7 @@ use bevy::{
 	window::{CursorOptions, PrimaryWindow, WindowCloseRequested},
 	winit::WINIT_WINDOWS,
 };
+use bevy_infinite_grid::InfiniteGridBundle;
 
 pub struct InternalPlugin;
 
@@ -129,7 +130,14 @@ fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 }
 
 fn spawn_scene(mut commands: Commands) {
-	commands.spawn(EditorScene);
+	commands.spawn((
+		EditorScene,
+		Children::spawn(Spawn((
+			UserHidden,
+			Name::new("Infinite Grid"),
+			InfiniteGridBundle::default(),
+		))),
+	));
 }
 
 fn configure_windows(

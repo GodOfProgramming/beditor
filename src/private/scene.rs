@@ -1,17 +1,14 @@
 use crate::{
 	EditorState, SimulationState,
-	private::{
-		EditorInternalQuery, EditorOwned, EditorScene, Simulated, UserHidden, ui::InspectorSelection,
-	},
+	private::{EditorOwned, Simulated, UserHidden, ui::InspectorSelection},
 	util::one_of,
 };
 use bevy::{
 	ecs::{entity::EntityHashSet, entity_disabling::Disabled},
 	prelude::*,
-	scene::SceneInstance,
 	utils::TypeIdMap,
 };
-use bevy_infinite_grid::{InfiniteGrid, InfiniteGridBundle};
+use bevy_infinite_grid::InfiniteGrid;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 use std::any::TypeId;
@@ -22,7 +19,7 @@ impl Plugin for EditorScenePlugin {
 	fn build(&self, app: &mut App) {
 		app
 			.init_resource::<RelationshipRegistry>()
-			.add_observer(one_of::<PrimaryScene>)
+			.add_observer(one_of::<UserScene>)
 			.add_systems(Startup, startup)
 			.add_systems(
 				OnEnter(EditorState::Editing),
@@ -37,26 +34,27 @@ impl Plugin for EditorScenePlugin {
 #[derive(Component, Reflect, Default, Clone, Copy)]
 #[require(SceneRoot, Name = Name::new("Scene"))]
 #[reflect(Clone, Default)]
-pub struct PrimaryScene;
+pub struct UserScene;
 
 fn startup(mut commands: Commands) {
-	commands.spawn(PrimaryScene);
+	commands.spawn(UserScene);
 }
 
-fn show_infinite_grid(mut commands: Commands) {
-	commands.spawn((
-		UserHidden,
-		Name::new("Infinite Grid"),
-		InfiniteGridBundle::default(),
-	));
+fn show_infinite_grid(
+	mut commands: Commands,
+	q_grids: Query<Entity, (With<InfiniteGrid>, With<UserHidden>, Allow<Disabled>)>,
+) {
+	for entity in &q_grids {
+		commands.entity(entity).remove::<Disabled>();
+	}
 }
 
 fn remove_infinite_grid(
 	mut commands: Commands,
-	q_grids: EditorInternalQuery<Entity, With<InfiniteGrid>>,
+	q_grids: Query<Entity, (With<InfiniteGrid>, With<UserHidden>)>,
 ) {
 	for entity in &q_grids {
-		commands.entity(entity).despawn();
+		commands.entity(entity).insert(Disabled);
 	}
 }
 

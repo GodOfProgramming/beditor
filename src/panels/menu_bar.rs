@@ -1,7 +1,7 @@
 use crate::{
 	EditorState, SimulationState,
 	panels::settings::{EditorSettingsUi, ProjectSettingsUi},
-	private::{EditorInternalQuery, scene::PrimaryScene},
+	private::{EditorInternalQuery, scene::UserScene},
 	ui::{OpenMode, OpenUi},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -38,7 +38,7 @@ pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 fn file_menu(ui: &mut egui::Ui, params: &mut Params) {
 	ui.menu_button("File", |ui| {
 		if ui.button("New Scene").clicked() {
-			params.commands.spawn(PrimaryScene);
+			params.commands.spawn(UserScene);
 		}
 
 		if ui.button("Test").clicked() {

@@ -12,7 +12,7 @@ use crate::{
 		egui::{
 			add_button, down_button, maybe_grid, maybe_grid_label_if, remove_button, show_docs, up_button,
 		},
-		entity, or,
+		entity,
 		world::{ImmutableWorldView, MutableWorldView, RestrictedWorldView},
 	},
 };
@@ -33,6 +33,7 @@ use std::{
 	borrow::{Borrow, Cow},
 	cell::RefCell,
 	marker::PhantomData,
+	ops::BitOr,
 };
 
 pub trait ProjectorReflect: Fn(&mut dyn PartialReflect) -> &mut dyn PartialReflect {}
@@ -707,7 +708,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					ui.end_row();
 					changed
 				})
-				.fold(false, or)
+				.fold(false, BitOr::bitor)
 		}) else {
 			return false;
 		};
@@ -747,7 +748,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					ui.end_row();
 					changed
 				})
-				.fold(false, or)
+				.fold(false, BitOr::bitor)
 		}) else {
 			return false;
 		};
@@ -778,7 +779,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					ui.end_row();
 					changed
 				})
-				.fold(false, or)
+				.fold(false, BitOr::bitor)
 		}) else {
 			return false;
 		};
@@ -818,7 +819,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 					ui.end_row();
 					changed
 				})
-				.fold(false, or)
+				.fold(false, BitOr::bitor)
 		}) else {
 			return false;
 		};
@@ -1398,7 +1399,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 						ui.end_row();
 						changed
 					})
-					.fold(false, or)
+					.fold(false, BitOr::bitor)
 			})
 			.map(|r| r.inner)
 			.unwrap_or(false);
@@ -1492,7 +1493,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 								)
 							})
 							.map(handle)
-							.fold(false, or),
+							.fold(false, BitOr::bitor),
 						VariantInfo::Tuple(info) => info
 							.iter()
 							.enumerate()
@@ -1505,7 +1506,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 								)
 							})
 							.map(handle)
-							.fold(false, or),
+							.fold(false, BitOr::bitor),
 						VariantInfo::Unit(_) => false,
 					}
 				})

@@ -10,7 +10,7 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalSingle, UserHidden,
 		cam::{ActiveEditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
-		scene,
+		scene::{self, ShowSceneEditor},
 		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
@@ -121,49 +121,59 @@ impl HierarchyUi {
 
 					let mut entity_ref = world.entity_mut(entity);
 
-					if entity_ref.contains::<Transform>() {
-						if camera_state == ActiveEditorCamera::Cam3D && ui.button("Look At").clicked() {
-							queue.push(LookAt(entity_ref.id()));
+					ui.menu_button("Movement", |ui| {
+						if entity_ref.contains::<Transform>() {
+							if camera_state == ActiveEditorCamera::Cam3D && ui.button("Look At").clicked() {
+								queue.push(LookAt(entity_ref.id()));
+							}
+
+							if ui.button("Move To").clicked() {
+								queue.push(MoveTo(entity_ref.id()));
+							}
 						}
+					});
 
-						if ui.button("Move To").clicked() {
-							queue.push(MoveTo(entity_ref.id()));
-						}
-					}
+					ui.menu_button("Camera", |ui| {
+						if let Some(camera) = entity_ref.get::<Camera>()
+							&& let Some(image) = camera.target.as_image()
+						{
+							if entity_ref.contains::<EditorManagedCamera>() {
+								if ui.button("Open Live").clicked() {
+									queue.push(OpenUi::open_with(
+										OpenMode::Window,
+										CameraViewUi::new(entity),
+									));
+								}
+							} else if ui.button("Add To Editor").clicked() {
+								queue.push(move |world: &mut World| {
+									world
+										.entity_mut(entity)
+										.insert(EditorManagedCamera::default());
+								});
+							}
 
-					if entity_ref.get::<ChildOf>().is_some() && ui.button("Make Orphan").clicked() {
-						entity_ref.remove::<ChildOf>();
-					}
-
-					if let Some(camera) = entity_ref.get::<Camera>()
-						&& let Some(image) = camera.target.as_image()
-					{
-						if entity_ref.contains::<EditorManagedCamera>() {
-							if ui.button("Open Live").clicked() {
+							if ui.button("Observe").clicked() {
 								queue.push(OpenUi::open_with(
 									OpenMode::Window,
-									CameraViewUi::new(entity),
+									ImageViewerUi::new(image.id()),
 								));
 							}
-						} else if ui.button("Add To Editor").clicked() {
-							queue.push(move |world: &mut World| {
-								world
-									.entity_mut(entity)
-									.insert(EditorManagedCamera::default());
-							});
+						}
+					});
+
+					ui.menu_button("Scene", |ui| {
+						if entity_ref.contains::<ChildOf>() && ui.button("Make Orphan").clicked() {
+							entity_ref.remove::<ChildOf>();
 						}
 
-						if ui.button("Observe").clicked() {
-							queue.push(OpenUi::open_with(
-								OpenMode::Window,
-								ImageViewerUi::new(image.id()),
-							));
+						if ui.button("Reparent").clicked() {
+							queue.push(ReparentMessage(entity));
 						}
-					}
-				}
 
-				if ui.button("Reparent").clicked() {
-					world.write_message(ReparentMessage(entity));
+						if entity_ref.contains::<SceneRoot>() && ui.button("Edit Scene").clicked() {
+							queue.push(ShowSceneEditor::new(entity));
+						}
+					});
 				}
 
 				let state = world
@@ -221,6 +231,12 @@ impl ReparentMessage {
 				*selection = InspectorSelection::Entities(entities)
 			}
 		}
+	}
+}
+
+impl Command for ReparentMessage {
+	fn apply(self, world: &mut World) -> () {
+		world.write_message(self);
 	}
 }
 

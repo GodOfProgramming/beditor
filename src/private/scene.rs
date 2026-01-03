@@ -1,6 +1,10 @@
 use crate::{
 	EditorState, SimulationState,
-	private::{EditorOwned, Simulated, UserHidden, ui::InspectorSelection},
+	private::{
+		EditorInternalSingle, EditorOwned, Simulated, UserHidden,
+		reflection::{TypeNameDisplayCache, TypeNameDisplayInfo},
+		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
+	},
 	util::one_of,
 };
 use bevy::{
@@ -8,7 +12,9 @@ use bevy::{
 	prelude::*,
 	utils::TypeIdMap,
 };
+use bevy_egui::EguiContext;
 use bevy_infinite_grid::InfiniteGrid;
+use derive_new::new;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 use std::any::TypeId;
@@ -18,6 +24,7 @@ pub struct EditorScenePlugin;
 impl Plugin for EditorScenePlugin {
 	fn build(&self, app: &mut App) {
 		app
+			.add_message::<ShowSceneEditor>()
 			.init_resource::<RelationshipRegistry>()
 			.add_observer(one_of::<UserScene>)
 			.add_systems(Startup, startup)
@@ -27,7 +34,8 @@ impl Plugin for EditorScenePlugin {
 			)
 			.add_systems(OnExit(EditorState::Editing), remove_infinite_grid)
 			.add_systems(OnEnter(EditorState::SimulationPrep), on_sim_prep)
-			.add_systems(First, mark_entities);
+			.add_systems(First, mark_entities)
+			.add_systems(EditorUiEguiContextPass, show_scene_editing_modal);
 	}
 }
 
@@ -126,6 +134,55 @@ fn restore_scene(
 			});
 		}
 	}
+}
+
+#[derive(new, Message)]
+pub struct ShowSceneEditor(Entity);
+
+impl Command for ShowSceneEditor {
+	fn apply(self, world: &mut World) {
+		world.write_message(self);
+	}
+}
+
+fn show_scene_editing_modal(
+	mut messages: MessageReader<ShowSceneEditor>,
+	mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
+	mut show_popup: Local<bool>,
+	mut list: Local<widgets::SelectableList<widgets::MultiSelect<TypeNameDisplayInfo>>>,
+	type_name_cache: Res<TypeNameDisplayCache>,
+) {
+	*show_popup |= !messages.is_empty();
+
+	messages.clear();
+
+	if !*show_popup {
+		return;
+	}
+
+	let ctx = contexts.get_mut();
+
+	egui::Modal::new(egui::Id::new("beditor-scene-modal")).show(ctx, |ui| {
+		widgets::DualVScrollArea::new(ui.id(), (ui.available_width() * 0.1).min(100.0)).show(
+			ui,
+			|ui| {
+				ui.label("Placeholder");
+			},
+			|ui| {
+				ui.heading("Select Scene Components");
+
+				ui.separator();
+
+				list.ui(ui, type_name_cache.as_slice());
+			},
+		);
+
+		ui.separator();
+
+		if ui.button("Close").clicked() {
+			*show_popup = false;
+		}
+	});
 }
 
 ////////////////////////////////////////////////////////////////////////////////

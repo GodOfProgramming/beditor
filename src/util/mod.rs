@@ -34,11 +34,6 @@ pub fn pretty_type_name_str(val: &str) -> String {
 	format!("{:?}", disqualified::ShortName(val))
 }
 
-// Replace this when || becomes an operator
-pub fn or(a: bool, b: bool) -> bool {
-	a || b
-}
-
 pub fn one_of<C: Component>(
 	event: On<Add, C>,
 	mut commands: Commands,

@@ -14,6 +14,7 @@ use egui_file_dialog::{DialogState, FileDialog};
 use parking_lot::Mutex;
 use std::{cell::RefCell, io::Write, path::PathBuf, sync::Arc};
 use uuid::{Uuid, uuid};
+use widgets::SingleSelect;
 
 #[derive(Default)]
 pub struct TypeEditorUiExtension;
@@ -167,7 +168,7 @@ struct TypeEditorState {
 
 	file_dialog: FileDialog,
 
-	type_list: widgets::SelectableList<CachedType>,
+	type_list: widgets::SelectableList<SingleSelect<CachedType>>,
 	type_filter: String,
 	type_list_cache: Vec<CachedType>,
 
@@ -284,36 +285,49 @@ fn show_dialogs(
 					.collect();
 			}
 
-			if let Some(inner_response) = type_list.ui(ui, type_list_cache) {
-				let Some(type_info) = type_list.selected().and_then(|selected| {
-					cache
-						.iter()
-						.find(|t| selected.type_info.type_id() == t.type_id())
-				}) else {
-					warn!("Logic error indexing default cache");
-					return None;
-				};
+			let mut output = None;
 
-				let type_registry = app_type_registry.read();
+			ui.scope_builder(
+				egui::UiBuilder::new().max_rect(ui.clip_rect() / 2.0),
+				|ui| {
+					if let Some(inner_response) = type_list.ui(ui, type_list_cache) {
+						let Some(type_info) = type_list.selected().as_ref().and_then(|selected| {
+							cache
+								.iter()
+								.find(|t| selected.type_info.type_id() == t.type_id())
+						}) else {
+							warn!("Logic error indexing default cache");
+							return;
+						};
 
-				let Some(type_registration) = type_registry.get(type_info.type_id()) else {
-					warn!("Logic error indexing a type id that previously existed");
-					return None;
-				};
+						let type_registry = app_type_registry.read();
 
-				let Some(reflect_default) = type_registration.data::<ReflectDefault>() else {
-					warn!("Logic error accessing reflect default for a type that had reflect default");
-					return None;
-				};
+						let Some(type_registration) = type_registry.get(type_info.type_id()) else {
+							warn!("Logic error indexing a type id that previously existed");
+							return;
+						};
 
-				if inner_response.response.clicked() {
-					*open = false;
-				}
+						let Some(reflect_default) = type_registration.data::<ReflectDefault>() else {
+							warn!("Logic error accessing reflect default for a type that had reflect default");
+							return;
+						};
 
-				Some(reflect_default.default())
-			} else {
-				None
+						if inner_response.response.clicked() {
+							*open = false;
+						}
+
+						output = Some(reflect_default.default());
+					}
+				},
+			);
+
+			ui.separator();
+
+			if ui.button("Close").clicked() {
+				*open = false;
 			}
+
+			output
 		});
 
 		// this might be the dumbest thing I ever wrote

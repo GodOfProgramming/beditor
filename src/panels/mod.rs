@@ -286,7 +286,10 @@ fn ui_for_entry<T>(
 fn ui_for_dir(ui: &mut egui::Ui, size: egui::Vec2, label: &str, id: egui::Id) -> bool {
 	widgets::Card::new(size)
 		.with_label(label)
-		.show(ui, |ui| widgets::Dir::ui(ui, id))
+		.show(ui, |ui| {
+			ui.label(egui_phosphor_icons::icons::FOLDER.regular());
+			ui.interact(ui.min_rect(), id, egui::Sense::click())
+		})
 		.inner
 		.on_hover_cursor(egui::CursorIcon::PointingHand)
 		.double_clicked()

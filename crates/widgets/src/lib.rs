@@ -1,3 +1,6 @@
+use std::{collections::HashSet, hash::Hash};
+
+use egui::scroll_area::ScrollAreaOutput;
 use itertools::Itertools;
 
 pub struct Dialog {
@@ -148,62 +151,175 @@ pub fn horizontal_list<I, T>(
 	}
 }
 
-pub struct SelectableList<T>
-where
-	T: Eq + Clone + AsRef<str>,
-{
-	selected: Option<T>,
+pub struct SelectableList<S> {
+	selector: S,
 }
 
-impl<T> Default for SelectableList<T>
+impl<S> Default for SelectableList<S>
 where
-	T: Eq + Clone + AsRef<str>,
+	S: Selector,
 {
 	fn default() -> Self {
-		Self { selected: None }
+		Self {
+			selector: Default::default(),
+		}
 	}
 }
 
-impl<T> SelectableList<T>
+impl<S> SelectableList<S>
 where
-	T: Eq + Clone + AsRef<str>,
+	S: Selector,
+	S::Item: Clone + AsRef<str>,
 {
-	pub fn selected(&self) -> Option<&T> {
-		self.selected.as_ref()
+	pub fn selected(&self) -> &S::Selected {
+		self.selector.selected()
 	}
 
-	pub fn ui(&mut self, ui: &mut egui::Ui, items: &[T]) -> Option<egui::InnerResponse<usize>> {
+	pub fn ui(&mut self, ui: &mut egui::Ui, items: &[S::Item]) -> Option<egui::InnerResponse<usize>> {
 		let text_style = egui::TextStyle::Body;
 		let row_height = ui.text_style_height(&text_style);
 
 		egui::ScrollArea::both()
 			.auto_shrink([false, false])
 			.show_rows(ui, row_height, items.len(), |ui, range| {
-				let mut value = None;
+				let mut inner_response = None;
 
 				let start = range.start;
 				for (i, item) in items[range].iter().enumerate() {
 					let response = ui.add(
-						egui::Button::selectable(self.selected.as_ref() == Some(item), item.as_ref())
-							.truncate(),
+						egui::Button::selectable(self.selector.is_selected(item), item.as_ref()).truncate(),
 					);
+
 					if response.clicked() {
-						self.selected = Some(item.clone());
-						value = Some(egui::InnerResponse::new(start + i, response));
+						self.selector.on_select(item.clone());
+						inner_response = Some(egui::InnerResponse::new(start + i, response));
 					}
 				}
 
-				value
+				inner_response
 			})
 			.inner
 	}
 }
 
-pub struct Dir;
+pub trait Selector: Default {
+	type Item;
+	type Selected;
 
-impl Dir {
-	pub fn ui(ui: &mut egui::Ui, id: egui::Id) -> egui::Response {
-		ui.label(egui_phosphor_icons::icons::FOLDER.regular());
-		ui.interact(ui.min_rect(), id, egui::Sense::click())
+	fn selected(&self) -> &Self::Selected;
+
+	fn is_selected(&self, other: &Self::Item) -> bool;
+
+	fn on_select(&mut self, other: Self::Item);
+}
+
+pub struct SingleSelect<T> {
+	selected: Option<T>,
+}
+
+impl<T> Default for SingleSelect<T> {
+	fn default() -> Self {
+		Self {
+			selected: Default::default(),
+		}
+	}
+}
+
+impl<T> Selector for SingleSelect<T>
+where
+	T: PartialEq,
+{
+	type Item = T;
+	type Selected = Option<T>;
+
+	fn selected(&self) -> &Self::Selected {
+		&self.selected
+	}
+
+	fn is_selected(&self, other: &Self::Item) -> bool {
+		self.selected.as_ref() == Some(other)
+	}
+
+	fn on_select(&mut self, other: Self::Item) {
+		if self.is_selected(&other) {
+			self.selected = None;
+		} else {
+			self.selected = Some(other);
+		}
+	}
+}
+
+pub struct MultiSelect<T> {
+	selected: HashSet<T>,
+}
+
+impl<T> Default for MultiSelect<T> {
+	fn default() -> Self {
+		Self {
+			selected: Default::default(),
+		}
+	}
+}
+
+impl<T> Selector for MultiSelect<T>
+where
+	T: Eq + Hash,
+{
+	type Item = T;
+	type Selected = HashSet<T>;
+
+	fn selected(&self) -> &Self::Selected {
+		&self.selected
+	}
+
+	fn is_selected(&self, other: &Self::Item) -> bool {
+		self.selected.contains(other)
+	}
+
+	fn on_select(&mut self, other: Self::Item) {
+		if self.is_selected(&other) {
+			self.selected.remove(&other);
+		} else {
+			self.selected.insert(other);
+		}
+	}
+}
+
+pub struct DualVScrollArea {
+	id: egui::Id,
+	split_at: f32,
+}
+
+impl DualVScrollArea {
+	pub fn new(id: egui::Id, split_at: f32) -> Self {
+		Self { id, split_at }
+	}
+
+	pub fn show<L, R>(
+		&self,
+		ui: &mut egui::Ui,
+		left: impl FnOnce(&mut egui::Ui) -> L,
+		right: impl FnOnce(&mut egui::Ui) -> R,
+	) -> egui::InnerResponse<(ScrollAreaOutput<L>, ScrollAreaOutput<R>)> {
+		ui.allocate_ui_with_layout(
+			ui.available_size(),
+			egui::Layout::left_to_right(egui::Align::Center),
+			|ui| {
+				let left = egui::ScrollArea::vertical()
+					.max_width(self.split_at)
+					.auto_shrink([false; 2])
+					.id_salt(self.id.with("dual-scroll-left"))
+					.show(ui, |ui| ui.vertical(|ui| (left)(ui)).inner);
+
+				ui.separator();
+
+				let right = egui::ScrollArea::vertical()
+					.auto_shrink([true, false])
+					.id_salt(self.id.with("dual-scroll-right"))
+					.show(ui, |ui| ui.vertical(|ui| (right)(ui)).inner);
+
+				(left, right)
+			},
+		)
 	}
 }

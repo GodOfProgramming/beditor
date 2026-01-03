@@ -6,14 +6,15 @@ use crate::{
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContextSettings;
+use convert_case::{Case, Casing};
 use egui::Widget;
 use egui_phosphor_icons::icons;
 use itertools::Itertools;
 use notify::Notification;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
-use strum::IntoEnumIterator;
-use strum_macros::{Display, EnumIter};
+use strum::VariantArray;
+use strum_macros::{Display, VariantArray};
 use uuid::uuid;
 
 #[derive(Default)]
@@ -36,7 +37,13 @@ pub struct EditorSettingsUi {
 }
 
 #[derive(SystemParam)]
-pub struct EditorSettingsUiParams<'w, 's> {
+pub struct Params<'w, 's> {
+	category_list: Local<'s, widgets::CategoryMenu<EditorSettingCategory>>,
+	category_params: CategoryParams<'w, 's>,
+}
+
+#[derive(SystemParam)]
+pub struct CategoryParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	editor_settings: ResMut<'w, EditorSettings>,
 	global_settings: GlobalEditorSettings<'w, 's>,
@@ -53,25 +60,27 @@ impl EditorUi for EditorSettingsUi {
 
 	const SCROLL_BARS: [bool; 2] = [true, true];
 
-	type Params<'w, 's> = EditorSettingsUiParams<'w, 's>;
+	type Params<'w, 's> = Params<'w, 's>;
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		default()
 	}
 
-	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
-		let selected = super::settings_display(
-			ui,
-			self.selected_category,
-			EditorSettingCategory::iter(),
-			|ui| {
-				if let Some(category) = self.selected_category {
-					category.ui(ui, &mut params);
-				} else {
-					ui.label("Select a category");
-				}
-			},
-		);
+	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
+		let Params {
+			mut category_list,
+			category_params,
+		} = params;
+
+		let list = EditorSettingCategory::VARIANTS;
+
+		let selected = category_list.ui(ui, list, |ui| {
+			if let Some(category) = self.selected_category {
+				category.ui(ui, category_params);
+			} else {
+				ui.label("Select a category");
+			}
+		});
 
 		if selected.is_some() {
 			self.selected_category = selected;
@@ -102,11 +111,23 @@ impl FromWorld for EditorSettings {
 	}
 }
 
-#[derive(Reflect, Clone, Copy, EnumIter, Display, PartialEq, Eq)]
+#[derive(Reflect, Clone, Copy, Display, PartialEq, Eq, VariantArray)]
 enum EditorSettingCategory {
 	Appearance,
 
 	AdvancedOptions,
+}
+
+impl From<EditorSettingCategory> for egui::WidgetText {
+	fn from(value: EditorSettingCategory) -> Self {
+		Self::Text(value.to_string().to_case(Case::Title))
+	}
+}
+
+impl From<&EditorSettingCategory> for egui::WidgetText {
+	fn from(value: &EditorSettingCategory) -> Self {
+		Self::Text(value.to_string().to_case(Case::Title))
+	}
 }
 
 #[derive(Default)]
@@ -116,18 +137,18 @@ struct AppearanceSettings {
 }
 
 impl AppearanceSettings {
-	fn ui(ui: &mut egui::Ui, params: &mut EditorSettingsUiParams) {
-		let EditorSettingsUiParams {
-			commands,
-			editor_settings,
-			global_settings,
-			context_settings,
+	fn ui(ui: &mut egui::Ui, params: CategoryParams) {
+		let CategoryParams {
+			mut commands,
+			mut editor_settings,
+			mut global_settings,
+			mut context_settings,
 		} = params;
 
 		let EditorSettings {
 			appearance_settings: this,
 			..
-		} = &mut **editor_settings;
+		} = &mut *editor_settings;
 
 		if let Some(context_settings) = context_settings.as_deref_mut() {
 			ui.horizontal(|ui| {
@@ -249,7 +270,7 @@ impl AdvancedOptions {
 }
 
 impl EditorSettingCategory {
-	fn ui(self, ui: &mut egui::Ui, params: &mut EditorSettingsUiParams) {
+	fn ui(self, ui: &mut egui::Ui, params: CategoryParams) {
 		match self {
 			Self::Appearance => AppearanceSettings::ui(ui, params),
 			Self::AdvancedOptions => AdvancedOptions::ui(ui),

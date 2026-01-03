@@ -14,17 +14,20 @@ use bevy::{
 };
 use bevy_egui::EguiContext;
 use bevy_infinite_grid::InfiniteGrid;
+use convert_case::{Case, Casing};
 use derive_new::new;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 use std::any::TypeId;
+use strum::VariantArray;
+use strum_macros::{Display, VariantArray};
 
 pub struct EditorScenePlugin;
 
 impl Plugin for EditorScenePlugin {
 	fn build(&self, app: &mut App) {
 		app
-			.add_message::<ShowSceneEditor>()
+			.add_message::<ShowSceneSettings>()
 			.init_resource::<RelationshipRegistry>()
 			.add_observer(one_of::<UserScene>)
 			.add_systems(Startup, startup)
@@ -137,20 +140,38 @@ fn restore_scene(
 }
 
 #[derive(new, Message)]
-pub struct ShowSceneEditor(Entity);
+pub struct ShowSceneSettings(Entity);
 
-impl Command for ShowSceneEditor {
+impl Command for ShowSceneSettings {
 	fn apply(self, world: &mut World) {
 		world.write_message(self);
 	}
 }
 
+#[derive(Reflect, Clone, Copy, Display, PartialEq, Eq, VariantArray)]
+enum SceneSettings {
+	SavableComponents,
+}
+
+impl From<SceneSettings> for egui::WidgetText {
+	fn from(value: SceneSettings) -> Self {
+		Self::Text(value.to_string().to_case(Case::Title))
+	}
+}
+
+impl From<&SceneSettings> for egui::WidgetText {
+	fn from(value: &SceneSettings) -> Self {
+		Self::Text(value.to_string().to_case(Case::Title))
+	}
+}
+
 fn show_scene_editing_modal(
-	mut messages: MessageReader<ShowSceneEditor>,
+	mut messages: MessageReader<ShowSceneSettings>,
 	mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
 	mut show_popup: Local<bool>,
-	mut list: Local<widgets::SelectableList<widgets::MultiSelect<TypeNameDisplayInfo>>>,
 	type_name_cache: Res<TypeNameDisplayCache>,
+	mut menu: Local<widgets::CategoryMenu<SceneSettings>>,
+	mut type_name_list: Local<widgets::SelectableList<widgets::MultiSelect<TypeNameDisplayInfo>>>,
 ) {
 	*show_popup |= !messages.is_empty();
 
@@ -162,20 +183,18 @@ fn show_scene_editing_modal(
 
 	let ctx = contexts.get_mut();
 
-	egui::Modal::new(egui::Id::new("beditor-scene-modal")).show(ctx, |ui| {
-		widgets::DualVScrollArea::new(ui.id(), (ui.available_width() * 0.1).min(100.0)).show(
-			ui,
-			|ui| {
-				ui.label("Placeholder");
-			},
-			|ui| {
-				ui.heading("Select Scene Components");
+	let id = egui::Id::new("beditor-scene-modal");
 
-				ui.separator();
+	let response = widgets::MenuModal::new(id).show(ctx, |ui| {
+		let list = SceneSettings::VARIANTS;
 
-				list.ui(ui, type_name_cache.as_slice());
-			},
-		);
+		menu.ui(ui, list, |ui| {
+			ui.heading("Select Scene Components");
+
+			ui.separator();
+
+			type_name_list.ui(ui, type_name_cache.as_slice());
+		});
 
 		ui.separator();
 
@@ -183,6 +202,10 @@ fn show_scene_editing_modal(
 			*show_popup = false;
 		}
 	});
+
+	if response.backdrop_response.clicked() {
+		*show_popup = false;
+	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -12,11 +12,12 @@ use crate::{
 	util::storage::ProjectSettings,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
+use convert_case::{Case, Casing};
 use egui::TextBuffer;
 use notify::Notification;
 use persistent_id::PersistentId;
-use strum::IntoEnumIterator;
-use strum_macros::{Display, EnumIter};
+use strum::VariantArray;
+use strum_macros::{Display, VariantArray};
 use uuid::uuid;
 
 #[derive(Default)]
@@ -52,13 +53,19 @@ pub struct ProjectSettingsUi {
 }
 
 #[derive(SystemParam)]
-pub struct ProjectSettingsUiParams<'w, 's> {
+pub struct Params<'w, 's> {
+	commands: Commands<'w, 's>,
+	category_menu: Local<'s, widgets::CategoryMenu<ProjectSettingCategory>>,
+	category_params: CategoryParams<'w, 's>,
+}
+
+#[derive(SystemParam)]
+struct CategoryParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	project_settings: ProjectSettings<'w, 's>,
 	active_camera: ResMut<'w, ActiveEditorCamera>,
 	layout_manager: ResMut<'w, LayoutManager>,
 	layout_name: Local<'s, String>,
-
 	save_layout_on_exit: Local<'s, bool>,
 }
 
@@ -69,10 +76,11 @@ impl EditorUi for ProjectSettingsUi {
 
 	const HIDDEN: bool = true;
 
-	type Params<'w, 's> = ProjectSettingsUiParams<'w, 's>;
+	type Params<'w, 's> = Params<'w, 's>;
 
 	fn spawn(mut params: Self::Params<'_, '_>) -> Self {
-		*params.save_layout_on_exit = params
+		*params.category_params.save_layout_on_exit = params
+			.category_params
 			.project_settings
 			.get(SaveLayoutOnExitSetting)
 			.unwrap_or(true);
@@ -87,18 +95,22 @@ impl EditorUi for ProjectSettingsUi {
 		}
 	}
 
-	fn ui(&mut self, ui: &mut egui::Ui, mut params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
+		let Params {
+			mut commands,
+			mut category_menu,
+			mut category_params,
+		} = params;
+
 		self.save_layout_dialog.show(ui.ctx(), |ui, open| {
 			ui.horizontal(|ui| {
 				ui.label("Name");
-				ui.text_edit_singleline(&mut *params.layout_name);
+				ui.text_edit_singleline(&mut *category_params.layout_name);
 			});
 
 			ui.horizontal(|ui| {
 				if ui.button("Save").clicked() {
-					params
-						.commands
-						.write_message(SaveLayoutMessage(params.layout_name.take()));
+					commands.write_message(SaveLayoutMessage(category_params.layout_name.take()));
 					*open = false;
 				}
 
@@ -112,7 +124,7 @@ impl EditorUi for ProjectSettingsUi {
 			ui.label("This will reset your layout to the default configuration. Continue?");
 			ui.horizontal(|ui| {
 				if ui.button("Ok").clicked() {
-					params.commands.write_message(ResetLayoutMessage);
+					commands.write_message(ResetLayoutMessage);
 					*open = false;
 				}
 
@@ -122,18 +134,15 @@ impl EditorUi for ProjectSettingsUi {
 			});
 		});
 
-		let selected = super::settings_display(
-			ui,
-			self.selected_category,
-			ProjectSettingCategory::iter(),
-			|ui| {
-				if let Some(category) = self.selected_category {
-					category.ui(ui, &mut params, self);
-				} else {
-					ui.label("Select a category");
-				}
-			},
-		);
+		let list = ProjectSettingCategory::VARIANTS;
+
+		let selected = category_menu.ui(ui, list, |ui| {
+			if let Some(category) = self.selected_category {
+				category.ui(ui, category_params, self);
+			} else {
+				ui.label("Select a category");
+			}
+		});
 
 		if selected.is_some() {
 			self.selected_category = selected;
@@ -141,17 +150,29 @@ impl EditorUi for ProjectSettingsUi {
 	}
 }
 
-#[derive(Reflect, Clone, Copy, EnumIter, Display, PartialEq, Eq)]
+#[derive(Reflect, Clone, Copy, Display, PartialEq, Eq, VariantArray)]
 enum ProjectSettingCategory {
 	Camera,
 	Layouts,
+}
+
+impl From<ProjectSettingCategory> for egui::WidgetText {
+	fn from(value: ProjectSettingCategory) -> Self {
+		Self::Text(value.to_string().to_case(Case::Title))
+	}
+}
+
+impl From<&ProjectSettingCategory> for egui::WidgetText {
+	fn from(value: &ProjectSettingCategory) -> Self {
+		Self::Text(value.to_string().to_case(Case::Title))
+	}
 }
 
 impl ProjectSettingCategory {
 	fn ui(
 		self,
 		ui: &mut egui::Ui,
-		params: &mut ProjectSettingsUiParams<'_, '_>,
+		mut params: CategoryParams<'_, '_>,
 		settings_ui: &mut ProjectSettingsUi,
 	) {
 		match self {

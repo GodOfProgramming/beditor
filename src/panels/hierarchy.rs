@@ -10,7 +10,7 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalSingle, UserHidden,
 		cam::{ActiveEditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
-		scene::{self, ShowSceneEditor},
+		scene::{self, ShowSceneSettings},
 		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
@@ -171,7 +171,7 @@ impl HierarchyUi {
 						}
 
 						if entity_ref.contains::<SceneRoot>() && ui.button("Edit Scene").clicked() {
-							queue.push(ShowSceneEditor::new(entity));
+							queue.push(ShowSceneSettings::new(entity));
 						}
 					});
 				}

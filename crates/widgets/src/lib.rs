@@ -1,25 +1,45 @@
-use std::{collections::HashSet, hash::Hash};
+use core::f32;
+use std::{collections::HashSet, hash::Hash, sync::Arc};
 
-use egui::scroll_area::ScrollAreaOutput;
+use egui::IntoAtoms;
 use itertools::Itertools;
+
+pub struct MenuModal {
+	id: egui::Id,
+}
+
+impl MenuModal {
+	pub fn new(id: egui::Id) -> Self {
+		Self { id }
+	}
+
+	pub fn show<R>(
+		&self,
+		ctx: &egui::Context,
+		content: impl FnOnce(&mut egui::Ui) -> R,
+	) -> egui::ModalResponse<R> {
+		let area_size = ctx.input(|i| i.content_rect()).size() * 0.9;
+		egui::Modal::new(self.id).show(ctx, |ui| {
+			egui::Resize::default()
+				.fixed_size(area_size)
+				.show(ui, |ui| (content)(ui))
+		})
+	}
+}
 
 pub struct Dialog {
 	id: egui::Id,
-	title: egui::WidgetText,
+	title: Arc<egui::RichText>,
 	pub open: bool,
 }
 
 impl Dialog {
-	pub fn new(id: egui::Id, title: impl Into<egui::WidgetText>) -> Self {
+	pub fn new(id: egui::Id, title: impl Into<egui::RichText>) -> Self {
 		Self {
 			id,
-			title: title.into(),
+			title: Arc::new(title.into().heading()),
 			open: false,
 		}
-	}
-
-	pub fn set_title(&mut self, title: impl Into<egui::WidgetText>) {
-		self.title = title.into();
 	}
 
 	/// See [`egui::Window::show`]
@@ -29,7 +49,20 @@ impl Dialog {
 		contents: impl FnOnce(&mut egui::Ui, &mut bool) -> R,
 	) -> Option<egui::ModalResponse<R>> {
 		if self.open {
-			let response = egui::Modal::new(self.id).show(ctx, |ui| (contents)(ui, &mut self.open));
+			let response = egui::Modal::new(self.id).show(ctx, |ui| {
+				ui.horizontal(|ui| {
+					if ui.button("X").clicked() {
+						self.open = false;
+					}
+
+					ui.label(egui::WidgetText::RichText(Arc::clone(&self.title)));
+				});
+				ui.separator();
+				(contents)(ui, &mut self.open)
+			});
+			if response.backdrop_response.clicked() {
+				self.open = false;
+			}
 			Some(response)
 		} else {
 			None
@@ -169,7 +202,8 @@ where
 impl<S> SelectableList<S>
 where
 	S: Selector,
-	S::Item: Clone + AsRef<str>,
+	S::Item: Clone + for<'a> IntoAtoms<'a>,
+	egui::WidgetText: for<'a> From<&'a S::Item>,
 {
 	pub fn selected(&self) -> &S::Selected {
 		self.selector.selected()
@@ -186,9 +220,8 @@ where
 
 				let start = range.start;
 				for (i, item) in items[range].iter().enumerate() {
-					let response = ui.add(
-						egui::Button::selectable(self.selector.is_selected(item), item.as_ref()).truncate(),
-					);
+					let response =
+						ui.add(egui::Button::selectable(self.selector.is_selected(item), item).truncate());
 
 					if response.clicked() {
 						self.selector.on_select(item.clone());
@@ -285,14 +318,13 @@ where
 	}
 }
 
-pub struct DualVScrollArea {
-	id: egui::Id,
+pub struct HorizontalSplit {
 	split_at: f32,
 }
 
-impl DualVScrollArea {
-	pub fn new(id: egui::Id, split_at: f32) -> Self {
-		Self { id, split_at }
+impl HorizontalSplit {
+	pub fn new(split_at: f32) -> Self {
+		Self { split_at }
 	}
 
 	pub fn show<L, R>(
@@ -300,26 +332,81 @@ impl DualVScrollArea {
 		ui: &mut egui::Ui,
 		left: impl FnOnce(&mut egui::Ui) -> L,
 		right: impl FnOnce(&mut egui::Ui) -> R,
-	) -> egui::InnerResponse<(ScrollAreaOutput<L>, ScrollAreaOutput<R>)> {
+	) -> egui::InnerResponse<(L, R)> {
 		ui.allocate_ui_with_layout(
 			ui.available_size(),
 			egui::Layout::left_to_right(egui::Align::Center),
 			|ui| {
-				let left = egui::ScrollArea::vertical()
+				let left = egui::Resize::default()
+					.default_width(self.split_at)
 					.max_width(self.split_at)
-					.auto_shrink([false; 2])
-					.id_salt(self.id.with("dual-scroll-left"))
+					.min_width(self.split_at)
+					.resizable(false)
 					.show(ui, |ui| ui.vertical(|ui| (left)(ui)).inner);
 
 				ui.separator();
 
-				let right = egui::ScrollArea::vertical()
-					.auto_shrink([true, false])
-					.id_salt(self.id.with("dual-scroll-right"))
-					.show(ui, |ui| ui.vertical(|ui| (right)(ui)).inner);
+				let right = ui.vertical(|ui| (right)(ui)).inner;
 
 				(left, right)
 			},
 		)
+	}
+}
+
+pub struct CategoryMenu<T>
+where
+	T: Eq + Copy + for<'a> IntoAtoms<'a>,
+	egui::WidgetText: for<'a> From<&'a T>,
+{
+	selector: SelectableList<SingleSelect<T>>,
+}
+
+impl<T> Default for CategoryMenu<T>
+where
+	T: Eq + Copy + for<'a> IntoAtoms<'a>,
+	egui::WidgetText: for<'a> From<&'a T>,
+{
+	fn default() -> Self {
+		Self {
+			selector: Default::default(),
+		}
+	}
+}
+
+impl<T> CategoryMenu<T>
+where
+	T: Eq + Copy + for<'a> IntoAtoms<'a>,
+	egui::WidgetText: for<'a> From<&'a T>,
+{
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	pub fn ui(
+		&mut self,
+		ui: &mut egui::Ui,
+		category_list: &[T],
+		content: impl FnOnce(&mut egui::Ui),
+	) -> Option<T> {
+		let mut out = None;
+
+		HorizontalSplit::new(ui.available_width() * 0.1).show(
+			ui,
+			|ui| {
+				ui.heading("Categories");
+				ui.separator();
+
+				out = self
+					.selector
+					.ui(ui, category_list)
+					.map(|r| category_list[r.inner]);
+			},
+			|ui| {
+				(content)(ui);
+			},
+		);
+
+		out
 	}
 }

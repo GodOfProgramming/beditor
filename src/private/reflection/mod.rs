@@ -89,9 +89,15 @@ impl Hash for TypeNameDisplayInfo {
 	}
 }
 
-impl AsRef<str> for TypeNameDisplayInfo {
-	fn as_ref(&self) -> &str {
-		self.display.as_str()
+impl From<TypeNameDisplayInfo> for egui::WidgetText {
+	fn from(value: TypeNameDisplayInfo) -> Self {
+		Self::Text(value.display.clone())
+	}
+}
+
+impl From<&TypeNameDisplayInfo> for egui::WidgetText {
+	fn from(value: &TypeNameDisplayInfo) -> Self {
+		Self::Text(value.display.clone())
 	}
 }
 

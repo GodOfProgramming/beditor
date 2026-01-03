@@ -153,9 +153,15 @@ impl PartialEq for CachedType {
 
 impl Eq for CachedType {}
 
-impl AsRef<str> for CachedType {
-	fn as_ref(&self) -> &str {
-		&self.display
+impl From<CachedType> for egui::WidgetText {
+	fn from(value: CachedType) -> Self {
+		egui::WidgetText::Text(value.display.clone())
+	}
+}
+
+impl From<&CachedType> for egui::WidgetText {
+	fn from(value: &CachedType) -> Self {
+		egui::WidgetText::Text(value.display.clone())
 	}
 }
 

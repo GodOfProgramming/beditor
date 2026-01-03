@@ -13,6 +13,7 @@ use crate::{
 	},
 	private::{
 		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned, EditorScene,
+		UserHidden,
 		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
 	},
 	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
@@ -105,7 +106,13 @@ pub struct EditorUiEguiContextPass;
 pub struct EditorEguiContext;
 
 #[derive(Component)]
-#[require(Name = Name::new("Editor Ui"), Visibility)]
+#[require(
+  UserHidden,
+  GlobalTransform,
+  UiTransform,
+  Visibility,
+  Name = Name::new("Editor Ui"),
+)]
 struct EditorUiContainer;
 
 #[derive(Resource)]
@@ -689,11 +696,15 @@ fn handle_selected(
 	event: On<Add, Selected>,
 	mut commands: Commands,
 	q_3d_meshes: Query<(), With<Mesh3d>>,
+	q_transforms: Query<(), With<Transform>>,
 ) {
-	if let Ok(mut entity) = commands.get_entity(event.event_target()) {
-		entity.insert(GizmoTarget::default());
-		if q_3d_meshes.contains(entity.id()) {
-			entity.queue(insert_bundle_from_world::<Highlight>());
+	let entity = event.event_target();
+	if q_transforms.contains(entity)
+		&& let Ok(mut entity_commands) = commands.get_entity(entity)
+	{
+		entity_commands.insert(GizmoTarget::default());
+		if q_3d_meshes.contains(entity_commands.id()) {
+			entity_commands.queue(insert_bundle_from_world::<Highlight>());
 		}
 	}
 }

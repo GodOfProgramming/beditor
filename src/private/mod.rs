@@ -86,7 +86,11 @@ pub type EditorInternalQuery<'w, 's, Q, F = ()> = Query<'w, 's, Q, EditorInterna
 pub type EditorInternalSingle<'w, 's, Q, F = ()> = Single<'w, 's, Q, EditorInternalFilter<F>>;
 
 #[derive(Component)]
-#[require(SceneRoot, UserHidden, Name = Name::new("Editor Scene"))]
+#[require(
+  UserHidden,
+  SceneRoot,
+  Name = Name::new("Editor Scene")
+)]
 pub struct EditorScene;
 
 /// Entities that are owned by the editor

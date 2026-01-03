@@ -34,12 +34,13 @@ impl EditorExtension for DiagnosticsUiExtension {
 	fn build_app(&self, app: &mut App) {
 		app
 			.init_resource::<FrameTimeGraph>()
-			.add_observer(handle_ui_debug)
-			.add_systems(PostStartup, startup);
+			.add_observer(on_spawn)
+			.add_observer(handle_ui_debug);
 	}
 }
 
 #[derive(Default, Component, Reflect)]
+#[require(GlobalTransform, Visibility)]
 pub struct DiagnosticsUi {
 	log_level: LogLevel,
 }
@@ -157,7 +158,8 @@ struct FrameTimeGraph {
 #[derive(Component)]
 struct FrameTimeGraphCamera;
 
-fn startup(
+fn on_spawn(
+	event: On<Add, DiagnosticsUi>,
 	mut commands: Commands,
 	mut frame_time_graph_materials: ResMut<Assets<FrametimeGraphMaterial>>,
 	mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
@@ -194,6 +196,7 @@ fn startup(
 				target: RenderTarget::Image(ImageRenderTarget::from(graph.image.clone())),
 				..default()
 			},
+			ChildOf(event.event_target()),
 		))
 		.id();
 
@@ -208,6 +211,7 @@ fn startup(
 		},
 		Pickable::IGNORE,
 		MaterialNode::from(graph.mat.clone()),
+		ChildOf(event.event_target()),
 	));
 }
 

@@ -369,4 +369,5 @@ impl SelectedEntitiesChangedEvent {
 }
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub struct Selected;

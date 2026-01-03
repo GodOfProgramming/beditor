@@ -1,6 +1,8 @@
 use crate::{
 	EditorState, SimulationState,
-	private::{EditorInternalQuery, EditorOwned, Simulated, UserHidden, ui::InspectorSelection},
+	private::{
+		EditorInternalQuery, EditorOwned, EditorScene, Simulated, UserHidden, ui::InspectorSelection,
+	},
 	util::one_of,
 };
 use bevy::{
@@ -80,11 +82,11 @@ fn mark_entities(
 
 fn on_sim_prep(
 	mut commands: Commands,
-	q_scene_roots: Query<Entity, With<SceneInstance>>,
+	q_user_scenes: Query<Entity, (With<SceneRoot>, Without<UserHidden>)>,
 	mut next_state: ResMut<NextState<EditorState>>,
 	mut selected_entities: ResMut<InspectorSelection>,
 ) {
-	for entity in &q_scene_roots {
+	for entity in &q_user_scenes {
 		commands
 			.entity(entity)
 			.clone_and_spawn_with_opt_out(|builder| {

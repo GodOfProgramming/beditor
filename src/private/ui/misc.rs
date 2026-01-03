@@ -109,12 +109,12 @@ pub unsafe trait UiExtensions: EditorUi {
 			match q.get(unsafe { world_cell.world() }, entity) {
 				Ok((has_self, has_params)) => {
 					panic!(
-						"Failed to query {}, has self: {has_self}, has params: {has_params}",
+						"Failed to query {}: has self: {has_self}, has params: {has_params}",
 						<Self as EditorUi>::NAME,
 					);
 				}
 				Err(err) => {
-					panic!("Failed to query {}, {err}", <Self as EditorUi>::NAME);
+					panic!("Failed to query {}: {err}", <Self as EditorUi>::NAME);
 				}
 			}
 		};

@@ -1,6 +1,6 @@
 use crate::{
 	EditorState,
-	private::{EditorInternalQuery, UserHidden, ui::KeyboardFocus},
+	private::{EditorInternalQuery, EditorScene, UserHidden, ui::KeyboardFocus},
 };
 use bevy::prelude::*;
 use leafwing_input_manager::{
@@ -19,22 +19,27 @@ pub struct Unfocused;
 
 pub struct EditorInputPlugin;
 
-impl EditorInputPlugin {
-	fn init_input(mut commands: Commands) {
-		let inputs = InputMap::default().with(EditorActions::Play, KeyCode::F5);
-
-		commands.spawn((Name::new("Editor Input"), UserHidden, inputs));
-	}
-}
+impl EditorInputPlugin {}
 
 impl Plugin for EditorInputPlugin {
 	fn build(&self, app: &mut App) {
 		app
 			.configure_sets(Update, Unfocused.run_if(in_state(KeyboardFocus::Unfocused)))
 			.add_plugins(InputManagerPlugin::<EditorActions>::default())
-			.add_systems(Startup, Self::init_input)
+			.add_observer(on_new_scene)
 			.add_systems(Update, global_input_actions.in_set(Unfocused));
 	}
+}
+
+fn on_new_scene(event: On<Add, EditorScene>, mut commands: Commands) {
+	let inputs = InputMap::default().with(EditorActions::Play, KeyCode::F5);
+
+	commands.spawn((
+		Name::new("Editor Input"),
+		UserHidden,
+		inputs,
+		ChildOf(event.event_target()),
+	));
 }
 
 pub fn global_input_actions(

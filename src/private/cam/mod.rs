@@ -220,13 +220,17 @@ enum PanState {
 pub struct EditorCamera;
 
 #[derive(Component)]
-#[require(SceneRoot, Name = Name::new("Editor Camera Scene"))]
+#[require(
+  UserHidden,
+  SceneRoot,
+  Name = Name::new("Editor Camera Scene")
+)]
 pub struct EditorCameraScene;
 
 #[derive(Default, Component, Reflect)]
 #[require(
-  EditorEguiContext,
   UserHidden,
+  EditorEguiContext,
   Camera2d,
   Camera = Camera { order: isize::MAX, ..default() },
   RenderLayers = RenderLayers::layer(EDITOR_UI_RENDER_LAYER),

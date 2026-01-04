@@ -8,7 +8,6 @@
 )]
 
 pub mod inspector;
-mod panels;
 mod private;
 pub mod ui;
 mod util;
@@ -171,9 +170,7 @@ impl Plugin for EditorPlugin {
 			.try_add_plugin(TransformGizmoPlugin)
 			.try_add_plugin(PrefabPlugin::default())
 			// internal
-			.add_plugins(private::InternalPlugin)
-			// extensions
-			.add_plugins(EditorExtensionPlugin::<panels::EditorPanelsExtension>::default());
+			.add_plugins(private::InternalPlugin);
 	}
 }
 

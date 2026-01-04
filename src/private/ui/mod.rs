@@ -7,14 +7,14 @@ use crate::{
 		add_single,
 		ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
 	},
-	panels::{
-		assets, components, diagnostics, editor_view, hierarchy, inspector, menu_bar, prefabs,
-		resources,
-	},
 	private::{
 		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned, EditorScene,
 		UserHidden,
 		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
+		ext::{
+			assets, components, diagnostics, editor_view, hierarchy, inspector, menu_bar, prefabs,
+			resources,
+		},
 	},
 	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
 	ui::OpenUi,

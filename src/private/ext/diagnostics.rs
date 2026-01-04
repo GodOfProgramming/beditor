@@ -1,6 +1,6 @@
+use super::inspector::InspectorSettings;
 use crate::{
 	EditorExtension, ProjectSettings,
-	panels::inspector::InspectorSettings,
 	private::{
 		EditorInternal, EditorInternalQuery,
 		cam::{RenderCameras, RenderCamerasSetting},

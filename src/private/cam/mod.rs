@@ -3,9 +3,9 @@ pub mod cam2d;
 pub mod cam3d;
 
 use crate::{
-	panels::editor_view::EditorViewUi,
 	private::{
 		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorScene, UserHidden,
+		ext::editor_view::EditorViewUi,
 		input,
 		ui::{EditorEguiContext, misc::UiState},
 	},

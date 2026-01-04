@@ -1,9 +1,9 @@
+use super::{
+	BundleDnd,
+	camera_view::{self, CameraViewUi},
+};
 use crate::{
 	EditorExtension, EditorState, EditorUi,
-	panels::{
-		BundleDnd,
-		camera_view::{self, CameraViewUi},
-	},
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
 		cam::EditorCamera,

@@ -5,7 +5,7 @@ use crate::{
 		options::{EntityDisplay, EntityOptions},
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
-	panels::inspector::entity_context_menu,
+	private::ext::inspector::entity_context_menu,
 	util::{
 		self, pretty_type_name,
 		world::{MutableWorldView, RestrictedWorldView},

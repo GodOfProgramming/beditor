@@ -1,7 +1,6 @@
-use super::BundleDnd;
+use super::{BundleDnd, SearchableVfs};
 use crate::{
 	EditorExtension, EditorUi,
-	panels::SearchableVfs,
 	util::components::{ComponentRegistry, RegisteredComponent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};

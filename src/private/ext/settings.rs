@@ -1,15 +1,13 @@
 mod editor;
 mod project;
 
+use crate::{EditorExtension, EditorExtensionPlugin};
 use bevy::prelude::*;
+use editor::EditorSettingsUiExtension;
+use project::ProjectSettingsUiExtension;
 
 pub use editor::ShowEditorSettings;
 pub use project::ProjectSettingsUi;
-
-use crate::{
-	EditorExtension, EditorExtensionPlugin,
-	panels::settings::{editor::EditorSettingsUiExtension, project::ProjectSettingsUiExtension},
-};
 
 #[derive(Default)]
 pub struct SettingsUiExtension;

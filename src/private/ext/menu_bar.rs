@@ -1,7 +1,10 @@
 use crate::{
 	EditorState, SimulationState,
-	panels::settings::{ProjectSettingsUi, ShowEditorSettings},
-	private::{EditorInternalQuery, scene::UserScene},
+	private::{
+		EditorInternalQuery,
+		ext::settings::{ProjectSettingsUi, ShowEditorSettings},
+		scene::UserScene,
+	},
 	ui::{OpenMode, OpenUi},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};

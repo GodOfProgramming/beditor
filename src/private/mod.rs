@@ -1,5 +1,6 @@
 pub mod assets;
 pub mod cam;
+pub mod ext;
 pub mod input;
 pub mod reflection;
 pub mod scene;
@@ -7,7 +8,7 @@ pub mod ui;
 pub mod util;
 
 use crate::{
-	AppSystems, EditorState, SimulationState,
+	AppSystems, EditorExtensionPlugin, EditorState, SimulationState,
 	settings::{WindowMaximizedSetting, WindowSizeSetting},
 	util::{components::ComponentRegistry, storage::GlobalEditorSettings},
 };
@@ -32,6 +33,7 @@ impl Plugin for InternalPlugin {
 				ui::EditorUiPlugin,
 				reflection::ReflectionExtensionsPlugin,
 				assets::AssetsPlugin,
+				EditorExtensionPlugin::<ext::InternalEditorExtensions>::default(),
 			))
 			.add_systems(
 				Startup,

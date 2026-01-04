@@ -28,9 +28,9 @@ use std::{
 use vfs::{Vfs, VfsEntry, VfsNode};
 
 #[derive(Default)]
-pub struct EditorPanelsExtension;
+pub struct InternalEditorExtensions;
 
-impl EditorExtension for EditorPanelsExtension {
+impl EditorExtension for InternalEditorExtensions {
 	fn build_editor(&self, ctx: &mut EditorExtensionContext) {
 		use crate::private::ui::misc::MissingUi;
 		ctx.register_ui::<MissingUi>();

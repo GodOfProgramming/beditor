@@ -2,8 +2,9 @@ use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 
 use crate::{
 	EditorExtension,
-	panels::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
-	private::EditorInternal,
+	private::{ EditorInternal,
+	ext::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
+   },
 	ui::EditorUiWorld,
 };
 use bevy::prelude::*;

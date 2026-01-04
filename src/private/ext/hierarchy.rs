@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
+use super::{BundleDnd, camera_view::CameraViewUi, image_viewer::ImageViewerUi};
 use crate::{
 	EditorExtension,
 	inspector::{
 		WorldExtensions as _,
 		ui::hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
 	},
-	panels::{BundleDnd, camera_view::CameraViewUi, image_viewer::ImageViewerUi},
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalSingle, UserHidden,
 		cam::{ActiveEditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
@@ -20,6 +18,7 @@ use bevy::prelude::*;
 use bevy_egui::EguiContext;
 use egui_file_dialog::FileDialog;
 use notify::Notification;
+use std::sync::Arc;
 use uuid::{Uuid, uuid};
 
 #[derive(Default)]

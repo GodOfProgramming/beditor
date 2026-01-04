@@ -1,6 +1,6 @@
+use super::image_viewer::ImageViewerUi;
 use crate::{
 	EditorExtension, EditorUi,
-	panels::image_viewer::ImageViewerUi,
 	private::{EditorInternal, EditorInternalQuery, cam::EditorManagedCamera},
 	util::egui::ContextExtensions,
 };

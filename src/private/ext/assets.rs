@@ -1,4 +1,4 @@
-use crate::{EditorExtension, private::ui::InspectorSelection, ui::EditorUi};
+use crate::{EditorExtension, inspector::ui::InspectorSelection, ui::EditorUi};
 use bevy::{asset::ReflectAsset, ecs::system::SystemParam, prelude::*};
 use uuid::uuid;
 

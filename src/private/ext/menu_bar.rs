@@ -3,7 +3,7 @@ use crate::{
 	private::{
 		EditorInternalQuery,
 		ext::settings::{ProjectSettingsUi, ShowEditorSettings},
-		scene::{LoadScene, TargetSceneRoot},
+		scene::{EditorSceneRoot, LoadScene},
 	},
 	ui::{OpenMode, OpenUi},
 };
@@ -49,7 +49,7 @@ pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 fn file_menu(ui: &mut egui::Ui, params: &mut Params) {
 	ui.menu_button("File", |ui| {
 		if ui.button("New Scene").clicked() {
-			params.commands.spawn(TargetSceneRoot);
+			params.commands.spawn(EditorSceneRoot);
 		}
 
 		if ui.button("Open Scene").clicked() {

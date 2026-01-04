@@ -102,7 +102,7 @@ pub struct EditorOwned;
 
 /// Entities that are spawned during simulation
 #[derive(Component, Reflect)]
-pub struct Simulated;
+pub struct SimulationOwned;
 
 fn auto_register_components(world: &mut World) {
 	world.resource_scope(|world, mut component_registry: Mut<ComponentRegistry>| {

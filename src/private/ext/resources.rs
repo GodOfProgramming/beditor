@@ -1,7 +1,5 @@
 use crate::{
-	EditorExtension,
-	private::{EditorInternal, ui::InspectorSelection},
-	ui::EditorUi,
+	EditorExtension, inspector::ui::InspectorSelection, private::EditorInternal, ui::EditorUi,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::marker::PhantomData;

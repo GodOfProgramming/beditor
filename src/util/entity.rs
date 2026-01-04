@@ -93,7 +93,7 @@ fn guess_entity_name_inner(world: &World, entity: Entity, archetype: &Archetype)
 		});
 
 		if let Some(name) = found_name {
-			return format!("{name} ({entity})");
+			return format!("Entity ({entity}) - {name}");
 		}
 	}
 

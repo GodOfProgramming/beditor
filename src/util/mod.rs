@@ -8,7 +8,7 @@ pub mod world;
 
 use crate::{
 	EditorState,
-	private::{EditorInternalQuery, EditorOwned, Simulated},
+	private::{EditorInternalQuery, EditorOwned, SimulationOwned},
 };
 use bevy::{
 	ecs::{
@@ -102,7 +102,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 		match world.state::<EditorState>() {
 			EditorState::Editing => Some(world.spawn((EditorOwned, bundle)).id()),
 			EditorState::SimulationPrep | EditorState::Simulating(_) => {
-				Some(world.spawn((Simulated, bundle)).id())
+				Some(world.spawn((SimulationOwned, bundle)).id())
 			}
 			_ => None,
 		}

@@ -17,7 +17,7 @@ use crate::{
 	},
 };
 use bevy::{
-	asset::{ReflectAsset, ReflectHandle},
+	asset::{ReflectAsset, ReflectHandle, UntypedAssetId},
 	ecs::{query::QueryFilter, world::CommandQueue},
 	prelude::*,
 	reflect::{
@@ -28,6 +28,7 @@ use bevy::{
 };
 use derive_new::new;
 use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
+use hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent};
 use std::{
 	any::{Any, TypeId},
 	borrow::{Borrow, Cow},
@@ -2331,4 +2332,58 @@ pub fn many_unimplemented<T>(
 ) -> bool {
 	errors::reflect::no_multiedit(ui, std::any::type_name::<T>());
 	false
+}
+
+#[derive(Resource)]
+pub enum InspectorSelection {
+	Entities(SelectedEntities),
+	Resource(TypeId, String),
+	Asset(TypeId, String, UntypedAssetId),
+}
+
+impl Default for InspectorSelection {
+	fn default() -> Self {
+		Self::Entities(default())
+	}
+}
+
+impl InspectorSelection {
+	pub fn clear(&mut self) -> Option<SelectedEntitiesChangedEvent> {
+		match self {
+			InspectorSelection::Entities(selected_entities) => Some(selected_entities.scoped_clear()),
+			InspectorSelection::Resource(_, _) => {
+				*self = default();
+				None
+			}
+			InspectorSelection::Asset(_, _, _) => {
+				*self = default();
+				None
+			}
+		}
+	}
+
+	pub fn add_selected(&mut self, entity: Entity, add: bool) -> SelectedEntitiesChangedEvent {
+		if let InspectorSelection::Entities(selected_entities) = self {
+			selected_entities.select_maybe_add(entity, add)
+		} else {
+			let mut selected_entities = SelectedEntities::default();
+			let event = selected_entities.select_replace(entity);
+			*self = Self::Entities(selected_entities);
+			event
+		}
+	}
+}
+
+#[derive(Component)]
+#[component(storage = "SparseSet")]
+pub struct Selected;
+
+pub struct SelectEntity(pub Entity);
+
+impl Command for SelectEntity {
+	fn apply(self, world: &mut World) {
+		let mut selection = world.resource_mut::<InspectorSelection>();
+		let event = selection.add_selected(self.0, false);
+		world.trigger(event);
+	}
 }

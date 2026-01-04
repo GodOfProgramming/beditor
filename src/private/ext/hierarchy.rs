@@ -3,13 +3,15 @@ use crate::{
 	EditorExtension,
 	inspector::{
 		WorldExtensions as _,
-		ui::hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
+		ui::{
+			InspectorSelection, SelectEntity,
+			hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
+		},
 	},
 	private::{
 		EditorInternal, EditorInternalFilter, UserHidden,
 		cam::{ActiveEditorCamera, EditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
-		scene::{ShowSceneSettings, TargetScene},
-		ui::InspectorSelection,
+		scene::{ActiveScene, ShowSceneSettings},
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
 	util::WorldExtensions as _,
@@ -80,9 +82,7 @@ impl EditorUiWorld for HierarchyUi {
 		if ui.button("New Empty Entity").clicked()
 			&& let Some(entity) = world.spawn_stateful_entity()
 		{
-			let mut inspector_selection = world.resource_mut::<InspectorSelection>();
-			let event = inspector_selection.add_selected(entity, false);
-			world.trigger(event);
+			world.commands().queue(SelectEntity(entity));
 		}
 
 		let editor_camera = {
@@ -97,9 +97,7 @@ impl EditorUiWorld for HierarchyUi {
 			&& let Some(entity) =
 				world.spawn_stateful_entity_bundle((Node::default(), UiTargetCamera(editor_camera)))
 		{
-			let mut inspector_selection = world.resource_mut::<InspectorSelection>();
-			let event = inspector_selection.add_selected(entity, false);
-			world.trigger(event);
+			world.commands().queue(SelectEntity(entity));
 		}
 	}
 }
@@ -181,12 +179,12 @@ impl HierarchyUi {
 							queue.push(ReparentMessage(entity));
 						}
 
-						if entity_ref.contains::<TargetScene>() {
+						if entity_ref.contains::<ActiveScene>() {
 							if !entity_ref.contains::<DynamicSceneRoot>() && ui.button("Edit Scene").clicked() {
 								queue.push(ShowSceneSettings::new(entity));
 							}
 						} else if ui.button("Make Scene").clicked() {
-							entity_ref.insert(TargetScene);
+							entity_ref.insert(ActiveScene);
 						}
 
 						if ui.button("Despawn").clicked() {

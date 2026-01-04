@@ -5,7 +5,7 @@ use crate::{
 	DataTable, EditorState, EditorUiWorld, PersistentData, ProjectSettings,
 	inspector::{
 		add_single,
-		ui::hierarchy::{Selected, SelectedEntities, SelectedEntitiesChangedEvent},
+		ui::{InspectorSelection, Selected},
 	},
 	private::{
 		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned, EditorScene,
@@ -21,13 +21,12 @@ use crate::{
 	util::{entity::insert_bundle_from_world, storage::GlobalEditorSettings},
 };
 use bevy::{
-	asset::UntypedAssetId,
 	camera::visibility::RenderLayers,
 	ecs::{
 		schedule::ScheduleLabel,
 		system::{SystemState, entity_command},
 	},
-	picking::pointer::PointerId,
+	picking::pointer::{PointerId, PointerInteraction},
 	platform::collections::HashMap,
 	prelude::*,
 };
@@ -61,7 +60,6 @@ impl Plugin for EditorUiPlugin {
 			.insert_resource(egui_settings)
 			.init_resource::<HighlightOptions>()
 			.init_resource::<UiManager>()
-			.init_resource::<InspectorSelection>()
 			.init_resource::<LayoutManager>()
 			.init_resource::<NewTabs>()
 			.init_state::<KeyboardFocus>()
@@ -591,46 +589,6 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
 	fn on_rect_changed(&mut self, tab: &mut Self::Tab) {
 		(tab.vtable.on_panel_changed)(tab.entity, &mut self.world.borrow_mut());
-	}
-}
-
-#[derive(Resource)]
-pub enum InspectorSelection {
-	Entities(SelectedEntities),
-	Resource(TypeId, String),
-	Asset(TypeId, String, UntypedAssetId),
-}
-
-impl Default for InspectorSelection {
-	fn default() -> Self {
-		Self::Entities(default())
-	}
-}
-
-impl InspectorSelection {
-	pub fn clear(&mut self) -> Option<SelectedEntitiesChangedEvent> {
-		match self {
-			InspectorSelection::Entities(selected_entities) => Some(selected_entities.scoped_clear()),
-			InspectorSelection::Resource(_, _) => {
-				*self = default();
-				None
-			}
-			InspectorSelection::Asset(_, _, _) => {
-				*self = default();
-				None
-			}
-		}
-	}
-
-	pub fn add_selected(&mut self, entity: Entity, add: bool) -> SelectedEntitiesChangedEvent {
-		if let InspectorSelection::Entities(selected_entities) = self {
-			selected_entities.select_maybe_add(entity, add)
-		} else {
-			let mut selected_entities = SelectedEntities::default();
-			let event = selected_entities.select_replace(entity);
-			*self = Self::Entities(selected_entities);
-			event
-		}
 	}
 }
 

@@ -1,8 +1,11 @@
 use super::{BundleDnd, panel_dnd_drop_ui};
 use crate::{
 	EditorExtension,
-	inspector::{WorldExtensions as _, ui::components::ComponentInfo},
-	private::{EditorInternal, ui::InspectorSelection},
+	inspector::{
+		WorldExtensions as _,
+		ui::{InspectorSelection, components::ComponentInfo},
+	},
+	private::EditorInternal,
 	ui::EditorUiWorld,
 	util::{WorldExtensions as _, egui::show_docs},
 };

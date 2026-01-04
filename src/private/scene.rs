@@ -1,17 +1,18 @@
 use crate::{
 	EditorState, SimulationState,
+	inspector::ui::InspectorSelection,
 	private::{
-		EditorInternalSingle, EditorOwned, Simulated, UserHidden,
+		EditorInternalSingle, EditorOwned, SimulationOwned, UserHidden,
 		cam::EditorCamera,
 		reflection::{TypeNameDisplayCache, TypeNameDisplayInfo},
-		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
+		ui::{EditorEguiContext, EditorUiEguiContextPass},
 	},
 	util::entity::one_of,
 };
 use bevy::{
 	ecs::{entity::EntityHashSet, entity_disabling::Disabled, system::SystemParam},
 	prelude::*,
-	scene::serde::SceneSerializer,
+	scene::{SceneInstance, SceneInstanceReady, serde::SceneSerializer},
 	utils::TypeIdMap,
 };
 use bevy_egui::EguiContext;
@@ -37,12 +38,12 @@ pub struct EditorScenePlugin;
 impl Plugin for EditorScenePlugin {
 	fn build(&self, app: &mut App) {
 		app
-			.add_plugins(SingletonPlugin::<TargetSceneRoot>::new(
+			.add_plugins(SingletonPlugin::<EditorSceneRoot>::new(
 				SingletonBehavior::RemoveOther,
 			))
 			.add_message::<ShowSceneSettings>()
 			.init_resource::<RelationshipRegistry>()
-			.add_observer(one_of::<TargetScene>)
+			.add_observer(one_of::<ActiveScene>)
 			.add_observer(on_new_camera)
 			.add_observer(on_new_scene)
 			.add_systems(
@@ -57,27 +58,29 @@ impl Plugin for EditorScenePlugin {
 }
 
 #[derive(Component, Default)]
-#[require(Transform, Visibility, Node, TargetScene)]
-pub struct TargetSceneRoot;
+#[require(Transform, Visibility, Node, ActiveScene, Name::new("New Scene"))]
+pub struct EditorSceneRoot;
 
+/// Add this component to any entity to give it the qualifications of becoming a scene
+/// Also make it the currently active scene
 #[derive(Component, Reflect, Default, Clone, Copy)]
 #[reflect(Component, Clone, Default)]
 #[require(Transform, Visibility, Node)]
-pub struct TargetScene;
+pub struct ActiveScene;
 
 #[derive(Component)]
 struct ComponentFilter(SceneFilter);
 
 #[derive(Bundle)]
 struct EditableScene {
-	scene: TargetScene,
+	scene: ActiveScene,
 	components: ComponentFilter,
 }
 
 fn on_new_camera(
 	event: On<Add, EditorCamera>,
 	mut commands: Commands,
-	target_scene_root: Option<Single<Entity, With<TargetSceneRoot>>>,
+	target_scene_root: Option<Single<Entity, With<EditorSceneRoot>>>,
 ) {
 	match target_scene_root {
 		Some(ts) => {
@@ -86,13 +89,13 @@ fn on_new_camera(
 				.insert(UiTargetCamera(event.event_target()));
 		}
 		None => {
-			commands.spawn((Name::new("New Scene"), TargetSceneRoot));
+			commands.spawn(EditorSceneRoot);
 		}
 	}
 }
 
 fn on_new_scene(
-	event: On<Add, TargetSceneRoot>,
+	event: On<Add, EditorSceneRoot>,
 	mut commands: Commands,
 	editor_camera: EditorInternalSingle<Entity, With<EditorCamera>>,
 ) {
@@ -121,18 +124,18 @@ fn remove_infinite_grid(
 
 fn mark_entities(
 	mut commands: Commands,
-	q_unmarked_entities: Query<Entity, (Without<Simulated>, Without<EditorOwned>)>,
+	q_unowned_entities: Query<Entity, (Without<SimulationOwned>, Without<EditorOwned>)>,
 	state: Res<State<EditorState>>,
 ) {
 	match state.get() {
 		EditorState::Editing => {
-			for entity in &q_unmarked_entities {
+			for entity in &q_unowned_entities {
 				commands.entity(entity).insert(EditorOwned);
 			}
 		}
 		EditorState::SimulationPrep | EditorState::Simulating(_) => {
-			for entity in &q_unmarked_entities {
-				commands.entity(entity).insert(Simulated);
+			for entity in &q_unowned_entities {
+				commands.entity(entity).insert(SimulationOwned);
 			}
 		}
 		_ => {}
@@ -152,7 +155,7 @@ fn on_sim_prep(
 				builder.add_observers(true);
 				builder.linked_cloning(true);
 			})
-			.insert(Simulated);
+			.insert(SimulationOwned);
 
 		commands
 			.entity(entity)
@@ -168,7 +171,7 @@ fn on_sim_prep(
 
 fn restore_scene(
 	mut commands: Commands,
-	q_simulated_entities: Query<Entity, With<Simulated>>,
+	q_simulated_entities: Query<Entity, With<SimulationOwned>>,
 	q_roots: Query<(Entity, Has<Disabled>), (With<SceneRoot>, Allow<Disabled>)>,
 ) {
 	for entity in &q_simulated_entities {
@@ -464,7 +467,27 @@ impl Command for LoadScene {
 				.map(|f| format!("Scene Root ({})", f.display()))
 				.unwrap_or_else(|| String::from("Scene Root"));
 			let scene = assets.load(path);
-			world.spawn((TargetSceneRoot, Name::new(name), DynamicSceneRoot(scene)));
+
+			world
+				.spawn((Name::new(name), DynamicSceneRoot(scene)))
+				.observe(on_scene_ready);
 		});
 	}
+}
+
+fn on_scene_ready(
+	event: On<SceneInstanceReady>,
+	mut commands: Commands,
+	q_scene_instances: Query<(Entity, &SceneInstance)>,
+) {
+	let id = event.instance_id;
+
+	let Some(entity) = q_scene_instances
+		.iter()
+		.find_map(|(e, i)| (**i == id).then_some(e))
+	else {
+		return;
+	};
+
+	commands.entity(entity).insert(EditorSceneRoot);
 }

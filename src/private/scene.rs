@@ -16,6 +16,7 @@ use bevy_egui::EguiContext;
 use bevy_infinite_grid::InfiniteGrid;
 use convert_case::{Case, Casing};
 use derive_new::new;
+use egui_file_dialog::{DialogMode, DialogState, FileDialog};
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 use std::any::TypeId;
@@ -148,20 +149,104 @@ impl Command for ShowSceneSettings {
 	}
 }
 
-#[derive(Reflect, Clone, Copy, Display, PartialEq, Eq, VariantArray)]
-enum SceneSettings {
-	SavableComponents,
+const MODAL_FILE_DIALOG_ID: &str = "beditor-file-dialog";
+
+#[derive(Deref, DerefMut)]
+struct SceneFileDialog(FileDialog);
+
+impl Default for SceneFileDialog {
+	fn default() -> Self {
+		Self(
+			FileDialog::default()
+				.as_modal(true)
+				.anchor(egui::Align2::CENTER_CENTER, egui::Vec2::default())
+				.default_save_extension("scn.ron")
+				.id(MODAL_FILE_DIALOG_ID),
+		)
+	}
 }
 
-impl SceneSettings {
+#[derive(Deref, DerefMut)]
+struct SceneOptionsModal(widgets::MenuModal);
+
+impl Default for SceneOptionsModal {
+	fn default() -> Self {
+		Self(widgets::MenuModal::new().order(egui::Order::Middle))
+	}
+}
+
+#[derive(SystemParam)]
+struct Params<'s, 'w> {
+	type_name_cache: Res<'w, TypeNameDisplayCache>,
+	type_name_list: Local<'s, widgets::SelectableList<widgets::MultiSelect<TypeNameDisplayInfo>>>,
+	file_dialog: Local<'s, SceneFileDialog>,
+}
+
+impl From<SceneOptions> for egui::WidgetText {
+	fn from(value: SceneOptions) -> Self {
+		Self::Text(value.to_string().to_case(Case::Title))
+	}
+}
+
+impl From<&SceneOptions> for egui::WidgetText {
+	fn from(value: &SceneOptions) -> Self {
+		Self::Text(value.to_string().to_case(Case::Title))
+	}
+}
+
+fn show_scene_editing_modal(
+	mut messages: MessageReader<ShowSceneSettings>,
+	mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
+	mut modal: Local<SceneOptionsModal>,
+	mut menu: Local<widgets::CategoryMenu<SceneOptions>>,
+	params: Params,
+) {
+	modal.open |= !messages.is_empty();
+	messages.clear();
+
+	let ctx = contexts.get_mut();
+
+	let id = egui::Id::new("beditor-scene-modal");
+
+	modal.show(ctx, id, |ui| {
+		ui.heading("Scene Settings");
+
+		ui.separator();
+
+		menu.ui(ui, SceneOptions::VARIANTS, |ui, selected_category| {
+			if let Some(category) = selected_category {
+				category.ui(ui, params);
+			} else {
+				ui.label("Select a category");
+			}
+		});
+	});
+}
+
+#[derive(Reflect, Default, Clone, Copy, Display, PartialEq, Eq, VariantArray)]
+enum SceneOptions {
+	#[default]
+	SaveAndExport,
+	SerializableTypes,
+}
+
+impl SceneOptions {
 	fn ui(self, ui: &mut egui::Ui, params: Params<'_, '_>) {
 		let Params {
 			type_name_cache,
 			mut type_name_list,
+			mut file_dialog,
 		} = params;
 
+		file_dialog.update(ui.ctx());
+
 		match self {
-			Self::SavableComponents => {
+			Self::SaveAndExport => {
+				if ui.button("Export").clicked() {
+					file_dialog.save_file();
+				}
+			}
+			Self::SerializableTypes => {
 				ui.heading("Select Scene Components");
 
 				ui.separator();
@@ -170,51 +255,6 @@ impl SceneSettings {
 			}
 		}
 	}
-}
-
-#[derive(SystemParam)]
-struct Params<'s, 'w> {
-	type_name_cache: Res<'w, TypeNameDisplayCache>,
-	type_name_list: Local<'s, widgets::SelectableList<widgets::MultiSelect<TypeNameDisplayInfo>>>,
-}
-
-impl From<SceneSettings> for egui::WidgetText {
-	fn from(value: SceneSettings) -> Self {
-		Self::Text(value.to_string().to_case(Case::Title))
-	}
-}
-
-impl From<&SceneSettings> for egui::WidgetText {
-	fn from(value: &SceneSettings) -> Self {
-		Self::Text(value.to_string().to_case(Case::Title))
-	}
-}
-
-fn show_scene_editing_modal(
-	mut messages: MessageReader<ShowSceneSettings>,
-	mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
-	mut modal: Local<widgets::MenuModal>,
-	mut menu: Local<widgets::CategoryMenu<SceneSettings>>,
-	params: Params,
-) {
-	modal.open |= !messages.is_empty();
-	messages.clear();
-
-	let ctx = contexts.get_mut();
-	let id = egui::Id::new("beditor-scene-modal");
-	modal.show(ctx, id, |ui| {
-		ui.heading("Scene Settings");
-
-		ui.separator();
-
-		menu.ui(ui, SceneSettings::VARIANTS, |ui, selected_category| {
-			if let Some(category) = selected_category {
-				category.ui(ui, params);
-			} else {
-				ui.label("Select a category");
-			}
-		});
-	});
 }
 
 ////////////////////////////////////////////////////////////////////////////////

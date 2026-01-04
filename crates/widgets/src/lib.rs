@@ -4,14 +4,28 @@ use std::{collections::HashSet, hash::Hash, sync::Arc};
 use egui::IntoAtoms;
 use itertools::Itertools;
 
-#[derive(Default)]
 pub struct MenuModal {
 	pub open: bool,
+	order: egui::Order,
+}
+
+impl Default for MenuModal {
+	fn default() -> Self {
+		Self {
+			open: false,
+			order: egui::Order::Foreground,
+		}
+	}
 }
 
 impl MenuModal {
 	pub fn new() -> Self {
 		Self::default()
+	}
+
+	pub fn order(mut self, order: egui::Order) -> Self {
+		self.order = order;
+		self
 	}
 
 	pub fn show<R>(
@@ -25,7 +39,13 @@ impl MenuModal {
 		}
 
 		let area_size = ctx.input(|i| i.content_rect()).size() * 0.9;
-		let response = egui::Modal::new(id).show(ctx, |ui| {
+
+		let response = egui::Modal {
+			area: egui::Modal::default_area(id).order(self.order),
+			backdrop_color: egui::Color32::from_black_alpha(100),
+			frame: None,
+		}
+		.show(ctx, |ui| {
 			egui::Resize::default()
 				.fixed_size(area_size)
 				.show(ui, |ui| {

@@ -122,7 +122,7 @@ widgets = { path = "./crates/widgets" }
 xml-rs = "1.0.0"
 
 [features]
-default = ["dev", "watch"]
+default = ["dev"]
 dev = ["bevy/track_location", "bevy/asset_processor"]
 profiling = ["bevy/trace_tracy", "dep:tracing-tracy"]
 watch = ["bevy/file_watcher"]

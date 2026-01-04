@@ -71,11 +71,17 @@ pub trait WorldExtensions: BorrowMut<World> {
 	}
 
 	fn spawn_stateful_entity(&mut self) -> Option<Entity> {
+		self.spawn_stateful_entity_bundle(())
+	}
+
+	fn spawn_stateful_entity_bundle(&mut self, bundle: impl Bundle) -> Option<Entity> {
 		let world = self.borrow_mut();
 
 		match world.state::<EditorState>() {
-			EditorState::Editing => Some(world.spawn(EditorOwned).id()),
-			EditorState::SimulationPrep | EditorState::Simulating(_) => Some(world.spawn(Simulated).id()),
+			EditorState::Editing => Some(world.spawn((EditorOwned, bundle)).id()),
+			EditorState::SimulationPrep | EditorState::Simulating(_) => {
+				Some(world.spawn((Simulated, bundle)).id())
+			}
 			_ => None,
 		}
 	}

@@ -329,9 +329,7 @@ fn on_active_camera_change(
 }
 
 fn on_new_editor_scene(event: On<Add, EditorScene>, mut commands: Commands) {
-	let scene = event.event_target();
-	commands.spawn((EditorWindowCamera, ChildOf(scene)));
-	commands.spawn((EditorCameraScene, ChildOf(scene)));
+	commands.spawn((EditorWindowCamera, ChildOf(event.event_target())));
 }
 
 pub fn mouse_hovered_in_editor_view(

@@ -7,8 +7,8 @@ use crate::{
 	},
 	private::{
 		EditorInternal, EditorInternalFilter, UserHidden,
-		cam::{ActiveEditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
-		scene::ShowSceneSettings,
+		cam::{ActiveEditorCamera, EditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
+		scene::{ShowSceneSettings, TargetScene},
 		ui::InspectorSelection,
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
@@ -77,8 +77,25 @@ impl EditorUiWorld for HierarchyUi {
 		_surface: egui_dock::SurfaceIndex,
 		_node: egui_dock::NodeIndex,
 	) {
-		if ui.button("Spawn New Entity").clicked()
+		if ui.button("New Empty Entity").clicked()
 			&& let Some(entity) = world.spawn_stateful_entity()
+		{
+			let mut inspector_selection = world.resource_mut::<InspectorSelection>();
+			let event = inspector_selection.add_selected(entity, false);
+			world.trigger(event);
+		}
+
+		let editor_camera = {
+			world
+				.query_filtered::<Entity, EditorInternalFilter<With<EditorCamera>>>()
+				.single(world)
+				.ok()
+		};
+
+		if let Some(editor_camera) = editor_camera
+			&& ui.button("New Empty Ui").clicked()
+			&& let Some(entity) =
+				world.spawn_stateful_entity_bundle((Node::default(), UiTargetCamera(editor_camera)))
 		{
 			let mut inspector_selection = world.resource_mut::<InspectorSelection>();
 			let event = inspector_selection.add_selected(entity, false);
@@ -111,8 +128,8 @@ impl HierarchyUi {
 
 					let mut entity_ref = world.entity_mut(entity);
 
-					ui.menu_button("Movement", |ui| {
-						if entity_ref.contains::<Transform>() {
+					if entity_ref.contains::<Transform>() {
+						ui.menu_button("Movement", |ui| {
 							if camera_state == ActiveEditorCamera::Cam3D && ui.button("Look At").clicked() {
 								queue.push(LookAt(entity_ref.id()));
 							}
@@ -120,13 +137,13 @@ impl HierarchyUi {
 							if ui.button("Move To").clicked() {
 								queue.push(MoveTo(entity_ref.id()));
 							}
-						}
-					});
+						});
+					}
 
-					ui.menu_button("Camera", |ui| {
-						if let Some(camera) = entity_ref.get::<Camera>()
-							&& let Some(image) = camera.target.as_image()
-						{
+					if let Some(camera) = entity_ref.get::<Camera>()
+						&& let Some(image) = camera.target.as_image()
+					{
+						ui.menu_button("Camera", |ui| {
 							if entity_ref.contains::<EditorManagedCamera>() {
 								if ui.button("Open Live").clicked() {
 									queue.push(OpenUi::open_with(
@@ -148,8 +165,8 @@ impl HierarchyUi {
 									ImageViewerUi::new(image.id()),
 								));
 							}
-						}
-					});
+						});
+					}
 
 					ui.menu_button("Scene", |ui| {
 						if ui.button("Add Child").clicked() {
@@ -164,8 +181,12 @@ impl HierarchyUi {
 							queue.push(ReparentMessage(entity));
 						}
 
-						if entity_ref.contains::<SceneRoot>() && ui.button("Edit Scene").clicked() {
-							queue.push(ShowSceneSettings::new(entity));
+						if entity_ref.contains::<TargetScene>() {
+							if !entity_ref.contains::<DynamicSceneRoot>() && ui.button("Edit Scene").clicked() {
+								queue.push(ShowSceneSettings::new(entity));
+							}
+						} else if ui.button("Make Scene").clicked() {
+							entity_ref.insert(TargetScene);
 						}
 
 						if ui.button("Despawn").clicked() {

@@ -7,7 +7,7 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
 		cam::EditorCamera,
-		scene::UserScene,
+		scene::TargetScene,
 		ui::{EditorEguiContext, misc::UiState},
 	},
 	util::WorldExtensions as _,
@@ -152,7 +152,7 @@ impl EditorUi for EditorViewUi {
 			payload.insert(std::iter::once(new_entity), world);
 
 			'make_child: {
-				let mut query = world.query_filtered::<Entity, EditorInternalFilter<With<UserScene>>>();
+				let mut query = world.query_filtered::<Entity, EditorInternalFilter<With<TargetScene>>>();
 				let Ok(root_entity) = query.query_mut(world).single() else {
 					break 'make_child;
 				};

@@ -1,11 +1,26 @@
-use crate::util::world::{RestrictedWorldView, WorldView};
+use crate::{
+	private::EditorInternalQuery,
+	util::world::{RestrictedWorldView, WorldView},
+};
 use bevy::{
-	ecs::archetype::Archetype,
+	ecs::{archetype::Archetype, system::entity_command},
 	picking::pointer::PointerId,
 	prelude::*,
 	window::{Monitor, PrimaryWindow},
 };
 use std::any::TypeId;
+
+pub fn one_of<C: Component>(
+	event: On<Add, C>,
+	mut commands: Commands,
+	q_others: EditorInternalQuery<Entity, With<C>>,
+) {
+	for entity in q_others.iter().filter(|&e| e != event.event_target()) {
+		if let Ok(mut entity) = commands.get_entity(entity) {
+			entity.queue_silenced(entity_command::remove::<C>());
+		}
+	}
+}
 
 pub fn insert_bundle_from_world<T: Bundle + FromWorld>() -> impl EntityCommand {
 	move |mut entity: EntityWorldMut| {

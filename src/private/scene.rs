@@ -1,10 +1,12 @@
 use crate::{
 	EditorState, SimulationState,
 	private::{
-		EditorInternalFilter, EditorInternalSingle, EditorOwned, Simulated, UserHidden,
+		EditorInternalSingle, EditorOwned, Simulated, UserHidden,
+		cam::EditorCamera,
 		reflection::{TypeNameDisplayCache, TypeNameDisplayInfo},
 		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
 	},
+	util::entity::one_of,
 };
 use bevy::{
 	ecs::{entity::EntityHashSet, entity_disabling::Disabled, system::SystemParam},
@@ -33,12 +35,14 @@ pub struct EditorScenePlugin;
 impl Plugin for EditorScenePlugin {
 	fn build(&self, app: &mut App) {
 		app
-			.add_plugins(SingletonPlugin::<UserScene, EditorInternalFilter>::new(
+			.add_plugins(SingletonPlugin::<TargetSceneRoot>::new(
 				SingletonBehavior::RemoveOther,
 			))
 			.add_message::<ShowSceneSettings>()
 			.init_resource::<RelationshipRegistry>()
-			.add_systems(Startup, startup)
+			.add_observer(one_of::<TargetScene>)
+			.add_observer(on_new_camera)
+			.add_observer(on_new_scene)
 			.add_systems(
 				OnEnter(EditorState::Editing),
 				(show_infinite_grid, restore_scene),
@@ -50,25 +54,49 @@ impl Plugin for EditorScenePlugin {
 	}
 }
 
+#[derive(Component, Default)]
+#[require(Transform, Visibility, Node, TargetScene)]
+pub struct TargetSceneRoot;
+
 #[derive(Component, Reflect, Default, Clone, Copy)]
-#[require(
-  SceneRoot,
-  Name = Name::new("Scene")
-)]
-#[reflect(Clone, Default)]
-pub struct UserScene;
+#[reflect(Component, Clone, Default)]
+#[require(Transform, Visibility, Node)]
+pub struct TargetScene;
 
 #[derive(Component)]
 struct ComponentFilter(SceneFilter);
 
 #[derive(Bundle)]
 struct EditableScene {
-	scene: UserScene,
+	scene: TargetScene,
 	components: ComponentFilter,
 }
 
-fn startup(mut commands: Commands) {
-	commands.spawn(UserScene);
+fn on_new_camera(
+	event: On<Add, EditorCamera>,
+	mut commands: Commands,
+	target_scene_root: Option<Single<Entity, With<TargetSceneRoot>>>,
+) {
+	match target_scene_root {
+		Some(ts) => {
+			commands
+				.entity(*ts)
+				.insert(UiTargetCamera(event.event_target()));
+		}
+		None => {
+			commands.spawn((Name::new("New Scene"), TargetSceneRoot));
+		}
+	}
+}
+
+fn on_new_scene(
+	event: On<Add, TargetSceneRoot>,
+	mut commands: Commands,
+	editor_camera: EditorInternalSingle<Entity, With<EditorCamera>>,
+) {
+	commands
+		.entity(event.event_target())
+		.insert(UiTargetCamera(*editor_camera));
 }
 
 fn show_infinite_grid(
@@ -423,8 +451,12 @@ impl Command for LoadScene {
 				})
 				.unwrap_or(self.0);
 
+			let name = path
+				.file_stem()
+				.map(|f| format!("Scene Root ({})", f.display()))
+				.unwrap_or_else(|| String::from("Scene Root"));
 			let scene = assets.load(path);
-			world.spawn((UserScene, DynamicSceneRoot(scene)));
+			world.spawn((TargetSceneRoot, Name::new(name), DynamicSceneRoot(scene)));
 		});
 	}
 }

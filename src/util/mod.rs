@@ -34,18 +34,6 @@ pub fn pretty_type_name_str(val: &str) -> String {
 	format!("{:?}", disqualified::ShortName(val))
 }
 
-pub fn one_of<C: Component>(
-	event: On<Add, C>,
-	mut commands: Commands,
-	q_others: EditorInternalQuery<Entity, With<C>>,
-) {
-	for entity in q_others.iter().filter(|&e| e != event.event_target()) {
-		if let Ok(mut entity) = commands.get_entity(entity) {
-			entity.queue_silenced(entity_command::remove::<C>());
-		}
-	}
-}
-
 #[allow(unused)]
 pub trait WindowExtensions: Borrow<Window> {
 	fn center(&self) -> [f32; 2] {

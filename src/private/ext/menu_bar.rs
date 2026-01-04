@@ -3,11 +3,12 @@ use crate::{
 	private::{
 		EditorInternalQuery,
 		ext::settings::{ProjectSettingsUi, ShowEditorSettings},
-		scene::UserScene,
+		scene::{LoadScene, UserScene},
 	},
 	ui::{OpenMode, OpenUi},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
+use egui_file_dialog::FileDialog;
 use egui_phosphor_icons::icons;
 use uuid::Uuid;
 
@@ -19,6 +20,8 @@ pub struct Params<'w, 's> {
 	next_editor_state: ResMut<'w, NextState<EditorState>>,
 
 	q_project_settings_ui: EditorInternalQuery<'w, 's, (), With<ProjectSettingsUi>>,
+
+	file_dialog: Local<'s, FileDialog>,
 }
 
 #[derive(Resource, Reflect, Default)]
@@ -28,6 +31,12 @@ struct CachedSettings {
 }
 
 pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
+	params.file_dialog.update(ui.ctx());
+
+	if let Some(file) = params.file_dialog.take_picked() {
+		params.commands.queue(LoadScene::new(file));
+	}
+
 	egui::MenuBar::new().ui(ui, |ui| {
 		file_menu(ui, &mut params);
 		edit_menu(ui, &mut params);
@@ -43,8 +52,8 @@ fn file_menu(ui: &mut egui::Ui, params: &mut Params) {
 			params.commands.spawn(UserScene);
 		}
 
-		if ui.button("Test").clicked() {
-			params.commands.spawn_empty();
+		if ui.button("Open Scene").clicked() {
+			params.file_dialog.pick_file();
 		}
 	});
 }

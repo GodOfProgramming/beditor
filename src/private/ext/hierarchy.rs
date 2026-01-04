@@ -6,17 +6,15 @@ use crate::{
 		ui::hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent},
 	},
 	private::{
-		EditorInternal, EditorInternalFilter, EditorInternalSingle, UserHidden,
+		EditorInternal, EditorInternalFilter, UserHidden,
 		cam::{ActiveEditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
-		scene::{self, ShowSceneSettings},
-		ui::{EditorEguiContext, EditorUiEguiContextPass, InspectorSelection},
+		scene::ShowSceneSettings,
+		ui::InspectorSelection,
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
 	util::WorldExtensions as _,
 };
 use bevy::prelude::*;
-use bevy_egui::EguiContext;
-use egui_file_dialog::FileDialog;
 use notify::Notification;
 use std::sync::Arc;
 use uuid::{Uuid, uuid};
@@ -31,19 +29,12 @@ impl EditorExtension for HierarchyExtension {
 
 	fn build_app(&self, app: &mut App) {
 		app
-			.init_resource::<HierarchyState>()
 			.add_message::<ReparentMessage>()
 			.add_message::<ClearSelectedMessage>()
-			.add_message::<DespawnEntityMessage>()
 			.add_observer(SelectedEntitiesChangedEvent::on_event)
-			.add_systems(EditorUiEguiContextPass, show_dialogs)
 			.add_systems(
 				FixedUpdate,
-				(
-					ReparentMessage::handle,
-					ClearSelectedMessage::handle,
-					DespawnEntityMessage::handle,
-				),
+				(ReparentMessage::handle, ClearSelectedMessage::handle),
 			);
 	}
 }
@@ -161,6 +152,10 @@ impl HierarchyUi {
 					});
 
 					ui.menu_button("Scene", |ui| {
+						if ui.button("Add Child").clicked() {
+							queue.push(AddChild(entity))
+						}
+
 						if entity_ref.contains::<ChildOf>() && ui.button("Make Orphan").clicked() {
 							entity_ref.remove::<ChildOf>();
 						}
@@ -172,32 +167,11 @@ impl HierarchyUi {
 						if entity_ref.contains::<SceneRoot>() && ui.button("Edit Scene").clicked() {
 							queue.push(ShowSceneSettings::new(entity));
 						}
-					});
-				}
 
-				let state = world
-					.resource::<HierarchyState>()
-					.scene_file_dialog
-					.state()
-					.clone();
-
-				ui.add_enabled_ui(state != egui_file_dialog::DialogState::Open, |ui| {
-					if ui.button("Save As Scene").clicked() {
-						match scene::serialize_to_scene(entity, world) {
-							Ok(data) => {
-								let mut state = world.resource_mut::<HierarchyState>();
-								state.scene_file_dialog.save_file();
-								state.data = data;
-							}
-							Err(err) => {
-								world.trigger(Notification::error("Failed to save scene").with_context(err))
-							}
+						if ui.button("Despawn").clicked() {
+							entity_ref.despawn();
 						}
-					}
-				});
-
-				if ui.button("Despawn").clicked() {
-					world.write_message(DespawnEntityMessage(entity));
+					});
 				}
 
 				if ui.button("Clear Selected").clicked() {
@@ -207,6 +181,14 @@ impl HierarchyUi {
 		});
 
 		true
+	}
+}
+
+struct AddChild(Entity);
+
+impl Command for AddChild {
+	fn apply(self, world: &mut World) {
+		world.spawn(ChildOf(self.0));
 	}
 }
 
@@ -240,17 +222,6 @@ impl Command for ReparentMessage {
 }
 
 #[derive(Message)]
-struct DespawnEntityMessage(Entity);
-
-impl DespawnEntityMessage {
-	fn handle(mut messages: MessageReader<Self>, mut commands: Commands) {
-		for msg in messages.read() {
-			commands.entity(msg.0).despawn();
-		}
-	}
-}
-
-#[derive(Message)]
 struct ClearSelectedMessage;
 
 impl ClearSelectedMessage {
@@ -268,40 +239,6 @@ impl ClearSelectedMessage {
 		if let InspectorSelection::Entities(selected) = inspector_selection.as_mut() {
 			let event = selected.scoped_clear();
 			commands.trigger(event);
-		}
-	}
-}
-
-#[derive(Resource, Default)]
-struct HierarchyState {
-	scene_file_dialog: FileDialog,
-	data: Vec<u8>,
-}
-
-fn show_dialogs(
-	mut commands: Commands,
-	mut state: ResMut<HierarchyState>,
-	mut context: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
-) {
-	let ctx = context.get_mut();
-
-	state.scene_file_dialog.update(ctx);
-	if let Some(file) = state.scene_file_dialog.take_picked()
-		&& state.scene_file_dialog.mode() == egui_file_dialog::DialogMode::SaveFile
-	{
-		match std::fs::write(&file, std::mem::take(&mut state.data)) {
-			Ok(_) => {
-				commands.trigger(Notification::success(format!(
-					"Saved scene to {}",
-					file.display()
-				)));
-			}
-			Err(err) => {
-				commands.trigger(
-					Notification::error(format!("Failed to save scene to {}", file.display()))
-						.with_context(err),
-				);
-			}
 		}
 	}
 }

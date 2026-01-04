@@ -1,11 +1,14 @@
 use crate::{
-	APP_DIR, EditorExtension, EditorUi, Settings,
-	private::{EditorInternal, EditorInternalSingle, ui::EditorEguiContext},
+	APP_DIR, EditorExtension, Settings,
+	private::{
+		EditorInternalSingle,
+		ui::{EditorEguiContext, EditorUiEguiContextPass},
+	},
 	settings::CurrentThemeSetting,
 	util::storage::{Global, GlobalEditorSettings},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::EguiContextSettings;
+use bevy_egui::{EguiContext, EguiContextSettings};
 use convert_case::{Case, Casing};
 use egui::Widget;
 use egui_phosphor_icons::icons;
@@ -15,76 +18,63 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 use strum::VariantArray;
 use strum_macros::{Display, VariantArray};
-use uuid::uuid;
 
 #[derive(Default)]
 pub struct EditorSettingsUiExtension;
 
 impl EditorExtension for EditorSettingsUiExtension {
-	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
-		ctx.register_ui::<EditorSettingsUi>();
-	}
+	fn build_editor(&self, _ctx: &mut crate::EditorExtensionContext) {}
 
 	fn build_app(&self, app: &mut App) {
-		app.init_resource::<EditorSettings>();
+		app
+			.add_message::<ShowEditorSettings>()
+			.init_resource::<EditorSettings>()
+			.add_systems(EditorUiEguiContextPass, ShowEditorSettings::show_menu);
 	}
-}
-
-#[derive(Default, Component, Reflect)]
-#[require(EditorInternal)]
-pub struct EditorSettingsUi {
-	selected_category: Option<EditorSettingCategory>,
 }
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
-	category_list: Local<'s, widgets::CategoryMenu<EditorSettingCategory>>,
-	category_params: CategoryParams<'w, 's>,
-}
-
-#[derive(SystemParam)]
-pub struct CategoryParams<'w, 's> {
 	commands: Commands<'w, 's>,
 	editor_settings: ResMut<'w, EditorSettings>,
 	global_settings: GlobalEditorSettings<'w, 's>,
 	context_settings:
-		Option<EditorInternalSingle<'w, 's, &'static mut EguiContextSettings, With<EditorEguiContext>>>,
+		EditorInternalSingle<'w, 's, &'static mut EguiContextSettings, With<EditorEguiContext>>,
 }
 
-impl EditorUi for EditorSettingsUi {
-	const NAME: &str = "Editor Settings";
+#[derive(Message)]
+pub struct ShowEditorSettings;
 
-	const ID: uuid::Uuid = uuid!("5c929b24-50f2-4840-93c4-41e865645e64");
+impl ShowEditorSettings {
+	fn show_menu(
+		mut messages: MessageReader<Self>,
+		mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
+		mut modal: Local<widgets::MenuModal>,
+		mut menu: Local<widgets::CategoryMenu<EditorSettingCategory>>,
+		params: Params,
+	) {
+		modal.open |= !messages.is_empty();
+		messages.clear();
 
-	const HIDDEN: bool = true;
+		let ctx = contexts.get_mut();
+		let id = egui::Id::new("beditor-editor-settings-modal");
+		modal.show(ctx, id, |ui| {
+			ui.heading("Editor Settings");
 
-	const SCROLL_BARS: [bool; 2] = [true, true];
+			ui.separator();
 
-	type Params<'w, 's> = Params<'w, 's>;
-
-	fn spawn(_params: Self::Params<'_, '_>) -> Self {
-		default()
-	}
-
-	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
-		let Params {
-			mut category_list,
-			category_params,
-		} = params;
-
-		let list = EditorSettingCategory::VARIANTS;
-
-		let selected = category_list.ui(ui, list, |ui| {
-			if let Some(category) = self.selected_category {
-				category.ui(ui, category_params);
-			} else {
-				ui.label("Select a category");
-			}
+			menu.ui(
+				ui,
+				EditorSettingCategory::VARIANTS,
+				|ui, selected_category| {
+					if let Some(category) = selected_category {
+						category.ui(ui, params);
+					} else {
+						ui.label("Select a category");
+					}
+				},
+			);
 		});
-
-		if selected.is_some() {
-			self.selected_category = selected;
-		}
 	}
 }
 
@@ -137,8 +127,8 @@ struct AppearanceSettings {
 }
 
 impl AppearanceSettings {
-	fn ui(ui: &mut egui::Ui, params: CategoryParams) {
-		let CategoryParams {
+	fn ui(ui: &mut egui::Ui, params: Params) {
+		let Params {
 			mut commands,
 			mut editor_settings,
 			mut global_settings,
@@ -150,22 +140,20 @@ impl AppearanceSettings {
 			..
 		} = &mut *editor_settings;
 
-		if let Some(context_settings) = context_settings.as_deref_mut() {
-			ui.horizontal(|ui| {
-				ui.label(format!(
-					"Zoom ({zoom:.2}x)",
-					zoom = context_settings.scale_factor
-				));
+		ui.horizontal(|ui| {
+			ui.label(format!(
+				"Zoom ({zoom:.2}x)",
+				zoom = context_settings.scale_factor
+			));
 
-				if ui.add(egui::Button::new(icons::MINUS)).clicked() {
-					context_settings.scale_factor -= 0.25;
-				}
+			if ui.add(egui::Button::new(icons::MINUS)).clicked() {
+				context_settings.scale_factor -= 0.25;
+			}
 
-				if ui.add(egui::Button::new(icons::PLUS)).clicked() {
-					context_settings.scale_factor += 0.25;
-				}
-			});
-		}
+			if ui.add(egui::Button::new(icons::PLUS)).clicked() {
+				context_settings.scale_factor += 0.25;
+			}
+		});
 
 		let ctx = ui.ctx().clone();
 
@@ -270,7 +258,7 @@ impl AdvancedOptions {
 }
 
 impl EditorSettingCategory {
-	fn ui(self, ui: &mut egui::Ui, params: CategoryParams) {
+	fn ui(self, ui: &mut egui::Ui, params: Params) {
 		match self {
 			Self::Appearance => AppearanceSettings::ui(ui, params),
 			Self::AdvancedOptions => AdvancedOptions::ui(ui),

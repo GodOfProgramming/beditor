@@ -47,7 +47,6 @@ impl EditorExtension for ProjectSettingsUiExtension {
 #[derive(Component)]
 #[require(EditorInternal)]
 pub struct ProjectSettingsUi {
-	selected_category: Option<ProjectSettingCategory>,
 	save_layout_dialog: widgets::Dialog,
 	reset_layout_dialog: widgets::Dialog,
 }
@@ -86,7 +85,6 @@ impl EditorUi for ProjectSettingsUi {
 			.unwrap_or(true);
 
 		Self {
-			selected_category: None,
 			save_layout_dialog: widgets::Dialog::new(egui::Id::new("save_layout_dialog"), "Save Layout"),
 			reset_layout_dialog: widgets::Dialog::new(
 				egui::Id::new("reset_layout_dialog"),
@@ -134,19 +132,17 @@ impl EditorUi for ProjectSettingsUi {
 			});
 		});
 
-		let list = ProjectSettingCategory::VARIANTS;
-
-		let selected = category_menu.ui(ui, list, |ui| {
-			if let Some(category) = self.selected_category {
-				category.ui(ui, category_params, self);
-			} else {
-				ui.label("Select a category");
-			}
-		});
-
-		if selected.is_some() {
-			self.selected_category = selected;
-		}
+		category_menu.ui(
+			ui,
+			ProjectSettingCategory::VARIANTS,
+			|ui, selected_category| {
+				if let Some(category) = selected_category {
+					category.ui(ui, category_params, self);
+				} else {
+					ui.label("Select a category");
+				}
+			},
+		);
 	}
 }
 

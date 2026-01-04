@@ -8,7 +8,7 @@ use crate::{
 	util::one_of,
 };
 use bevy::{
-	ecs::{entity::EntityHashSet, entity_disabling::Disabled},
+	ecs::{entity::EntityHashSet, entity_disabling::Disabled, system::SystemParam},
 	prelude::*,
 	utils::TypeIdMap,
 };
@@ -153,6 +153,31 @@ enum SceneSettings {
 	SavableComponents,
 }
 
+impl SceneSettings {
+	fn ui(self, ui: &mut egui::Ui, params: Params<'_, '_>) {
+		let Params {
+			type_name_cache,
+			mut type_name_list,
+		} = params;
+
+		match self {
+			Self::SavableComponents => {
+				ui.heading("Select Scene Components");
+
+				ui.separator();
+
+				type_name_list.ui(ui, type_name_cache.as_slice());
+			}
+		}
+	}
+}
+
+#[derive(SystemParam)]
+struct Params<'s, 'w> {
+	type_name_cache: Res<'w, TypeNameDisplayCache>,
+	type_name_list: Local<'s, widgets::SelectableList<widgets::MultiSelect<TypeNameDisplayInfo>>>,
+}
+
 impl From<SceneSettings> for egui::WidgetText {
 	fn from(value: SceneSettings) -> Self {
 		Self::Text(value.to_string().to_case(Case::Title))
@@ -168,44 +193,28 @@ impl From<&SceneSettings> for egui::WidgetText {
 fn show_scene_editing_modal(
 	mut messages: MessageReader<ShowSceneSettings>,
 	mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
-	mut show_popup: Local<bool>,
-	type_name_cache: Res<TypeNameDisplayCache>,
+	mut modal: Local<widgets::MenuModal>,
 	mut menu: Local<widgets::CategoryMenu<SceneSettings>>,
-	mut type_name_list: Local<widgets::SelectableList<widgets::MultiSelect<TypeNameDisplayInfo>>>,
+	params: Params,
 ) {
-	*show_popup |= !messages.is_empty();
-
+	modal.open |= !messages.is_empty();
 	messages.clear();
 
-	if !*show_popup {
-		return;
-	}
-
 	let ctx = contexts.get_mut();
-
 	let id = egui::Id::new("beditor-scene-modal");
-
-	let response = widgets::MenuModal::new(id).show(ctx, |ui| {
-		let list = SceneSettings::VARIANTS;
-
-		menu.ui(ui, list, |ui| {
-			ui.heading("Select Scene Components");
-
-			ui.separator();
-
-			type_name_list.ui(ui, type_name_cache.as_slice());
-		});
+	modal.show(ctx, id, |ui| {
+		ui.heading("Scene Settings");
 
 		ui.separator();
 
-		if ui.button("Close").clicked() {
-			*show_popup = false;
-		}
+		menu.ui(ui, SceneSettings::VARIANTS, |ui, selected_category| {
+			if let Some(category) = selected_category {
+				category.ui(ui, params);
+			} else {
+				ui.label("Select a category");
+			}
+		});
 	});
-
-	if response.backdrop_response.clicked() {
-		*show_popup = false;
-	}
 }
 
 ////////////////////////////////////////////////////////////////////////////////

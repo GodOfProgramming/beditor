@@ -1,6 +1,6 @@
 use crate::{
 	EditorState, SimulationState,
-	panels::settings::{EditorSettingsUi, ProjectSettingsUi},
+	panels::settings::{ProjectSettingsUi, ShowEditorSettings},
 	private::{EditorInternalQuery, scene::UserScene},
 	ui::{OpenMode, OpenUi},
 };
@@ -15,7 +15,6 @@ pub struct Params<'w, 's> {
 	editor_state: Res<'w, State<EditorState>>,
 	next_editor_state: ResMut<'w, NextState<EditorState>>,
 
-	q_editor_settings_ui: EditorInternalQuery<'w, 's, (), With<EditorSettingsUi>>,
 	q_project_settings_ui: EditorInternalQuery<'w, 's, (), With<ProjectSettingsUi>>,
 }
 
@@ -49,13 +48,9 @@ fn file_menu(ui: &mut egui::Ui, params: &mut Params) {
 
 fn edit_menu(ui: &mut egui::Ui, params: &mut Params<'_, '_>) {
 	ui.menu_button("Edit", |ui| {
-		ui.add_enabled_ui(params.q_editor_settings_ui.is_empty(), |ui| {
-			if ui.button("Editor Settings").clicked() {
-				params
-					.commands
-					.queue(OpenUi::open::<EditorSettingsUi>(OpenMode::Window));
-			}
-		});
+		if ui.button("Editor Settings").clicked() {
+			params.commands.write_message(ShowEditorSettings);
+		}
 
 		ui.add_enabled_ui(params.q_project_settings_ui.is_empty(), |ui| {
 			if ui.button("Project Settings").clicked() {

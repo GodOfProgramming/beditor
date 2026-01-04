@@ -4,26 +4,48 @@ use std::{collections::HashSet, hash::Hash, sync::Arc};
 use egui::IntoAtoms;
 use itertools::Itertools;
 
+#[derive(Default)]
 pub struct MenuModal {
-	id: egui::Id,
+	pub open: bool,
 }
 
 impl MenuModal {
-	pub fn new(id: egui::Id) -> Self {
-		Self { id }
+	pub fn new() -> Self {
+		Self::default()
 	}
 
 	pub fn show<R>(
-		&self,
+		&mut self,
 		ctx: &egui::Context,
+		id: egui::Id,
 		content: impl FnOnce(&mut egui::Ui) -> R,
-	) -> egui::ModalResponse<R> {
+	) -> Option<egui::ModalResponse<R>> {
+		if !self.open {
+			return None;
+		}
+
 		let area_size = ctx.input(|i| i.content_rect()).size() * 0.9;
-		egui::Modal::new(self.id).show(ctx, |ui| {
+		let response = egui::Modal::new(id).show(ctx, |ui| {
 			egui::Resize::default()
 				.fixed_size(area_size)
-				.show(ui, |ui| (content)(ui))
-		})
+				.show(ui, |ui| {
+					let retval = (content)(ui);
+
+					ui.separator();
+
+					if ui.button("Close").clicked() {
+						self.open = false;
+					}
+
+					retval
+				})
+		});
+
+		if response.backdrop_response.clicked() {
+			self.open = false;
+		}
+
+		Some(response)
 	}
 }
 
@@ -354,59 +376,66 @@ impl HorizontalSplit {
 	}
 }
 
-pub struct CategoryMenu<T>
+pub struct CategoryMenu<C>
 where
-	T: Eq + Copy + for<'a> IntoAtoms<'a>,
-	egui::WidgetText: for<'a> From<&'a T>,
+	C: Eq + Copy + for<'a> IntoAtoms<'a>,
+	egui::WidgetText: for<'a> From<&'a C>,
 {
-	selector: SelectableList<SingleSelect<T>>,
+	selector: SelectableList<SingleSelect<C>>,
+	selected_category: Option<C>,
 }
 
-impl<T> Default for CategoryMenu<T>
+impl<C> Default for CategoryMenu<C>
 where
-	T: Eq + Copy + for<'a> IntoAtoms<'a>,
-	egui::WidgetText: for<'a> From<&'a T>,
+	C: Eq + Copy + for<'a> IntoAtoms<'a>,
+	egui::WidgetText: for<'a> From<&'a C>,
 {
 	fn default() -> Self {
 		Self {
 			selector: Default::default(),
+			selected_category: None,
 		}
 	}
 }
 
-impl<T> CategoryMenu<T>
+impl<C> CategoryMenu<C>
 where
-	T: Eq + Copy + for<'a> IntoAtoms<'a>,
-	egui::WidgetText: for<'a> From<&'a T>,
+	C: Eq + Copy + for<'a> IntoAtoms<'a>,
+	egui::WidgetText: for<'a> From<&'a C>,
 {
 	pub fn new() -> Self {
 		Self::default()
 	}
 
-	pub fn ui(
+	pub fn ui<R>(
 		&mut self,
 		ui: &mut egui::Ui,
-		category_list: &[T],
-		content: impl FnOnce(&mut egui::Ui),
-	) -> Option<T> {
-		let mut out = None;
-
-		HorizontalSplit::new(ui.available_width() * 0.1).show(
+		category_list: &[C],
+		content: impl FnOnce(&mut egui::Ui, Option<C>) -> R,
+	) -> (Option<egui::InnerResponse<C>>, R) {
+		let selected_category = self.selected_category;
+		let response = HorizontalSplit::new(ui.available_width() * 0.1).show(
 			ui,
 			|ui| {
 				ui.heading("Categories");
+
 				ui.separator();
 
-				out = self
+				let inner_response = self
 					.selector
 					.ui(ui, category_list)
-					.map(|r| category_list[r.inner]);
+					.map(|r| egui::InnerResponse::new(category_list[r.inner], r.response));
+
+				self.selected_category = inner_response
+					.as_ref()
+					.map(|r| r.inner)
+					.or(self.selected_category);
+
+				inner_response
 			},
-			|ui| {
-				(content)(ui);
-			},
+			|ui| (content)(ui, selected_category),
 		);
 
-		out
+		response.inner
 	}
 }

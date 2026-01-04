@@ -3,7 +3,7 @@ mod project;
 
 use bevy::prelude::*;
 
-pub use editor::EditorSettingsUi;
+pub use editor::ShowEditorSettings;
 pub use project::ProjectSettingsUi;
 
 use crate::{

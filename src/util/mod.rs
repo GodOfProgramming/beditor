@@ -23,6 +23,28 @@ use std::{
 	marker::PhantomData,
 };
 
+#[macro_export]
+macro_rules! match_else {
+	($value:ident; else $err:ident => $blk:block) => {
+		match $value {
+			Ok(_tmp_) => _tmp_,
+			Err($err) => $blk,
+		}
+	};
+	($value:expr; else $err:ident => $blk:block) => {
+		match $value {
+			Ok(_tmp_) => _tmp_,
+			Err($err) => $blk,
+		}
+	};
+	($value:block; else $err:ident => $blk:block) => {
+		match $value {
+			Ok(_tmp_) => _tmp_,
+			Err($err) => $blk,
+		}
+	};
+}
+
 #[derive(SystemParam)]
 pub struct NoParams;
 

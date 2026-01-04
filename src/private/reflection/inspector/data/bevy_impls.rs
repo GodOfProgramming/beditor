@@ -170,13 +170,11 @@ impl InspectorPrimitive for Handle<Mesh> {
 			world_view: world, ..
 		} = env.context;
 
-		let meshes = match world.resource::<Assets<Mesh>>() {
-			Ok(meshes) => meshes,
-			Err(err) => {
-				err.ui(ui, "Assets<Mesh>");
-				return;
-			}
-		};
+		let meshes = crate::match_else!(world.resource::<Assets<Mesh>>(); else err => {
+			err.ui(ui, "Assets<Mesh>");
+			return;
+		});
+
 		let Some(mesh) = meshes.get(self) else {
 			return dead_asset_handle(ui, self.id().untyped());
 		};
@@ -199,13 +197,10 @@ impl InspectorPrimitive for Handle<Image> {
 			env,
 			id,
 			|ui, handle, world, queue| {
-				let egui_user_textures = match world.resource::<EguiUserTextures>() {
-					Ok(v) => v,
-					Err(err) => {
-						err.ui(ui, "EguiUserTextures");
-						return;
-					}
-				};
+				let egui_user_textures = crate::match_else!(world.resource::<EguiUserTextures>(); else err => {
+					err.ui(ui, "EguiUserTextures");
+					return;
+				});
 
 				show_image(ui, handle, queue, egui_user_textures);
 			},
@@ -234,13 +229,10 @@ impl InspectorPrimitive for Handle<Image> {
 		} = env.context;
 
 		let mut queue = queue.borrow_mut();
-		let egui_user_textures = match world.resource::<EguiUserTextures>() {
-			Ok(res) => res,
-			Err(err) => {
-				err.ui(ui, "EguiUserTextures");
-				return;
-			}
-		};
+		let egui_user_textures = crate::match_else!(world.resource::<EguiUserTextures>(); else err => {
+			err.ui(ui, "EguiUserTextures");
+			return;
+		});
 
 		show_image(ui, self, &mut queue, egui_user_textures);
 	}

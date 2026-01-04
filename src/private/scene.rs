@@ -11,6 +11,7 @@ use crate::{
 use bevy::{
 	ecs::{entity::EntityHashSet, entity_disabling::Disabled, system::SystemParam},
 	prelude::*,
+	scene::serde::SceneSerializer,
 	utils::TypeIdMap,
 };
 use bevy_egui::EguiContext;
@@ -22,6 +23,7 @@ use notify::Notification;
 use ron::ser::PrettyConfig;
 use serde::Serialize;
 use singleton::{SingletonBehavior, SingletonPlugin};
+use smallvec::SmallVec;
 use std::{
 	any::TypeId,
 	env::current_dir,
@@ -366,30 +368,32 @@ impl Command for SerializeScene {
 		const ERR_MSG: &str = "Failed to serialize scene";
 		let Self(entity, path) = self;
 		world.resource_scope(|world, registry: Mut<RelationshipRegistry>| {
-			let all_entities = EntityHashSet::from_iter(entity_with_relatives(entity, world, &registry));
+			let app_type_registry = world.resource::<AppTypeRegistry>().clone();
+			let type_registry = app_type_registry.read();
+
+			let all_entities = entity_with_relatives(entity, world, &registry);
 			let scene = DynamicSceneBuilder::from_world(world)
 				.allow_all()
 				.extract_entities(all_entities.into_iter())
 				.build();
-			let app_type_registry = world.resource::<AppTypeRegistry>().clone();
-			let type_registry = app_type_registry.read();
-			let scene_ser = bevy::scene::serde::SceneSerializer::new(&scene, &type_registry);
+
+			let scene_ser = SceneSerializer::new(&scene, &type_registry);
 
 			let mut buf = String::new();
-			let mut ron_ser = match ron::Serializer::new(
+
+			let ser_result = ron::Serializer::new(
 				&mut buf,
 				Some(
 					PrettyConfig::default()
 						.struct_names(true)
 						.escape_strings(true),
 				),
-			) {
-				Ok(ser) => ser,
-				Err(err) => {
-					world.trigger(Notification::error(ERR_MSG).with_context(err));
-					return;
-				}
-			};
+			);
+
+			let mut ron_ser = crate::match_else!(ser_result; else err => {
+				world.trigger(Notification::error(ERR_MSG).with_context(err));
+				return;
+			});
 
 			if let Err(err) = scene_ser.serialize(&mut ron_ser) {
 				world.trigger(Notification::error(ERR_MSG).with_context(err));
@@ -411,10 +415,14 @@ fn entity_with_relatives(
 	world: &mut World,
 	registry: &RelationshipRegistry,
 ) -> Vec<Entity> {
-	let mut entities_to_check = vec![entity];
+	let mut entities_to_check = SmallVec::<[_; 24]>::from_iter(std::iter::once(entity));
 	let mut found_entities = EntityHashSet::new();
 
 	while let Some(entity) = entities_to_check.pop() {
+		if found_entities.contains(&entity) {
+			continue;
+		}
+
 		let relatives = registry
 			.values()
 			.fold(Vec::with_capacity(registry.len()), |mut list, extractor| {
@@ -427,7 +435,7 @@ fn entity_with_relatives(
 
 		found_entities.insert(entity);
 
-		let unchecked = relatives.difference(&found_entities);
+		let unchecked = relatives.difference(&found_entities).copied();
 		entities_to_check.extend(unchecked);
 	}
 

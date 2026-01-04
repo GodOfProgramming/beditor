@@ -6,10 +6,11 @@ use crate::{
 	util::{
 		self, WorldExtensions,
 		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
-		world::{MutableWorldView, ReflectBorrow, RestrictedWorldView, WorldView},
+		world::{MutableWorldView, ReflectBorrow, RestrictedWorldView},
 	},
 };
 use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
+use itertools::Itertools;
 use std::any::TypeId;
 
 pub struct ComponentInfo {
@@ -82,7 +83,8 @@ pub fn ui_for_entity_components(
 	type_registry: &TypeRegistry,
 	highlight_changes: bool,
 ) -> Option<egui::CollapsingResponse<ComponentInfo>> {
-	let Ok(components) = components_of_entity(&ctx.world_view, entity) else {
+	let world = ctx.world_view.world();
+	let Ok(components) = components_of_entity(world, entity) else {
 		errors::entity_does_not_exist(ui, entity);
 		return None;
 	};
@@ -115,26 +117,25 @@ pub fn ui_for_entity_components(
 		// create a context with access to the world except for the currently viewed component
 		let (mut component_view, world_view) = ctx.world_view.split_off_component((entity, type_id));
 
-		let value = match component_view.entity_component_reflect_mut(entity, type_id, type_registry) {
-			Ok(value) => value,
-			Err(e) => {
-				let response = ui.indent(id, |ui| {
-					ui.label(egui::RichText::new(&name).underline())
-						.on_hover_ui(|ui| {
-							e.ui(ui, name);
-						})
-				});
+		let component_result =
+			component_view.entity_component_reflect_mut(entity, type_id, type_registry);
+		let value = crate::match_else!(component_result; else err => {
+			let response = ui.indent(id, |ui| {
+				ui.label(egui::RichText::new(&name).underline())
+					.on_hover_ui(|ui| {
+						err.ui(ui, name);
+					})
+			});
 
-				clicked_header.maybe_take(ComponentInfo::from_response(
-					response.inner,
-					false,
-					type_id,
-					component_id,
-				));
+			clicked_header.maybe_take(ComponentInfo::from_response(
+				response.inner,
+				false,
+				type_id,
+				component_id,
+			));
 
-				continue;
-			}
-		};
+			continue;
+		});
 
 		if highlight_changes && value.is_changed() {
 			set_highlight_style(ui);
@@ -203,17 +204,15 @@ pub fn ui_for_entities_with_shared_components(
 		let type_registry = type_registry.read();
 
 		let &first = entities.first()?;
-		let world_view = RestrictedWorldView::<MutableWorldView>::from(world);
 
-		let Ok(mut components) = components_of_entity(&world_view, first) else {
+		let Ok(mut components) = components_of_entity(world, first) else {
 			errors::entity_does_not_exist(ui, first);
 			return None;
 		};
 
 		for &entity in entities.iter().skip(1) {
 			components.retain(|(_, id, _, _)| {
-				world_view
-					.world()
+				world
 					.get_entity(entity)
 					.map_or(true, |entity| entity.contains_id(*id))
 			})
@@ -240,6 +239,7 @@ pub fn ui_for_entities_with_shared_components(
 				continue;
 			}
 
+			let world_view = RestrictedWorldView::<MutableWorldView>::from(&mut *world); // TODO how is world "moved" when it's a reference?
 			let (resources_view, components_view) = world_view.resources_components();
 
 			let mut values = Vec::with_capacity(entities.len());
@@ -308,27 +308,24 @@ pub fn ui_for_entities_with_shared_components(
 	})
 }
 
-fn components_of_entity<W: WorldView>(
-	world_view: &RestrictedWorldView<W>,
+fn components_of_entity(
+	world: &World,
 	entity: Entity,
 ) -> Result<Vec<(String, ComponentId, Option<TypeId>, usize)>> {
-	let entity_ref = world_view.world().get_entity(entity)?;
+	let entity_ref = world.get_entity(entity)?;
 
 	let archetype = entity_ref.archetype();
-	let mut components: Vec<_> = archetype
+	let entity_components: Vec<_> = archetype
 		.components()
 		.iter()
 		.map(|component_id| {
-			let info = world_view
-				.world()
-				.components()
-				.get_info(*component_id)
-				.unwrap();
+			let info = world.components().get_info(*component_id).unwrap();
 			let name = util::pretty_type_name_str(&info.name().to_string());
 
 			(name, *component_id, info.type_id(), info.layout().size())
 		})
+		.sorted_by(|(name_a, ..), (name_b, ..)| name_a.cmp(name_b))
 		.collect();
-	components.sort_by(|(name_a, ..), (name_b, ..)| name_a.cmp(name_b));
-	Ok(components)
+
+	Ok(entity_components)
 }

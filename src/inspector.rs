@@ -233,11 +233,12 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let mut ctx = MutableContext::from_world_view(world_view, queue);
 			let mut env = InspectorUi::new(type_registry, &mut ctx);
 
-			let mut resource =
-				match resource_view.resource_reflect_mut_by_id(resource_type_id, type_registry) {
-					Ok(resource) => resource,
-					Err(err) => return errors::show_error(err, ui, name_of_type),
-				};
+			let resource_result =
+				resource_view.resource_reflect_mut_by_id(resource_type_id, type_registry);
+			let mut resource = crate::match_else!(resource_result; else err => {
+				errors::show_error(err, ui, name_of_type);
+				return;
+			});
 
 			let changed = env.ui_for_reflect_mut(
 				resource.bypass_change_detection().as_partial_reflect_mut(),

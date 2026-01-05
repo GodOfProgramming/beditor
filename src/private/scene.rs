@@ -4,13 +4,14 @@ use crate::{
 	private::{
 		EditorInternalSingle, EditorOwned, SimulationOwned, UserHidden,
 		cam::EditorCamera,
-		reflection::{TypeNameDisplayCache, TypeNameDisplayInfo},
+		reflection::{CachedTypeInfo, TypeInfoCache},
 		ui::{EditorEguiContext, EditorUiEguiContextPass},
 	},
 	util::entity::one_of,
 };
 use bevy::{
 	ecs::{entity::EntityHashSet, entity_disabling::Disabled, system::SystemParam},
+	platform::collections::HashSet,
 	prelude::*,
 	scene::{SceneInstance, SceneInstanceReady, serde::SceneSerializer},
 	utils::TypeIdMap,
@@ -18,7 +19,9 @@ use bevy::{
 use bevy_egui::EguiContext;
 use bevy_infinite_grid::InfiniteGrid;
 use convert_case::{Case, Casing};
+use derive_more::derive::Deref;
 use derive_new::new;
+use egui_autocomplete::AutoCompleteTextEdit;
 use egui_file_dialog::FileDialog;
 use notify::Notification;
 use ron::ser::PrettyConfig;
@@ -28,10 +31,11 @@ use smallvec::SmallVec;
 use std::{
 	any::TypeId,
 	env::current_dir,
+	ops::DerefMut,
 	path::{Path, PathBuf},
 };
-use strum::VariantArray;
-use strum_macros::{Display, VariantArray};
+use strum::{IntoEnumIterator, VariantArray};
+use strum_macros::{Display, EnumIter, VariantArray};
 
 pub struct EditorScenePlugin;
 
@@ -58,7 +62,15 @@ impl Plugin for EditorScenePlugin {
 }
 
 #[derive(Component, Default)]
-#[require(Transform, Visibility, Node, ActiveScene, Name::new("New Scene"))]
+#[require(
+	Transform,
+	Visibility,
+	Node,
+	ActiveScene,
+	Name::new("New Scene"),
+	ComponentFilter,
+	ResourceFilter
+)]
 pub struct EditorSceneRoot;
 
 /// Add this component to any entity to give it the qualifications of becoming a scene
@@ -68,13 +80,18 @@ pub struct EditorSceneRoot;
 #[require(Transform, Visibility, Node)]
 pub struct ActiveScene;
 
-#[derive(Component)]
+#[derive(Component, Default, Deref, DerefMut)]
 struct ComponentFilter(SceneFilter);
 
-#[derive(Bundle)]
-struct EditableScene {
-	scene: ActiveScene,
-	components: ComponentFilter,
+#[derive(Component, Default, Deref, DerefMut)]
+struct ResourceFilter(SceneFilter);
+
+/// Mirrored from [`SceneFilter`]
+#[derive(Default, EnumIter, Display, PartialEq, Eq, Clone, Copy)]
+enum FilterMode {
+	#[default]
+	Allow,
+	Deny,
 }
 
 fn on_new_camera(
@@ -229,10 +246,29 @@ impl Default for SceneOptionsModal {
 }
 
 #[derive(SystemParam)]
-struct Params<'s, 'w> {
-	type_name_cache: Res<'w, TypeNameDisplayCache>,
-	type_name_list: Local<'s, widgets::SelectableList<widgets::MultiSelect<TypeNameDisplayInfo>>>,
+struct Params<'w, 's> {
+	app_type_registry: Res<'w, AppTypeRegistry>,
 	file_dialog: Local<'s, SceneFileDialog>,
+	component_params: ComponentParams<'w, 's>,
+	resource_params: ResourceParams<'w, 's>,
+}
+
+#[derive(SystemParam)]
+struct ComponentParams<'w, 's> {
+	q_filters: Query<'w, 's, &'static mut ComponentFilter>,
+	cache: Local<'s, Vec<CachedTypeInfo>>,
+	list: Local<'s, widgets::SelectableList<widgets::MultiSelect<CachedTypeInfo>>>,
+	search_text: Local<'s, String>,
+	mode: Local<'s, FilterMode>,
+}
+
+#[derive(SystemParam)]
+struct ResourceParams<'w, 's> {
+	q_filters: Query<'w, 's, &'static mut ResourceFilter>,
+	cache: Local<'s, Vec<CachedTypeInfo>>,
+	list: Local<'s, widgets::SelectableList<widgets::MultiSelect<CachedTypeInfo>>>,
+	search_text: Local<'s, String>,
+	mode: Local<'s, FilterMode>,
 }
 
 impl From<SceneOptions> for egui::WidgetText {
@@ -251,10 +287,12 @@ fn show_scene_editing_modal(
 	mut commands: Commands,
 	mut messages: MessageReader<ShowSceneSettings>,
 	mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
+	app_type_registry: Res<AppTypeRegistry>,
+	type_name_cache: Res<TypeInfoCache>,
 	mut modal: Local<SceneOptionsModal>,
 	mut menu: Local<widgets::CategoryMenu<SceneOptions>>,
-	mut params: Params,
 	mut selected_scene: Local<Option<Entity>>,
+	mut params: Params,
 ) {
 	modal.open |= !messages.is_empty();
 	for msg in messages.read() {
@@ -267,6 +305,29 @@ fn show_scene_editing_modal(
 		commands.queue(SerializeScene(selected_scene, file));
 	}
 
+	if type_name_cache.is_changed() {
+		let type_registry = app_type_registry.read();
+		*params.component_params.cache = type_name_cache
+			.iter()
+			.filter(|c| {
+				type_registry
+					.get_type_data::<ReflectComponent>(c.type_info.type_id())
+					.is_some()
+			})
+			.cloned()
+			.collect();
+
+		*params.resource_params.cache = type_name_cache
+			.iter()
+			.filter(|c| {
+				type_registry
+					.get_type_data::<ReflectResource>(c.type_info.type_id())
+					.is_some()
+			})
+			.cloned()
+			.collect();
+	}
+
 	let id = egui::Id::new("beditor-scene-modal");
 	modal.show(ctx, id, |ui| {
 		ui.heading("Scene Settings");
@@ -275,7 +336,7 @@ fn show_scene_editing_modal(
 
 		menu.ui(ui, SceneOptions::VARIANTS, |ui, selected_category| {
 			if let Some(category) = selected_category {
-				category.ui(ui, params);
+				category.ui(ui, *selected_scene, params);
 			} else {
 				ui.label("Select a category");
 			}
@@ -287,32 +348,238 @@ fn show_scene_editing_modal(
 enum SceneOptions {
 	#[default]
 	SaveAndExport,
-	SerializableTypes,
+	SceneComponents,
+	SceneResources,
 }
 
 impl SceneOptions {
-	fn ui(self, ui: &mut egui::Ui, params: Params<'_, '_>) {
+	fn ui(self, ui: &mut egui::Ui, selected_scene: Option<Entity>, params: Params<'_, '_>) {
 		let Params {
-			type_name_cache,
-			mut type_name_list,
+			app_type_registry,
 			mut file_dialog,
+			component_params,
+			resource_params,
 		} = params;
 
 		file_dialog.update(ui.ctx());
 
 		match self {
 			Self::SaveAndExport => {
+				ui.add_enabled_ui(false, |ui| {
+					if ui.button("Save").clicked() {
+						// TODO
+					}
+				});
+
 				if ui.button("Export").clicked() {
 					file_dialog.save_file();
 				}
-			}
-			Self::SerializableTypes => {
-				ui.heading("Select Scene Components");
 
-				ui.separator();
+				if let Some(entity) = selected_scene {
+					ui.separator();
 
-				type_name_list.ui(ui, type_name_cache.as_slice());
+					let half = ui.available_width() / 2.0;
+
+					let type_registry = app_type_registry.read();
+
+					widgets::VerticalSplit::new(half).show(
+						ui,
+						|ui| {
+							let Ok(filter) = component_params.q_filters.get(entity) else {
+								ui.heading("All Components Allowed");
+								return;
+							};
+
+							let type_list = match &**filter {
+								SceneFilter::Unset => {
+									ui.heading("All Components Allowed");
+									return;
+								}
+								SceneFilter::Allowlist(hash_set) => {
+									ui.heading("Allowed Components");
+									hash_set
+								}
+								SceneFilter::Denylist(hash_set) => {
+									ui.heading("Denied Components");
+									hash_set
+								}
+							};
+
+							let items = type_list.iter().cloned().collect::<Vec<_>>();
+							widgets::vertical_list(ui, items, |ui, _, slice| {
+								for tr in slice
+									.iter()
+									.filter_map(|&type_id| type_registry.get(type_id))
+								{
+									ui.label(tr.type_info().type_path());
+								}
+							});
+						},
+						|ui| {
+							let Ok(filter) = resource_params.q_filters.get(entity) else {
+								ui.heading("All Resources Allowed");
+								return;
+							};
+
+							let type_list = match &**filter {
+								SceneFilter::Unset => {
+									ui.heading("All Resources Allowed");
+									return;
+								}
+								SceneFilter::Allowlist(hash_set) => {
+									ui.heading("Allowed Resources");
+									hash_set
+								}
+								SceneFilter::Denylist(hash_set) => {
+									ui.heading("Denied Resources");
+									hash_set
+								}
+							};
+
+							let items = type_list.iter().cloned().collect::<Vec<_>>();
+							widgets::vertical_list(ui, items, |ui, _, slice| {
+								for tr in slice
+									.iter()
+									.filter_map(|&type_id| type_registry.get(type_id))
+								{
+									ui.label(tr.type_info().type_path());
+								}
+							});
+						},
+					);
+				}
 			}
+			Self::SceneComponents => {
+				let ComponentParams {
+					mut q_filters,
+					cache,
+					mut list,
+					mut search_text,
+					mut mode,
+				} = component_params;
+				type_filter_ui(
+					ui,
+					"Select Scene Components",
+					&cache,
+					&mut search_text,
+					&mut list,
+					q_filters.iter_mut(),
+					&mut mode,
+				);
+			}
+			Self::SceneResources => {
+				let ResourceParams {
+					mut q_filters,
+					cache,
+					mut list,
+					mut search_text,
+					mut mode,
+				} = resource_params;
+				type_filter_ui(
+					ui,
+					"Select Scene Resources",
+					&cache,
+					&mut search_text,
+					&mut list,
+					q_filters.iter_mut(),
+					&mut mode,
+				);
+			}
+		}
+	}
+}
+
+fn type_filter_ui<'w, I, T>(
+	ui: &mut egui::Ui,
+	heading: &str,
+	list: &[CachedTypeInfo],
+	search_text: &mut String,
+	selectable_list: &mut widgets::SelectableList<widgets::MultiSelect<CachedTypeInfo>>,
+	mut filters: I,
+	mode: &mut FilterMode,
+) where
+	I: Iterator<Item = Mut<'w, T>>,
+	T: 'w + DerefMut<Target = SceneFilter>,
+{
+	let mut selection_changed = false;
+	let mut filter_mod: Option<fn(filter: &mut SceneFilter)> = None;
+
+	ui.heading(heading);
+
+	ui.separator();
+
+	ui.horizontal(|ui| {
+		let response = ui.add(AutoCompleteTextEdit::new(search_text, list));
+
+		let keyboard_submit = response.lost_focus() && !response.clicked_elsewhere();
+
+		if (ui.button("Toggle Searched").clicked() || keyboard_submit)
+			&& !search_text.is_empty()
+			&& let Some(cached_info) = list.iter().find(|c| c.as_ref() == search_text.as_str())
+		{
+			selection_changed |= true;
+			selectable_list.select(cached_info.clone());
+		}
+
+		if ui.button("Select All").clicked() {
+			selection_changed |= true;
+			for item in list {
+				selectable_list.select(item.clone());
+			}
+		}
+
+		if ui.button("Reset All").clicked() {
+			*selectable_list = default();
+			*mode = FilterMode::default();
+			filter_mod = Some(|filter| {
+				*filter = SceneFilter::Unset;
+			});
+		}
+
+		ui.horizontal(|ui| {
+			if ui.radio_value(mode, FilterMode::Allow, "Allow").clicked() {
+				*mode = FilterMode::Allow;
+				filter_mod = Some(|filter| {
+					*filter = SceneFilter::Allowlist(HashSet::from_iter(filter.iter().cloned()));
+				});
+			}
+
+			if ui.radio_value(mode, FilterMode::Deny, "Deny").clicked() {
+				*mode = FilterMode::Deny;
+				filter_mod = Some(|filter| {
+					*filter = SceneFilter::Denylist(HashSet::from_iter(filter.iter().cloned()));
+				});
+			}
+		});
+	});
+
+	selection_changed |= selectable_list
+		.ui(ui, list)
+		.map(|r| r.response.clicked())
+		.unwrap_or(false);
+
+	if selection_changed {
+		let selected = selectable_list.selected();
+		let selected = selected.iter().map(|c| c.type_info.type_id());
+		let filter_mod = filter_mod.unwrap_or(|_| {});
+
+		for mut filter in &mut filters {
+			(filter_mod)(&mut filter);
+
+			match &mut **filter {
+				SceneFilter::Unset => {
+					// do nothing
+				}
+				SceneFilter::Allowlist(hash_set) | SceneFilter::Denylist(hash_set) => {
+					*hash_set = HashSet::from_iter(selected.clone());
+				}
+			}
+		}
+	} else {
+		let filter_mod = filter_mod.unwrap_or(|_| {});
+
+		for mut filter in &mut filters {
+			(filter_mod)(&mut filter);
 		}
 	}
 }
@@ -375,8 +642,7 @@ impl Command for SerializeScene {
 			let type_registry = app_type_registry.read();
 
 			let all_entities = entity_with_relatives(entity, world, &registry);
-			let scene = DynamicSceneBuilder::from_world(world)
-				.allow_all()
+			let scene = scene_builder_for(entity, world)
 				.extract_entities(all_entities.into_iter())
 				.build();
 
@@ -411,6 +677,24 @@ impl Command for SerializeScene {
 			world.trigger(Notification::success("Saved Scene"));
 		});
 	}
+}
+
+fn scene_builder_for<'w>(entity: Entity, world: &'w World) -> DynamicSceneBuilder<'w> {
+	let mut scene_builder = DynamicSceneBuilder::from_world(world).allow_all();
+
+	if let Some(component_filter) = world.get::<ComponentFilter>(entity)
+		&& **component_filter != SceneFilter::Unset
+	{
+		scene_builder = scene_builder.with_component_filter(SceneFilter::clone(component_filter))
+	}
+
+	if let Some(resource_filter) = world.get::<ResourceFilter>(entity)
+		&& **resource_filter != SceneFilter::Unset
+	{
+		scene_builder = scene_builder.with_resource_filter(SceneFilter::clone(resource_filter))
+	}
+
+	scene_builder
 }
 
 fn entity_with_relatives(

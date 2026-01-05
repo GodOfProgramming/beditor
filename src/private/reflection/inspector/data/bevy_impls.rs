@@ -17,6 +17,7 @@ use bevy::{
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
 use egui::{Widget, load::SizedTexture};
+use egui_autocomplete::AutoCompleteTextEdit;
 use std::any::Any;
 
 impl InspectorPrimitive for uuid::Uuid {
@@ -655,7 +656,7 @@ fn asset_picker<'c, A: Asset>(
 
 	ui.vertical(|ui| {
 		ui.add_enabled_ui(!paths.is_empty(), |ui| {
-			let response = egui_autocomplete::AutoCompleteTextEdit::new(&mut search_text, paths)
+			let response = AutoCompleteTextEdit::new(&mut search_text, paths)
 				.popup_on_focus(true)
 				.ui(ui)
 				.on_hover_ui_at_pointer(|ui| (hover_ui)(ui, &search_text, &handles));

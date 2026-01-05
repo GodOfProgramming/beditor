@@ -4,13 +4,15 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalQuery, EditorInternalSingle,
 		reflection::{ReflectDefaultCache, serde::SerdeRegistry},
-		ui::{EditorEguiContext, EditorUiEguiContextPass, TabState, UiManager},
+		ui::{
+			EditorEguiContext, EditorUiEguiContextPass, TabState, UiManager, misc::CenteredFileDialog,
+		},
 	},
 };
 use bevy::{prelude::*, reflect::TypeInfo};
 use bevy_egui::EguiContext;
 use derive_new::new;
-use egui_file_dialog::{DialogState, FileDialog};
+use egui_file_dialog::DialogState;
 use parking_lot::Mutex;
 use std::{cell::RefCell, io::Write, path::PathBuf, sync::Arc};
 use uuid::{Uuid, uuid};
@@ -172,7 +174,7 @@ struct TypeEditorState {
 
 	value: Option<Arc<Mutex<RefCell<Box<dyn Reflect>>>>>,
 
-	file_dialog: FileDialog,
+	file_dialog: CenteredFileDialog,
 
 	type_list: widgets::SelectableList<SingleSelect<CachedType>>,
 	type_filter: String,
@@ -186,7 +188,7 @@ impl Default for TypeEditorState {
 		Self {
 			opened_file: None,
 			value: None,
-			file_dialog: FileDialog::default(),
+			file_dialog: CenteredFileDialog::default(),
 			type_list: default(),
 			type_filter: default(),
 			type_list_cache: default(),

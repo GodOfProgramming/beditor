@@ -17,7 +17,7 @@ impl Plugin for ReflectionExtensionsPlugin {
 		app
 			.init_resource::<SerdeRegistry>()
 			.init_resource::<ReflectDefaultCache>()
-			.init_resource::<TypeNameDisplayCache>()
+			.init_resource::<TypeInfoCache>()
 			.add_plugins(inspector::EditorInspectorPlugin)
 			.add_systems(
 				First,
@@ -41,27 +41,27 @@ impl ReflectDefaultCache {
 }
 
 #[derive(Resource, Default, Deref)]
-pub struct TypeNameDisplayCache {
-	inner: Vec<TypeNameDisplayInfo>,
+pub struct TypeInfoCache {
+	inner: Vec<CachedTypeInfo>,
 }
 
-impl TypeNameDisplayCache {
-	pub fn as_slice(&self) -> &[TypeNameDisplayInfo] {
+impl TypeInfoCache {
+	pub fn as_slice(&self) -> &[CachedTypeInfo] {
 		self.inner.as_slice()
 	}
 
 	fn rebuild<'t>(&mut self, type_list: impl Iterator<Item = &'t TypeRegistration>) {
-		self.inner = type_list.map(TypeNameDisplayInfo::from).collect();
+		self.inner = type_list.map(CachedTypeInfo::from).collect();
 	}
 }
 
 #[derive(Clone)]
-pub struct TypeNameDisplayInfo {
+pub struct CachedTypeInfo {
 	display: String,
-	type_info: &'static TypeInfo,
+	pub type_info: &'static TypeInfo,
 }
 
-impl From<&TypeRegistration> for TypeNameDisplayInfo {
+impl From<&TypeRegistration> for CachedTypeInfo {
 	fn from(value: &TypeRegistration) -> Self {
 		let type_info = value.type_info();
 		Self {
@@ -75,36 +75,42 @@ impl From<&TypeRegistration> for TypeNameDisplayInfo {
 	}
 }
 
-impl PartialEq for TypeNameDisplayInfo {
+impl PartialEq for CachedTypeInfo {
 	fn eq(&self, other: &Self) -> bool {
 		self.type_info.type_id().eq(&other.type_info.type_id())
 	}
 }
 
-impl Eq for TypeNameDisplayInfo {}
+impl Eq for CachedTypeInfo {}
 
-impl Hash for TypeNameDisplayInfo {
+impl Hash for CachedTypeInfo {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		self.type_info.type_id().hash(state);
 	}
 }
 
-impl From<TypeNameDisplayInfo> for egui::WidgetText {
-	fn from(value: TypeNameDisplayInfo) -> Self {
+impl From<CachedTypeInfo> for egui::WidgetText {
+	fn from(value: CachedTypeInfo) -> Self {
 		Self::Text(value.display.clone())
 	}
 }
 
-impl From<&TypeNameDisplayInfo> for egui::WidgetText {
-	fn from(value: &TypeNameDisplayInfo) -> Self {
+impl From<&CachedTypeInfo> for egui::WidgetText {
+	fn from(value: &CachedTypeInfo) -> Self {
 		Self::Text(value.display.clone())
+	}
+}
+
+impl AsRef<str> for CachedTypeInfo {
+	fn as_ref(&self) -> &str {
+		&self.display
 	}
 }
 
 fn rebuild_caches(
 	app_type_registry: Res<AppTypeRegistry>,
 	mut default_cache: ResMut<ReflectDefaultCache>,
-	mut display_cache: ResMut<TypeNameDisplayCache>,
+	mut display_cache: ResMut<TypeInfoCache>,
 ) {
 	let type_registry = app_type_registry.read();
 

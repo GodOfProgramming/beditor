@@ -4,11 +4,11 @@ use crate::{
 		EditorInternalQuery,
 		ext::settings::{ProjectSettingsUi, ShowEditorSettings},
 		scene::{EditorSceneRoot, LoadScene},
+		ui::misc::CenteredFileDialog,
 	},
 	ui::{OpenMode, OpenUi},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use egui_file_dialog::FileDialog;
 use egui_phosphor_icons::icons;
 use uuid::Uuid;
 
@@ -21,7 +21,7 @@ pub struct Params<'w, 's> {
 
 	q_project_settings_ui: EditorInternalQuery<'w, 's, (), With<ProjectSettingsUi>>,
 
-	file_dialog: Local<'s, FileDialog>,
+	file_dialog: Local<'s, CenteredFileDialog>,
 }
 
 #[derive(Resource, Reflect, Default)]

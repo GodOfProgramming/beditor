@@ -1,5 +1,10 @@
 use core::f32;
-use std::{collections::HashSet, hash::Hash, sync::Arc};
+use std::{
+	collections::HashSet,
+	hash::Hash,
+	ops::{Index, Range},
+	sync::Arc,
+};
 
 use egui::IntoAtoms;
 use itertools::Itertools;
@@ -226,13 +231,34 @@ pub fn horizontal_list<I, T>(
 	}
 }
 
-pub struct SelectableList<S> {
+pub fn vertical_list<T, R>(
+	ui: &mut egui::Ui,
+	items: impl AsRef<[T]>,
+	content: impl FnOnce(&mut egui::Ui, Range<usize>, &[T]) -> R,
+) -> R {
+	let text_style = egui::TextStyle::Body;
+	let row_height = ui.text_style_height(&text_style);
+	let items = items.as_ref();
+
+	egui::ScrollArea::both()
+		.auto_shrink([false, false])
+		.show_rows(ui, row_height, items.len(), |ui, range| {
+			let items = &items[range.clone()];
+			(content)(ui, range, items)
+		})
+		.inner
+}
+
+pub struct SelectableList<S>
+where
+	S: Selector,
+{
 	selector: S,
 }
 
 impl<S> Default for SelectableList<S>
 where
-	S: Selector,
+	S: Selector + Default,
 {
 	fn default() -> Self {
 		Self {
@@ -251,33 +277,31 @@ where
 		self.selector.selected()
 	}
 
+	pub fn select(&mut self, item: S::Item) {
+		self.selector.on_select(item);
+	}
+
 	pub fn ui(&mut self, ui: &mut egui::Ui, items: &[S::Item]) -> Option<egui::InnerResponse<usize>> {
-		let text_style = egui::TextStyle::Body;
-		let row_height = ui.text_style_height(&text_style);
+		vertical_list(ui, items, |ui, range, items| {
+			let mut inner_response = None;
 
-		egui::ScrollArea::both()
-			.auto_shrink([false, false])
-			.show_rows(ui, row_height, items.len(), |ui, range| {
-				let mut inner_response = None;
+			let start = range.start;
+			for (i, item) in items.iter().enumerate() {
+				let response =
+					ui.add(egui::Button::selectable(self.selector.is_selected(item), item).truncate());
 
-				let start = range.start;
-				for (i, item) in items[range].iter().enumerate() {
-					let response =
-						ui.add(egui::Button::selectable(self.selector.is_selected(item), item).truncate());
-
-					if response.clicked() {
-						self.selector.on_select(item.clone());
-						inner_response = Some(egui::InnerResponse::new(start + i, response));
-					}
+				if response.clicked() {
+					self.selector.on_select(item.clone());
+					inner_response = Some(egui::InnerResponse::new(start + i, response));
 				}
+			}
 
-				inner_response
-			})
-			.inner
+			inner_response
+		})
 	}
 }
 
-pub trait Selector: Default {
+pub trait Selector {
 	type Item;
 	type Selected;
 
@@ -360,11 +384,11 @@ where
 	}
 }
 
-pub struct HorizontalSplit {
+pub struct VerticalSplit {
 	split_at: f32,
 }
 
-impl HorizontalSplit {
+impl VerticalSplit {
 	pub fn new(split_at: f32) -> Self {
 		Self { split_at }
 	}
@@ -434,7 +458,7 @@ where
 		content: impl FnOnce(&mut egui::Ui, Option<C>) -> R,
 	) -> (Option<egui::InnerResponse<C>>, R) {
 		let selected_category = self.selected_category;
-		let response = HorizontalSplit::new(ui.available_width() * 0.1).show(
+		let response = VerticalSplit::new(ui.available_width() * 0.1).show(
 			ui,
 			|ui| {
 				ui.heading("Categories");

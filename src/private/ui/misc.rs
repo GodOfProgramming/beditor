@@ -19,6 +19,7 @@ use derive_more::derive::Deref;
 use derive_new::new;
 use egui::text::LayoutJob;
 use egui_dock::DockState;
+use egui_file_dialog::FileDialog;
 use persistent_id::PersistentId;
 use std::borrow::Borrow;
 use uuid::{Uuid, uuid};
@@ -277,3 +278,16 @@ pub(crate) trait DockExtensions:
 }
 
 impl DockExtensions for DockState<TabState> {}
+
+#[derive(Deref, DerefMut)]
+pub struct CenteredFileDialog(FileDialog);
+
+impl Default for CenteredFileDialog {
+	fn default() -> Self {
+		Self(
+			FileDialog::default()
+				.as_modal(true)
+				.anchor(egui::Align2::CENTER_CENTER, egui::Vec2::default()),
+		)
+	}
+}

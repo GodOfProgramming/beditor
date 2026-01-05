@@ -26,7 +26,7 @@ use bevy::{
 		schedule::ScheduleLabel,
 		system::{SystemState, entity_command},
 	},
-	picking::pointer::{PointerId, PointerInteraction},
+	picking::pointer::PointerId,
 	platform::collections::HashMap,
 	prelude::*,
 };

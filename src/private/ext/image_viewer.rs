@@ -1,6 +1,6 @@
 use crate::{
 	EditorExtension,
-	private::{EditorInternal, UserHidden},
+	private::{EditorInternal, UserHidden, ui::misc::CenteredFileDialog},
 	ui::EditorUi,
 	util::egui::ContextExtensions,
 };
@@ -12,7 +12,6 @@ use bevy::{
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
 use derive_new::new;
 use egui::Widget;
-use egui_file_dialog::FileDialog;
 use uuid::uuid;
 
 #[derive(Default)]
@@ -35,7 +34,7 @@ pub struct Params<'w, 's> {
 	commands: Commands<'w, 's>,
 	images: ResMut<'w, Assets<Image>>,
 	user_textures: ResMut<'w, EguiUserTextures>,
-	screenshot_file_dialog: Local<'s, FileDialog>,
+	screenshot_file_dialog: Local<'s, CenteredFileDialog>,
 }
 
 impl EditorUi for ImageViewerUi {

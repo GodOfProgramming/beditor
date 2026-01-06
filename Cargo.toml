@@ -8,6 +8,7 @@ publish = false
 [workspace]
 members = [
   ".",
+  "crates/atlas",
   "crates/macros",
   "crates/notify",
   "crates/persistent-id",
@@ -23,6 +24,7 @@ derive_more = "1.0.0"
 egui = "0.33.2"
 egui_phosphor_icons = "0.2.0"
 itertools = "0.14.0"
+nameof = "1.3.0"
 quote = "1.0.42"
 serde = "1.0"
 smallvec = "1.15.1"
@@ -45,11 +47,11 @@ singleton = { path = "./crates/singleton" }
 anyhow = "1.0.100"
 async-std = "1.13.2"
 bevy = { workspace = true, features = [
-  "default",
-  "serialize",
+  "asset_processor",
+  "bevy_dev_tools",
   "bevy_remote",
   "reflect_documentation",
-  "bevy_dev_tools",
+  "serialize",
 ] }
 bevy_egui = { workspace = true, features = [
   "bevy_ui",
@@ -90,7 +92,7 @@ log = "0.4.28"
 macros = { path = "./crates/macros" }
 maplit = "1.0.2"
 mimalloc = "*"
-nameof = "1.3.0"
+nameof = { workspace = true }
 parking_lot = "0.12.5"
 petgraph = "0.8.3"
 phf = { version = "0.13.1", features = ["macros"] }

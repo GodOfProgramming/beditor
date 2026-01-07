@@ -23,8 +23,8 @@ enum Entry {
 }
 
 pub struct ManifestSerializer<'r, 'm> {
-	type_registry: &'r TypeRegistry,
-	manifest: &'m WorldManifest,
+	pub type_registry: &'r TypeRegistry,
+	pub manifest: &'m WorldManifest,
 }
 
 impl<'r, 'm> Serialize for ManifestSerializer<'r, 'm> {

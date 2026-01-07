@@ -9,8 +9,10 @@ use crate::{
 		input,
 		ui::{EditorEguiContext, misc::UiState},
 	},
-	settings::{Setting, SettingsGroup, SettingsTable},
-	util::storage::ProjectSettings,
+	storage::{
+		ProjectSettings,
+		settings::{Setting, SettingsGroup, SettingsTable},
+	},
 };
 use axes::AxesGizmoPlugin;
 use bevy::{

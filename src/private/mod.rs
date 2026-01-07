@@ -9,8 +9,11 @@ pub mod util;
 
 use crate::{
 	AppSystems, EditorExtensionPlugin, EditorState, SimulationState,
-	settings::{WindowMaximizedSetting, WindowSizeSetting},
-	util::{components::ComponentRegistry, storage::GlobalEditorSettings},
+	reg::{components::ComponentRegistry, serde::SerdeRegistry},
+	storage::{
+		GlobalEditorSettings,
+		settings::{WindowMaximizedSetting, WindowSizeSetting},
+	},
 };
 use bevy::{
 	dev_tools::states::log_transitions,
@@ -26,6 +29,8 @@ pub struct InternalPlugin;
 impl Plugin for InternalPlugin {
 	fn build(&self, app: &mut App) {
 		app
+			.init_resource::<ComponentRegistry>()
+			.init_resource::<SerdeRegistry>()
 			.add_plugins((
 				scene::EditorScenePlugin,
 				cam::EditorCamPlugin,

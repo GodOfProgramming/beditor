@@ -1,7 +1,7 @@
 use super::{BundleDnd, SearchableVfs};
 use crate::{
 	EditorExtension, EditorUi,
-	util::components::{ComponentRegistry, RegisteredComponent},
+	reg::components::{ComponentRegistry, RegisteredComponent},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::{marker::PhantomData, num::NonZeroUsize};

@@ -434,6 +434,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "nameof",
+ "ron 0.12.0",
  "serde",
 ]
 
@@ -526,6 +527,7 @@ version = "0.17.3"
 dependencies = [
  "anyhow",
  "async-std",
+ "atlas",
  "bevy",
  "bevy_egui",
  "bevy_infinite_grid",
@@ -533,11 +535,11 @@ dependencies = [
  "brefabs",
  "bytemuck",
  "camino",
+ "common",
  "const_format",
  "convert_case 0.10.0",
  "derive-new",
  "derive_more 1.0.0",
- "disqualified",
  "dotenvy",
  "egui",
  "egui-file-dialog",
@@ -2306,6 +2308,18 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "disqualified",
+ "egui",
+ "ron 0.12.0",
+ "serde",
+ "variadics_please",
 ]
 
 [[package]]

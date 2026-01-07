@@ -1,6 +1,6 @@
 mod data;
 
-use crate::{AppExtensions as _, TypeGroups, TypeList, inspector::ui::InspectorSelection};
+use crate::inspector::ui::InspectorSelection;
 use bevy::prelude::*;
 use std::any::TypeId;
 
@@ -8,9 +8,9 @@ pub struct EditorInspectorPlugin;
 
 impl Plugin for EditorInspectorPlugin {
 	fn build(&self, app: &mut App) {
-		app.init_resource::<InspectorSelection>().register_types::<(
+		app.init_resource::<InspectorSelection>().register_type::<(
 			// math
-			TypeGroups<(
+			(
 				(bevy::math::IVec2, bevy::math::IVec3, bevy::math::IVec4),
 				(bevy::math::UVec2, bevy::math::UVec3, bevy::math::UVec4),
 				(bevy::math::DVec2, bevy::math::DVec3, bevy::math::DVec4),
@@ -41,9 +41,9 @@ impl Plugin for EditorInspectorPlugin {
 					bevy::math::Mat4,
 				),
 				(bevy::math::DQuat, bevy::math::Quat, bevy::math::Rect),
-			)>,
+			),
 			// misc
-			TypeList<(bevy::color::Color, core::ops::Range<f32>, TypeId)>,
+			(bevy::color::Color, core::ops::Range<f32>, TypeId),
 		)>();
 
 		data::init_app(app);

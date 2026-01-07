@@ -1,6 +1,6 @@
 pub mod reflect;
 
-use crate::util::egui::layout_job;
+use crate::private::util::egui::layout_job;
 use bevy::{asset::UntypedAssetId, prelude::*, reflect::TypeRegistry};
 use egui::FontId;
 use std::{any::TypeId, borrow::Cow};

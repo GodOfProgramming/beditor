@@ -2,10 +2,10 @@ use super::image_viewer::ImageViewerUi;
 use crate::{
 	EditorExtension, EditorUi,
 	private::{EditorInternal, EditorInternalQuery, cam::EditorManagedCamera},
-	util::egui::ContextExtensions,
 };
 use bevy::{ecs::system::SystemParam, prelude::*, render::render_resource::Extent3d};
 use bevy_egui::EguiUserTextures;
+use common::extensions::egui::ContextExtensions;
 use derive_new::new;
 use uuid::uuid;
 

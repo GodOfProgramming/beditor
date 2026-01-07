@@ -1,6 +1,6 @@
 use super::{LayoutInfo, TabState, VTable};
 use crate::{
-	EditorUi, EditorUiWorld, NoParams, UiManager,
+	EditorUi, EditorUiWorld, UiManager,
 	inspector::{
 		InspectorPrimitive,
 		ui::{ImmutableContext, InspectorUi, MutableContext},
@@ -187,7 +187,7 @@ impl EditorUi for MissingUi {
 	const NAME: &str = "Missing Ui";
 	const ID: Uuid = uuid!("d0f32ae1-2851-4bcd-a0c9-f83ae030d85f");
 
-	type Params<'w, 's> = NoParams;
+	type Params<'w, 's> = common::NoParams;
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
 		default()

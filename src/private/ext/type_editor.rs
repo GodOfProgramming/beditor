@@ -3,11 +3,12 @@ use crate::{
 	inspector::WorldExtensions,
 	private::{
 		EditorInternal, EditorInternalQuery, EditorInternalSingle,
-		reflection::{ReflectDefaultCache, serde::SerdeRegistry},
+		reflection::ReflectDefaultCache,
 		ui::{
 			EditorEguiContext, EditorUiEguiContextPass, TabState, UiManager, misc::CenteredFileDialog,
 		},
 	},
+	reg::serde::SerdeRegistry,
 };
 use bevy::{prelude::*, reflect::TypeInfo};
 use bevy_egui::EguiContext;

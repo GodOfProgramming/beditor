@@ -9,16 +9,14 @@
 
 pub mod inspector;
 mod private;
+pub mod reg;
+pub mod storage;
 pub mod ui;
-mod util;
 
 use crate::{
 	private::{EditorInternalFilter, ui::EditorUiEguiContextPass},
-	util::{
-		WorldExtensions as _,
-		components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
-		storage::Global,
-	},
+	reg::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
+	storage::{Global, Project, Settings},
 };
 use bevy::{
 	app::PluginGroupBuilder,
@@ -33,6 +31,7 @@ use bevy::{
 use bevy_infinite_grid::InfiniteGridPlugin;
 use bevy_mod_outline::OutlinePlugin;
 use brefabs::{PrefabPlugin, Prefabs};
+use common::extensions::bevy::{AppExtensions as _, WorldMutExtensions as _};
 use derive_new::new;
 use notify::NotificationPlugin;
 use platform_dirs::AppDirs;
@@ -45,16 +44,12 @@ pub use prelude::*;
 pub mod prelude {
 	pub use crate::{
 		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
+		EditorState,
 		ui::{EditorUi, EditorUiWorld},
-		util::{
-			AppExtensions, NoParams, TypeGroups, TypeList,
-			storage::{
-				DataTable, PersistentData, Project, ProjectSettings, SettingChanged, Settings, settings,
-			},
-		},
 	};
 	pub use bevy_egui;
 	pub use brefabs;
+	pub use common::NoParams;
 	pub use egui;
 	pub use macros::{self, Identifiable};
 	pub use persistent_id::{self, Identifiable};
@@ -150,7 +145,6 @@ impl Plugin for EditorPlugin {
 		}
 
 		app
-			.init_resource::<ComponentRegistry>()
 			.insert_state(EditorState::Editing)
 			// bevy
 			.try_add_plugin(MeshPickingPlugin)

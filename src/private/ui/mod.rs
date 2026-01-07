@@ -2,7 +2,7 @@ pub mod events;
 pub mod misc;
 
 use crate::{
-	DataTable, EditorState, EditorUiWorld, PersistentData, ProjectSettings,
+	EditorState, EditorUiWorld,
 	inspector::{
 		add_single,
 		ui::{InspectorSelection, Selected},
@@ -15,10 +15,13 @@ use crate::{
 			assets, components, diagnostics, editor_view, hierarchy, inspector, menu_bar, prefabs,
 			resources,
 		},
+		util::entity::insert_bundle_from_world,
 	},
-	settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
+	storage::{
+		DataTable, GlobalEditorSettings, PersistentData, ProjectSettings,
+		settings::{CurrentLayoutSetting, EditorEguiSettings, EditorUiScale, SaveLayoutOnExitSetting},
+	},
 	ui::OpenUi,
-	util::{entity::insert_bundle_from_world, storage::GlobalEditorSettings},
 };
 use bevy::{
 	camera::visibility::RenderLayers,

@@ -10,8 +10,8 @@ use crate::{
 		cam::EditorCamera,
 		scene::EditorSceneRoot,
 		ui::{EditorEguiContext, misc::UiState},
+		util::WorldExtensions as _,
 	},
-	util::WorldExtensions as _,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContext;

@@ -29,14 +29,6 @@ impl ComponentRegistry {
 		self.mapping.get(type_id)
 	}
 
-	pub(crate) fn len(&self) -> usize {
-		self.mapping.len()
-	}
-
-	pub(crate) fn iter(&self) -> impl Iterator<Item = (&TypeId, &RegisteredComponent)> {
-		self.mapping.iter()
-	}
-
 	pub(crate) fn vfs(&self) -> &Vfs<TypeId> {
 		&self.vfs
 	}

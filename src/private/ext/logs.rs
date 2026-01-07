@@ -1,10 +1,10 @@
 use crate::{
-	EditorExtension, EditorUi, ProjectSettings, SettingChanged,
+	EditorExtension, EditorUi,
 	private::{
-		EditorInternalQuery, EditorInternal,
+		EditorInternal, EditorInternalQuery,
 		util::log::{EventCollectorHandle, LogLevel},
 	},
-	settings::LogLevelSetting,
+	storage::{ProjectSettings, SettingChanged, settings::LogLevelSetting},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use strum::IntoEnumIterator;

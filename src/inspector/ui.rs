@@ -6,15 +6,9 @@ use crate::{
 	inspector::{
 		errors::{self, name_of_type, reflect::TypeDataError},
 		options::{InspectorOptions, ReflectInspectorOptions, Target},
+		world_view::{ImmutableWorldView, MutableWorldView, RestrictedWorldView},
 	},
-	util::{
-		self,
-		egui::{
-			add_button, down_button, maybe_grid, maybe_grid_label_if, remove_button, show_docs, up_button,
-		},
-		entity,
-		world::{ImmutableWorldView, MutableWorldView, RestrictedWorldView},
-	},
+	private::util::egui::show_docs,
 };
 use bevy::{
 	asset::{ReflectAsset, ReflectHandle, UntypedAssetId},
@@ -27,6 +21,7 @@ use bevy::{
 	},
 };
 use derive_new::new;
+use egui_phosphor_icons::icons;
 use fuzzy_matcher::{FuzzyMatcher, skim::SkimMatcherV2};
 use hierarchy::{SelectedEntities, SelectedEntitiesChangedEvent};
 use std::{
@@ -380,11 +375,11 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			}
 			TypeInfo::List(info) => self.ui_for_list_multiedit(info, ui, id, options, values, projector),
 			TypeInfo::Array(info) => {
-				errors::reflect::no_multiedit(ui, &util::pretty_type_name_str(info.type_path()));
+				errors::reflect::no_multiedit(ui, &common::types::pretty_name_of_str(info.type_path()));
 				false
 			}
 			TypeInfo::Map(info) => {
-				errors::reflect::no_multiedit(ui, &util::pretty_type_name_str(info.type_path()));
+				errors::reflect::no_multiedit(ui, &common::types::pretty_name_of_str(info.type_path()));
 				false
 			}
 			TypeInfo::Enum(info) => self.ui_for_enum_multiedit(info, ui, id, options, values, projector),
@@ -1001,7 +996,10 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				});
 
 				changed |= self.ui_for_reflect_mut_with_options(value, ui, ui_id, &());
-				let delete = remove_button(ui).on_hover_text("Remove element").clicked();
+				let delete = ui
+					.button(icons::MINUS)
+					.on_hover_text("Remove element")
+					.clicked();
 				ui.end_row();
 				!delete
 			});
@@ -1025,7 +1023,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 				match draft_clone {
 					None => {
 						// If no draft element exists, show a button to create one.
-						if add_button(ui).clicked() {
+						if ui.button(icons::PLUS).clicked() {
 							// Insert a temporary 'draft' key-value pair into UI state.
 							let key = key_default.default().into_partial_reflect();
 							let value = value_default.default().into_partial_reflect();
@@ -1099,7 +1097,11 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 						});
 					});
 					ui.horizontal_top(|ui| {
-						if remove_button(ui).on_hover_text("Remove element").clicked() {
+						if ui
+							.button(icons::MINUS)
+							.on_hover_text("Remove element")
+							.clicked()
+						{
 							let copy = val.to_dynamic();
 							op = Some(RemoveElement(copy));
 						}
@@ -1166,7 +1168,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			match draft_clone {
 				None => {
 					// If no draft element exists, show a button to create one.
-					if add_button(ui).clicked() {
+					if ui.button(icons::PLUS).clicked() {
 						// Insert a temporary 'draft' value into UI state, once inserted, we cannot modify it.
 						let draft = SetDraftElement(item_default.default().into_partial_reflect());
 						ui.data_mut(|data| data.insert_temp(set_draft_id, Some(draft)));
@@ -1282,7 +1284,11 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 							});
 						});
 						ui.horizontal_top(|ui| {
-							if remove_button(ui).on_hover_text("Remove element").clicked() {
+							if ui
+								.button(icons::MINUS)
+								.on_hover_text("Remove element")
+								.clicked()
+							{
 								let copy = value_to_check.to_dynamic();
 								op = Some(RemoveElement(copy));
 							}
@@ -1915,7 +1921,7 @@ fn self_or_children_satisfy_filter<QF: QueryFilter>(
 	filter: &str,
 	is_fuzzy: bool,
 ) -> bool {
-	let name = entity::guess_entity_name(world, entity);
+	let name = common::ecs::guess_entity_name(world, entity);
 
 	let self_matches = if is_fuzzy {
 		let matcher = SkimMatcherV2::default();
@@ -2084,7 +2090,11 @@ fn ui_for_empty_collection(ui: &mut egui::Ui, label: impl Into<egui::WidgetText>
 
 	ui.vertical_centered(|ui| {
 		ui.label(label);
-		if add_button(ui).on_hover_text("Add element").clicked() {
+		if ui
+			.button(icons::PLUS)
+			.on_hover_text("Add element")
+			.clicked()
+		{
 			add = true;
 		}
 	});
@@ -2266,24 +2276,40 @@ fn ui_for_list_controls(ui: &mut egui::Ui, index: usize, len: usize) -> Option<L
 	let mut op = None;
 
 	ui.horizontal_top(|ui| {
-		if add_button(ui).on_hover_text("Add element").clicked() {
+		if ui
+			.button(icons::PLUS)
+			.on_hover_text("Add element")
+			.clicked()
+		{
 			op = Some(AddElement(index));
 		}
 
-		if remove_button(ui).on_hover_text("Remove element").clicked() {
+		if ui
+			.button(icons::MINUS)
+			.on_hover_text("Remove element")
+			.clicked()
+		{
 			op = Some(RemoveElement(index));
 		}
 
 		let up_enabled = index > 0;
 		ui.add_enabled_ui(up_enabled, |ui| {
-			if up_button(ui).on_hover_text("Move element up").clicked() {
+			if ui
+				.button(icons::ARROW_UP)
+				.on_hover_text("Move element up")
+				.clicked()
+			{
 				op = Some(MoveElementUp(index));
 			}
 		});
 
 		let down_enabled = len.checked_sub(1).map(|l| index < l).unwrap_or(false);
 		ui.add_enabled_ui(down_enabled, |ui| {
-			if down_button(ui).on_hover_text("Move element down").clicked() {
+			if ui
+				.button(icons::ARROW_DOWN)
+				.on_hover_text("Move element down")
+				.clicked()
+			{
 				op = Some(MoveElementDown(index));
 			}
 		});
@@ -2385,5 +2411,32 @@ impl Command for SelectEntity {
 		let mut selection = world.resource_mut::<InspectorSelection>();
 		let event = selection.add_selected(self.0, false);
 		world.trigger(event);
+	}
+}
+
+pub fn maybe_grid<R>(
+	i: usize,
+	ui: &mut egui::Ui,
+	id: egui::Id,
+	mut f: impl FnMut(&mut egui::Ui, bool) -> R,
+) -> Option<egui::InnerResponse<R>> {
+	match i {
+		0 => None,
+		1 => Some(ui.scope(|ui| f(ui, false))),
+		_ => Some(egui::Grid::new(id).show(ui, |ui| f(ui, true))),
+	}
+}
+
+pub fn maybe_grid_label_if<R>(
+	i: usize,
+	ui: &mut egui::Ui,
+	id: egui::Id,
+	always_show_label: bool,
+	mut f: impl FnMut(&mut egui::Ui, bool) -> R,
+) -> Option<egui::InnerResponse<R>> {
+	match i {
+		0 => None,
+		1 if !always_show_label => Some(ui.scope(|ui| f(ui, false))),
+		_ => Some(egui::Grid::new(id).show(ui, |ui| f(ui, true))),
 	}
 }

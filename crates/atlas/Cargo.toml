@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 bevy.workspace = true
 nameof.workspace = true
+ron.workspace = true
 serde = { workspace = true, features = ["derive"] }

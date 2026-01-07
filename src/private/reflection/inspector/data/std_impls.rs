@@ -4,7 +4,7 @@ use crate::{
 		options::{InspectorOptionsType, NumberDisplay, NumberOptions, RangeOptions},
 		ui::{ImmutableContext, InspectorUi, MutableContext, change_slider, get_one_if_all_equal},
 	},
-	util::egui::layout_job,
+	private::util::egui::layout_job,
 };
 use bevy::{platform::time::Instant, prelude::*};
 use egui::{DragValue, RichText, TextBuffer, emath::Numeric};

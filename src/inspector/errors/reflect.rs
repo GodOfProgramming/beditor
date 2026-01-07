@@ -1,4 +1,4 @@
-use crate::{util::egui::layout_job, util::pretty_type_name_str};
+use crate::private::util::egui::layout_job;
 use egui::FontId;
 
 pub enum TypeDataError {
@@ -21,14 +21,17 @@ pub fn reflect_value_no_impl(ui: &mut egui::Ui, reason: TypeDataError, type_name
 			(FontId::proportional(13.0), "Try implementing "),
 			(
 				FontId::monospace(12.0),
-				&format!("InspectorPrimitive for {}", pretty_type_name_str(type_name)),
+				&format!(
+					"InspectorPrimitive for {}",
+					common::types::pretty_name_of_str(type_name)
+				),
 			),
 			(FontId::proportional(13.0), "\nand call "),
 			(
 				FontId::monospace(12.0),
 				&format!(
 					"app.register_type_data::<{}, InspectorEguiImpl>",
-					pretty_type_name_str(type_name)
+					common::types::pretty_name_of_str(type_name)
 				),
 			),
 			(FontId::proportional(13.0), "."),
@@ -72,7 +75,11 @@ pub fn unconstructable_variant(
 ) {
 	let mut vec = Vec::with_capacity(2 + unconstructable_field_types.len() * 2 + 4);
 
-	let qualified_variant = format!("{}::{}", pretty_type_name_str(type_name), variant);
+	let qualified_variant = format!(
+		"{}::{}",
+		common::types::pretty_name_of_str(type_name),
+		variant
+	);
 	vec.extend([
 		(FontId::monospace(12.0), qualified_variant.as_str()),
 		(

@@ -5,8 +5,7 @@ use super::{
 use crate::{
 	EditorState,
 	private::{EditorInternalQuery, EditorInternalSingle, UserHidden, cam::EditorCameraScene, util},
-	settings::Setting,
-	util::storage::ProjectSettings,
+	storage::{ProjectSettings, settings::Setting},
 };
 use bevy::{
 	input::mouse::MouseMotion,

@@ -1,4 +1,7 @@
-use crate::{DataTable, private::util::log::LogLevel, util::storage::PersistentData};
+use crate::{
+	private::util::log::LogLevel,
+	storage::{DataTable, PersistentData},
+};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;

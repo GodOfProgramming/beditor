@@ -1,5 +1,4 @@
 pub mod inspector;
-pub mod serde;
 
 use std::hash::Hash;
 
@@ -8,14 +7,12 @@ use bevy::{
 	reflect::{TypeInfo, TypeRegistration},
 };
 use itertools::Itertools;
-use serde::SerdeRegistry;
 
 pub struct ReflectionExtensionsPlugin;
 
 impl Plugin for ReflectionExtensionsPlugin {
 	fn build(&self, app: &mut App) {
 		app
-			.init_resource::<SerdeRegistry>()
 			.init_resource::<ReflectDefaultCache>()
 			.init_resource::<TypeInfoCache>()
 			.add_plugins(inspector::EditorInspectorPlugin)
@@ -46,10 +43,6 @@ pub struct TypeInfoCache {
 }
 
 impl TypeInfoCache {
-	pub fn as_slice(&self) -> &[CachedTypeInfo] {
-		self.inner.as_slice()
-	}
-
 	fn rebuild<'t>(&mut self, type_list: impl Iterator<Item = &'t TypeRegistration>) {
 		self.inner = type_list.map(CachedTypeInfo::from).collect();
 	}

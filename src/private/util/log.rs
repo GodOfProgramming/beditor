@@ -1,4 +1,4 @@
-use crate::{SettingChanged, settings::LogLevelSetting, util::storage::ProjectSettings};
+use crate::storage::{ProjectSettings, SettingChanged, settings::LogLevelSetting};
 use bevy::{
 	ecs::system::SystemState,
 	log::{

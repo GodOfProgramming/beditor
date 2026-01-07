@@ -2,14 +2,15 @@ use crate::{
 	inspector::{
 		errors,
 		ui::{ImmutableContext, InspectorUi, MutableContext},
+		world_view::{MutableWorldView, ReflectBorrow, RestrictedWorldView},
 	},
-	util::{
-		self, WorldExtensions,
-		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
-		world::{MutableWorldView, ReflectBorrow, RestrictedWorldView},
-	},
+	private::util,
 };
 use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
+use common::extensions::{
+	bevy::WorldMutExtensions as _,
+	egui::{CollapsingResponseExtensions, ResponseConditions},
+};
 use itertools::Itertools;
 use std::any::TypeId;
 
@@ -119,7 +120,7 @@ pub fn ui_for_entity_components(
 
 		let component_result =
 			component_view.entity_component_reflect_mut(entity, type_id, type_registry);
-		let value = crate::match_else!(component_result; else err => {
+		let value = common::match_else!(component_result; else err => {
 			let response = ui.indent(id, |ui| {
 				ui.label(egui::RichText::new(&name).underline())
 					.on_hover_ui(|ui| {
@@ -320,7 +321,7 @@ fn components_of_entity(
 		.iter()
 		.map(|component_id| {
 			let info = world.components().get_info(*component_id).unwrap();
-			let name = util::pretty_type_name_str(&info.name().to_string());
+			let name = common::types::pretty_name_of_str(&info.name().to_string());
 
 			(name, *component_id, info.type_id(), info.layout().size())
 		})
@@ -328,4 +329,32 @@ fn components_of_entity(
 		.collect();
 
 	Ok(entity_components)
+}
+
+fn set_highlight_style(ui: &mut egui::Ui) {
+	let highlight_color = egui::Color32::GOLD;
+
+	let visuals = &mut ui.style_mut().visuals;
+
+	visuals.collapsing_header_frame = true;
+
+	visuals.widgets.inactive.bg_stroke = egui::Stroke {
+		width: 1.0,
+		color: highlight_color,
+	};
+
+	visuals.widgets.active.bg_stroke = egui::Stroke {
+		width: 1.0,
+		color: highlight_color,
+	};
+
+	visuals.widgets.hovered.bg_stroke = egui::Stroke {
+		width: 1.0,
+		color: highlight_color,
+	};
+
+	visuals.widgets.noninteractive.bg_stroke = egui::Stroke {
+		width: 1.0,
+		color: highlight_color,
+	};
 }

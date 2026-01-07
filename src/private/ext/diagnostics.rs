@@ -1,13 +1,13 @@
 use super::inspector::InspectorSettings;
 use crate::{
-	EditorExtension, ProjectSettings,
+	EditorExtension,
 	private::{
 		EditorInternal, EditorInternalQuery,
 		cam::{RenderCameras, RenderCamerasSetting},
 		util::log::LogLevel,
 	},
+	storage::ProjectSettings,
 	ui::EditorUi,
-	util::egui::ContextExtensions,
 };
 use bevy::{
 	camera::{ImageRenderTarget, RenderTarget},
@@ -21,6 +21,7 @@ use bevy::{
 	},
 };
 use bevy_egui::{EguiContext, EguiTextureHandle, EguiUserTextures, egui};
+use common::extensions::egui::ContextExtensions;
 use uuid::uuid;
 
 #[derive(Default)]

@@ -4,8 +4,7 @@ use crate::{
 		EditorInternalSingle,
 		ui::{EditorEguiContext, EditorUiEguiContextPass},
 	},
-	settings::CurrentThemeSetting,
-	util::storage::{Global, GlobalEditorSettings},
+	storage::{Global, GlobalEditorSettings, settings::CurrentThemeSetting},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::{EguiContext, EguiContextSettings};

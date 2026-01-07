@@ -2,7 +2,6 @@ use crate::{
 	EditorExtension,
 	private::{EditorInternal, UserHidden, ui::misc::CenteredFileDialog},
 	ui::EditorUi,
-	util::egui::ContextExtensions,
 };
 use bevy::{
 	ecs::system::SystemParam,
@@ -10,6 +9,7 @@ use bevy::{
 	render::view::screenshot::{Screenshot, save_to_disk},
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
+use common::extensions::egui::ContextExtensions;
 use derive_new::new;
 use egui::Widget;
 use uuid::uuid;

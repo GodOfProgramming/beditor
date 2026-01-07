@@ -8,8 +8,7 @@ use crate::{
 			misc::{DockExtensions as _, MissingUi},
 		},
 	},
-	settings::SaveLayoutOnExitSetting,
-	util::storage::ProjectSettings,
+	storage::{ProjectSettings, settings::SaveLayoutOnExitSetting},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use convert_case::{Case, Casing};

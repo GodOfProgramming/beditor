@@ -12,11 +12,12 @@ use crate::{
 		EditorInternal, EditorInternalFilter, UserHidden,
 		cam::{ActiveEditorCamera, EditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
 		scene::{ActiveScene, ShowSceneSettings},
+		util::WorldExtensions as _,
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
-	util::WorldExtensions as _,
 };
 use bevy::prelude::*;
+use common::extensions::bevy::WorldMutExtensions as _;
 use notify::Notification;
 use std::sync::Arc;
 use uuid::{Uuid, uuid};
@@ -235,7 +236,7 @@ impl ReparentMessage {
 }
 
 impl Command for ReparentMessage {
-	fn apply(self, world: &mut World) -> () {
+	fn apply(self, world: &mut World) {
 		world.write_message(self);
 	}
 }

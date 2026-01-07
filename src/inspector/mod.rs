@@ -3,17 +3,15 @@
 pub mod errors;
 pub mod options;
 pub mod ui;
+pub mod world_view;
 
-use crate::util::{
-	self, WorldExtensions as _,
-	world::{MutableWorldView, RestrictedWorldView},
-};
 use bevy::{
 	asset::{ReflectAsset, UntypedAssetId},
 	ecs::query::QueryFilter,
 	prelude::*,
 	reflect::TypeRegistry,
 };
+use common::extensions::bevy::WorldMutExtensions as _;
 use std::{
 	any::{Any, TypeId},
 	borrow::BorrowMut,
@@ -22,6 +20,7 @@ use ui::{
 	ImmutableContext, InspectorUi, InspectorUiVTable, MutableContext, components, hierarchy,
 	hierarchy::SelectedEntities,
 };
+use world_view::{MutableWorldView, RestrictedWorldView};
 
 pub fn add<T: InspectorPrimitive + TypePath + PartialEq + Clone + Default>(
 	type_registry: &mut TypeRegistry,
@@ -171,7 +170,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
 			let type_registry = type_registry.read();
 
-			let entity_name = util::entity::guess_entity_name(world, entity);
+			let entity_name = common::ecs::guess_entity_name(world, entity);
 			ui.label(entity_name);
 
 			let mut ctx = MutableContext::new(world, queue);
@@ -205,7 +204,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let Some((mut resource, world_view)) =
 				RestrictedWorldView::<MutableWorldView>::from(world).split_off_resource_typed::<R>()
 			else {
-				errors::resource_does_not_exist(ui, &util::pretty_type_name::<R>());
+				errors::resource_does_not_exist(ui, &common::types::pretty_name::<R>());
 				return;
 			};
 
@@ -235,7 +234,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 
 			let resource_result =
 				resource_view.resource_reflect_mut_by_id(resource_type_id, type_registry);
-			let mut resource = crate::match_else!(resource_result; else err => {
+			let mut resource = common::match_else!(resource_result; else err => {
 				errors::show_error(err, ui, name_of_type);
 				return;
 			});

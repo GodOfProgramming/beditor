@@ -5,11 +5,11 @@ use crate::{
 		WorldExtensions as _,
 		ui::{InspectorSelection, components::ComponentInfo},
 	},
-	private::EditorInternal,
+	private::{EditorInternal, util::egui::show_docs},
 	ui::EditorUiWorld,
-	util::{WorldExtensions as _, egui::show_docs},
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};
+use common::extensions::bevy::WorldMutExtensions as _;
 use uuid::{Uuid, uuid};
 
 #[derive(Default)]

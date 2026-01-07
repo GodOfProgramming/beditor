@@ -4,12 +4,9 @@ use crate::{
 		errors::dead_asset_handle,
 		options::{EntityDisplay, EntityOptions},
 		ui::{ImmutableContext, InspectorUi, MutableContext},
+		world_view::{MutableWorldView, RestrictedWorldView, WorldView},
 	},
 	private::ext::inspector::entity_context_menu,
-	util::{
-		self, pretty_type_name,
-		world::{MutableWorldView, RestrictedWorldView},
-	},
 };
 use bevy::{
 	camera::visibility::RenderLayers, ecs::world::CommandQueue, gizmos::config::GizmoConfigStore,
@@ -65,7 +62,7 @@ impl InspectorPrimitive for Entity {
 			EntityDisplay::Components => {
 				let ctx = &mut env.context;
 
-				let entity_name = util::entity::guess_entity_name_restricted(&ctx.world_view, entity);
+				let entity_name = guess_entity_name_restricted(&ctx.world_view, entity);
 
 				egui::CollapsingHeader::new(entity_name)
 					.id_salt(id)
@@ -85,7 +82,9 @@ impl InspectorPrimitive for Entity {
 
 						if options.despawnable
 							&& ctx.world_view.contains_entity(entity)
-							&& util::egui::label_button(ui, "✖ Despawn", egui::Color32::RED)
+							&& ui
+								.button(egui::RichText::new("✖ Despawn").color(egui::Color32::RED))
+								.clicked()
 						{
 							ctx.queue.push(move |world: &mut World| {
 								world.entity_mut(entity).despawn();
@@ -105,6 +104,27 @@ impl InspectorPrimitive for Entity {
 		_: &InspectorUi<'_, ImmutableContext<'c>>,
 	) {
 		ui.label(format!("{self:?}"));
+	}
+}
+
+pub(crate) fn guess_entity_name_restricted<W>(
+	world_view: &RestrictedWorldView<W>,
+	entity: Entity,
+) -> String
+where
+	W: WorldView,
+{
+	match world_view.world().get_entity(entity) {
+		Ok(cell) => {
+			if world_view.allows_access_to_component((entity, std::any::TypeId::of::<Name>())) {
+				// SAFETY: we have access and don't keep reference
+				if let Some(name) = cell.get::<Name>() {
+					return format!("{} ({})", name.as_str(), entity);
+				}
+			}
+			common::ecs::maybe_component_entity_name(world_view.world(), entity, cell.archetype())
+		}
+		Err(_) => format!("Entity {} (inexistent)", entity.index()),
 	}
 }
 
@@ -171,7 +191,7 @@ impl InspectorPrimitive for Handle<Mesh> {
 			world_view: world, ..
 		} = env.context;
 
-		let meshes = crate::match_else!(world.resource::<Assets<Mesh>>(); else err => {
+		let meshes = common::match_else!(world.resource::<Assets<Mesh>>(); else err => {
 			err.ui(ui, "Assets<Mesh>");
 			return;
 		});
@@ -198,7 +218,7 @@ impl InspectorPrimitive for Handle<Image> {
 			env,
 			id,
 			|ui, handle, world, queue| {
-				let egui_user_textures = crate::match_else!(world.resource::<EguiUserTextures>(); else err => {
+				let egui_user_textures = common::match_else!(world.resource::<EguiUserTextures>(); else err => {
 					err.ui(ui, "EguiUserTextures");
 					return;
 				});
@@ -230,7 +250,7 @@ impl InspectorPrimitive for Handle<Image> {
 		} = env.context;
 
 		let mut queue = queue.borrow_mut();
-		let egui_user_textures = crate::match_else!(world.resource::<EguiUserTextures>(); else err => {
+		let egui_user_textures = common::match_else!(world.resource::<EguiUserTextures>(); else err => {
 			err.ui(ui, "EguiUserTextures");
 			return;
 		});
@@ -628,11 +648,11 @@ fn asset_picker<'c, A: Asset>(
 		(Ok(a), Ok(b)) => (a, b),
 		(a, b) => {
 			if let Err(e) = a {
-				e.ui(ui, pretty_type_name::<AssetServer>());
+				e.ui(ui, common::types::pretty_name::<AssetServer>());
 			}
 
 			if let Err(e) = b {
-				e.ui(ui, pretty_type_name::<Assets<A>>());
+				e.ui(ui, common::types::pretty_name::<Assets<A>>());
 			}
 			return false;
 		}

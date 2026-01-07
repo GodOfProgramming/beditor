@@ -1,10 +1,5 @@
 use core::f32;
-use std::{
-	collections::HashSet,
-	hash::Hash,
-	ops::{Index, Range},
-	sync::Arc,
-};
+use std::{collections::HashSet, hash::Hash, ops::Range, sync::Arc};
 
 use egui::IntoAtoms;
 use itertools::Itertools;

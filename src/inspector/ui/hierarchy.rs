@@ -1,14 +1,13 @@
 use super::{EntityFilter, Filter, Selected};
-use crate::util::egui::{CollapsingResponseExtensions, ResponseConditions};
-use crate::util::entity;
-use bevy::ecs::entity::EntityHashSet;
-use bevy::{ecs::query::QueryFilter, prelude::*};
+use bevy::{
+	ecs::{entity::EntityHashSet, query::QueryFilter},
+	prelude::*,
+};
+use common::extensions::egui::{CollapsingResponseExtensions, ResponseConditions};
 use derive_new::new;
 use egui::{CollapsingHeader, CollapsingResponse, RichText};
 use smallvec::SmallVec;
-use std::cmp::Ordering;
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::{cmp::Ordering, collections::HashSet, sync::Arc};
 
 pub struct UnusedPayload;
 
@@ -77,7 +76,7 @@ where
 		let mut new_selection = None;
 		let selected = self.selected.contains(entity);
 
-		let entity_name = entity::guess_entity_name(self.world, entity);
+		let entity_name = common::ecs::guess_entity_name(self.world, entity);
 		let mut name = RichText::new(entity_name);
 		if selected {
 			name = name.strong();

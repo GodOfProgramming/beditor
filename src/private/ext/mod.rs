@@ -15,7 +15,7 @@ pub mod type_editor;
 
 use crate::{
 	EditorExtension, EditorExtensionContext, EditorExtensionPlugin,
-	util::components::ComponentRegistry,
+	reg::components::ComponentRegistry,
 };
 use bevy::prelude::*;
 use brefabs::Prefabs;

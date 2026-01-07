@@ -1,13 +1,13 @@
 use crate::{
 	EditorState, SimulationState,
 	inspector::ui::InspectorSelection,
+	private::util::one_of,
 	private::{
 		EditorInternalSingle, EditorOwned, SimulationOwned, UserHidden,
 		cam::EditorCamera,
 		reflection::{CachedTypeInfo, TypeInfoCache},
 		ui::{EditorEguiContext, EditorUiEguiContextPass},
 	},
-	util::entity::one_of,
 };
 use bevy::{
 	ecs::{entity::EntityHashSet, entity_disabling::Disabled, system::SystemParam},
@@ -34,7 +34,7 @@ use std::{
 	ops::DerefMut,
 	path::{Path, PathBuf},
 };
-use strum::{IntoEnumIterator, VariantArray};
+use strum::VariantArray;
 use strum_macros::{Display, EnumIter, VariantArray};
 
 pub struct EditorScenePlugin;
@@ -659,7 +659,7 @@ impl Command for SerializeScene {
 				),
 			);
 
-			let mut ron_ser = crate::match_else!(ser_result; else err => {
+			let mut ron_ser = common::match_else!(ser_result; else err => {
 				world.trigger(Notification::error(ERR_MSG).with_context(err));
 				return;
 			});

@@ -1,12 +1,16 @@
 use crate::{
 	EditorState, SimulationState,
 	inspector::ui::InspectorSelection,
-	private::util::one_of,
 	private::{
 		EditorInternalSingle, EditorOwned, SimulationOwned, UserHidden,
 		cam::EditorCamera,
 		reflection::{CachedTypeInfo, TypeInfoCache},
 		ui::{EditorEguiContext, EditorUiEguiContextPass},
+		util::one_of,
+	},
+	storage::{
+		Project, Settings,
+		settings::{Setting, SettingsGroup, SettingsTable},
 	},
 };
 use bevy::{
@@ -41,25 +45,38 @@ pub struct EditorScenePlugin;
 
 impl Plugin for EditorScenePlugin {
 	fn build(&self, app: &mut App) {
+		let use_scenes = app
+			.world_mut()
+			.resource_mut::<Settings<Project>>()
+			.get(UseScenesSetting)
+			.unwrap_or(true);
+
 		app
+			.insert_resource(UseScenes(use_scenes))
 			.add_plugins(SingletonPlugin::<EditorSceneRoot>::new(
 				SingletonBehavior::RemoveOther,
 			))
 			.add_message::<ShowSceneSettings>()
 			.init_resource::<RelationshipRegistry>()
-			.add_observer(one_of::<ActiveScene>)
-			.add_observer(on_new_camera)
-			.add_observer(on_new_scene)
-			.add_systems(
-				OnEnter(EditorState::Editing),
-				(show_infinite_grid, restore_scene),
-			)
+			.add_systems(OnEnter(EditorState::Editing), show_infinite_grid)
 			.add_systems(OnExit(EditorState::Editing), remove_infinite_grid)
 			.add_systems(OnEnter(EditorState::SimulationPrep), on_sim_prep)
-			.add_systems(First, mark_entities)
 			.add_systems(EditorUiEguiContextPass, show_scene_editing_modal);
+
+		if use_scenes {
+			app
+				.add_observer(one_of::<ActiveScene>)
+				.add_observer(on_new_camera)
+				.add_observer(on_new_scene)
+				.add_systems(OnEnter(EditorState::Editing), restore_scene)
+				.add_systems(First, mark_entities);
+		}
 	}
 }
+
+/// Temp setting while scenes are not perfect
+#[derive(Resource, Deref, DerefMut)]
+pub struct UseScenes(bool);
 
 #[derive(Component, Default)]
 #[require(
@@ -98,7 +115,12 @@ fn on_new_camera(
 	event: On<Add, EditorCamera>,
 	mut commands: Commands,
 	target_scene_root: Option<Single<Entity, With<EditorSceneRoot>>>,
+	use_scenes: Res<UseScenes>,
 ) {
+	if !**use_scenes {
+		return;
+	}
+
 	match target_scene_root {
 		Some(ts) => {
 			commands
@@ -164,7 +186,14 @@ fn on_sim_prep(
 	q_user_scenes: Query<Entity, (With<SceneRoot>, Without<UserHidden>)>,
 	mut next_state: ResMut<NextState<EditorState>>,
 	mut selected_entities: ResMut<InspectorSelection>,
+	use_scenes: Res<UseScenes>,
 ) {
+	next_state.set(EditorState::Simulating(SimulationState::Live));
+
+	if !**use_scenes {
+		return;
+	}
+
 	for entity in &q_user_scenes {
 		commands
 			.entity(entity)
@@ -179,8 +208,6 @@ fn on_sim_prep(
 			.insert_recursive::<Children>(Disabled);
 	}
 
-	next_state.set(EditorState::Simulating(SimulationState::Live));
-
 	if let Some(event) = selected_entities.clear() {
 		commands.trigger(event);
 	}
@@ -190,7 +217,12 @@ fn restore_scene(
 	mut commands: Commands,
 	q_simulated_entities: Query<Entity, With<SimulationOwned>>,
 	q_roots: Query<(Entity, Has<Disabled>), (With<SceneRoot>, Allow<Disabled>)>,
+	use_scenes: Res<UseScenes>,
 ) {
+	if !**use_scenes {
+		return;
+	}
+
 	for entity in &q_simulated_entities {
 		if let Ok(mut entity) = commands.get_entity(entity) {
 			entity.despawn();
@@ -774,4 +806,22 @@ fn on_scene_ready(
 	};
 
 	commands.entity(entity).insert(EditorSceneRoot);
+}
+
+pub struct SceneSettingsGroup;
+
+impl SettingsGroup for SceneSettingsGroup {
+	type Table = SettingsTable;
+
+	const NAME: &str = "scenes";
+}
+
+pub struct UseScenesSetting;
+
+impl Setting for UseScenesSetting {
+	type Type = bool;
+
+	type Group = SceneSettingsGroup;
+
+	const NAME: &str = "use";
 }

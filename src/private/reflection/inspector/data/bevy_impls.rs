@@ -658,12 +658,10 @@ fn asset_picker<'c, A: Asset>(
 		}
 	};
 
-	let mut paths = Vec::with_capacity(assets.len());
 	let mut handles = HashMap::with_capacity(assets.len());
 	for asset_id in assets.iter().map(|a| a.0) {
-		if let Some(mesh_path) = asset_server.get_path(asset_id) {
-			paths.push(mesh_path.to_string());
-			handles.insert(mesh_path.to_string(), asset_id);
+		if let Some(asset_path) = asset_server.get_path(asset_id) {
+			handles.insert(asset_path.to_string(), asset_id);
 		}
 	}
 
@@ -675,8 +673,8 @@ fn asset_picker<'c, A: Asset>(
 	});
 
 	ui.vertical(|ui| {
-		ui.add_enabled_ui(!paths.is_empty(), |ui| {
-			let response = AutoCompleteTextEdit::new(&mut search_text, paths)
+		ui.add_enabled_ui(!handles.is_empty(), |ui| {
+			let response = AutoCompleteTextEdit::new(&mut search_text, handles.keys())
 				.popup_on_focus(true)
 				.ui(ui)
 				.on_hover_ui_at_pointer(|ui| (hover_ui)(ui, &search_text, &handles));

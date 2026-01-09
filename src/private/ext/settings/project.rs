@@ -1,8 +1,9 @@
 use crate::{
-	EditorExtension, EditorUi,
+	EditorExtension, EditorState, EditorUi,
 	private::{
 		EditorInternal, EditorInternalQuery,
 		cam::ActiveEditorCamera,
+		scene::{UseScenes, UseScenesSetting},
 		ui::{
 			LayoutManager, LoadLayout, SavedLayout, UiManager,
 			misc::{DockExtensions as _, MissingUi},
@@ -63,6 +64,9 @@ struct CategoryParams<'w, 's> {
 	project_settings: ProjectSettings<'w, 's>,
 	active_camera: ResMut<'w, ActiveEditorCamera>,
 	layout_manager: ResMut<'w, LayoutManager>,
+	use_scenes: ResMut<'w, UseScenes>,
+	editor_state: Res<'w, State<EditorState>>,
+
 	layout_name: Local<'s, String>,
 	save_layout_on_exit: Local<'s, bool>,
 }
@@ -149,6 +153,7 @@ impl EditorUi for ProjectSettingsUi {
 enum ProjectSettingCategory {
 	Camera,
 	Layouts,
+	Scenes,
 }
 
 impl From<ProjectSettingCategory> for egui::WidgetText {
@@ -226,7 +231,20 @@ impl ProjectSettingCategory {
 					{
 						params
 							.commands
-							.trigger(Notification::error("Failed to save setting").with_context(err))
+							.trigger(Notification::error("Failed to save setting").with_context(err));
+					}
+				});
+			}
+			Self::Scenes => {
+				ui.add_enabled_ui(**params.editor_state == EditorState::Editing, |ui| {
+					if ui.checkbox(&mut params.use_scenes, "Use Scenes").clicked()
+						&& let Err(err) = params
+							.project_settings
+							.set(UseScenesSetting, **params.use_scenes)
+					{
+						params
+							.commands
+							.trigger(Notification::error("Failed to save setting").with_context(err));
 					}
 				});
 			}

@@ -1,6 +1,5 @@
 use beditor::{brefabs::StaticPrefab, prelude::*};
 use bevy::{ecs::system::SystemParam, prelude::*};
-use brefabs::PrefabPlugin;
 use mimalloc::MiMalloc;
 
 #[global_allocator]
@@ -8,10 +7,11 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
 	App::new()
-		.add_plugins((
-			PrefabPlugin::default().with_static_prefab::<Cube>(),
-			EditorPlugin::new().register_game_camera::<GameCamera>(),
-		))
+		.add_plugins((EditorPlugin::new()
+			.with_prefabs(|prefabs| {
+				prefabs.add_static_prefab::<Cube>();
+			})
+			.register_game_camera::<GameCamera>(),))
 		.add_systems(Startup, startup)
 		.run();
 }

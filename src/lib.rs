@@ -33,7 +33,7 @@ use bevy::{
 };
 use bevy_infinite_grid::InfiniteGridPlugin;
 use bevy_mod_outline::OutlinePlugin;
-use brefabs::{PrefabPlugin, Prefabs};
+use brefabs::PrefabPlugin;
 use common::extensions::bevy::{AppExtensions as _, WorldMutExtensions as _};
 use derive_new::new;
 use notify::NotificationPlugin;
@@ -86,17 +86,24 @@ static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 	dirs.data_dir
 });
 
-type AppRegistrationFn = Box<dyn Fn(&mut App) + Send + Sync>;
+type AppRegistrationFn = Box<dyn Send + Sync + Fn(&mut App)>;
+type PrefabModFn = Box<dyn Send + Sync + Fn(&mut PrefabPlugin)>;
 
 #[derive(Default)]
 pub struct EditorPlugin {
 	default_plugins: Option<AppRegistrationFn>,
 	camera_registrations: Vec<fn(&mut App)>,
+	prefab_mods: Vec<PrefabModFn>,
 }
 
 impl EditorPlugin {
 	pub fn new() -> Self {
 		Self::default()
+	}
+
+	pub fn with_prefabs(mut self, f: impl 'static + Send + Sync + Fn(&mut PrefabPlugin)) -> Self {
+		self.prefab_mods.push(Box::new(f));
+		self
 	}
 
 	pub fn configure_defaults<P, F>(mut self, f: F) -> Self
@@ -154,6 +161,11 @@ impl Plugin for EditorPlugin {
 			(f)(app);
 		}
 
+		let mut prefabs = PrefabPlugin::default();
+		for f in self.prefab_mods.iter() {
+			(f)(&mut prefabs);
+		}
+
 		app
 			.insert_state(EditorState::Editing)
 			// bevy
@@ -172,9 +184,8 @@ impl Plugin for EditorPlugin {
 			.try_add_plugin(InfiniteGridPlugin)
 			.try_add_plugin(OutlinePlugin)
 			.try_add_plugin(TransformGizmoPlugin)
-			.try_add_plugin(PrefabPlugin::default())
 			// internal
-			.add_plugins(private::InternalPlugin);
+			.add_plugins((private::InternalPlugin, prefabs));
 	}
 }
 
@@ -213,9 +224,9 @@ where
 
 		app
 			.world_mut()
-			.resources_scope::<(UiManager, ComponentRegistry, Prefabs)>(|world, resources| {
-				let (ui_manager, components, prefabs) = resources;
-				let mut ctx = EditorExtensionContext::new(world, components, prefabs, ui_manager);
+			.resources_scope::<(UiManager, ComponentRegistry)>(|world, resources| {
+				let (ui_manager, components) = resources;
+				let mut ctx = EditorExtensionContext::new(world, components, ui_manager);
 				self.0.build_editor(&mut ctx);
 			});
 	}
@@ -234,17 +245,12 @@ where
 pub struct EditorExtensionContext<'w> {
 	world: &'w mut World,
 	components: &'w mut ComponentRegistry,
-	prefabs: &'w mut Prefabs,
 	ui_manager: &'w mut UiManager,
 }
 
 impl<'w> EditorExtensionContext<'w> {
 	pub fn world(&mut self) -> &mut World {
 		self.world
-	}
-
-	pub fn prefabs(&mut self) -> &mut Prefabs {
-		self.prefabs
 	}
 
 	pub fn register_component<T: RegisterableComponent>(&mut self) -> &mut Self {

@@ -3,15 +3,13 @@ use beditor::{
 	prelude::*,
 };
 use bevy::prelude::*;
-use brefabs::PrefabPlugin;
 use serde::Deserialize;
 
 fn main() {
 	App::new()
-		.add_plugins((
-			PrefabPlugin::default().with_prefab::<SamplePrefab>(),
-			EditorPlugin::new(),
-		))
+		.add_plugins((EditorPlugin::new().with_prefabs(|prefabs| {
+			prefabs.add_prefab::<SamplePrefab>();
+		}),))
 		.run();
 }
 

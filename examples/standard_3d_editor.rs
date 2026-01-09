@@ -10,7 +10,7 @@ fn main() {
 	App::new()
 		.add_plugins((
 			PrefabPlugin::default().with_static_prefab::<Cube>(),
-			EditorPlugin::new(),
+			EditorPlugin::new().register_game_camera::<GameCamera>(),
 		))
 		.add_systems(Startup, startup)
 		.run();

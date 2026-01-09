@@ -3,6 +3,7 @@ pub mod camera_view;
 pub mod components;
 pub mod diagnostics;
 pub mod editor_view;
+pub mod game_camera_view;
 pub mod hierarchy;
 pub mod image_viewer;
 pub mod inspector;

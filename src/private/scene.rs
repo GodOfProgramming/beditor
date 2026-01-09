@@ -49,7 +49,7 @@ impl Plugin for EditorScenePlugin {
 			.world_mut()
 			.resource_mut::<Settings<Project>>()
 			.get(UseScenesSetting)
-			.unwrap_or(true);
+			.unwrap_or(false);
 
 		app
 			.insert_resource(UseScenes(use_scenes))

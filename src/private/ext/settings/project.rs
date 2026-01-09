@@ -237,7 +237,10 @@ impl ProjectSettingCategory {
 			}
 			Self::Scenes => {
 				ui.add_enabled_ui(**params.editor_state == EditorState::Editing, |ui| {
-					if ui.checkbox(&mut params.use_scenes, "Use Scenes").clicked()
+					if ui
+						.checkbox(&mut params.use_scenes, "*Use Scenes")
+						.on_hover_text("This change requires a restart")
+						.clicked()
 						&& let Err(err) = params
 							.project_settings
 							.set(UseScenesSetting, **params.use_scenes)

@@ -139,9 +139,7 @@ impl HierarchyUi {
 						});
 					}
 
-					if let Some(camera) = entity_ref.get::<Camera>()
-						&& let Some(image) = camera.target.as_image()
-					{
+					if let Some(camera) = entity_ref.get::<Camera>() {
 						ui.menu_button("Camera", |ui| {
 							if entity_ref.contains::<EditorManagedCamera>() {
 								if ui.button("Open Live").clicked() {
@@ -158,7 +156,9 @@ impl HierarchyUi {
 								});
 							}
 
-							if ui.button("Observe").clicked() {
+							if let Some(image) = camera.target.as_image()
+								&& ui.button("Observe").clicked()
+							{
 								queue.push(OpenUi::open_with(
 									OpenMode::Window,
 									ImageViewerUi::new(image.id()),

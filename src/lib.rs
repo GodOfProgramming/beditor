@@ -14,7 +14,10 @@ pub mod storage;
 pub mod ui;
 
 use crate::{
-	private::{EditorInternalFilter, ui::EditorUiEguiContextPass},
+	private::{
+		EditorInternalFilter, ext::game_camera_view::GameCameraViewExtension,
+		ui::EditorUiEguiContextPass,
+	},
 	reg::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 	storage::{Global, Project, Settings},
 };
@@ -122,6 +125,13 @@ impl EditorPlugin {
 				..default()
 			})
 			.disable::<bevy::log::LogPlugin>()
+	}
+
+	pub fn register_game_camera<C: Component + Identifiable>(mut self) -> Self {
+		self.camera_registrations.push(|app| {
+			app.add_plugins(EditorExtensionPlugin::<GameCameraViewExtension<C>>::default());
+		});
+		self
 	}
 }
 

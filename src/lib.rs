@@ -7,6 +7,7 @@
 	reason = "For systems that may actually be more readable without abstraction"
 )]
 
+pub mod content;
 pub mod inspector;
 mod private;
 pub mod reg;
@@ -22,7 +23,7 @@ use crate::{
 	storage::{Global, Project, Settings},
 };
 use bevy::{
-	app::PluginGroupBuilder,
+	app::{PluginGroupBuilder, plugin_group},
 	dev_tools::{frame_time_graph::FrameTimeGraphPlugin, picking_debug::DebugPickingPlugin},
 	diagnostic::{
 		EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
@@ -267,4 +268,11 @@ impl<'w> EditorExtensionContext<'w> {
 		self.ui_manager.register::<U>();
 		self
 	}
+}
+
+plugin_group! {
+		/// Plugins that are needed to leverage editor created assets in a game, without including the editor
+		pub struct StandalonePlugins {
+			private::assets:::AssetsPlugin,
+		}
 }

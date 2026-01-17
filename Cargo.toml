@@ -8,7 +8,6 @@ publish = false
 [workspace]
 members = [
   ".",
-  "crates/atlas",
   "crates/common",
   "crates/macros",
   "crates/notify",
@@ -45,7 +44,6 @@ uuid = { workspace = true, features = ["serde"] }
 egui = { workspace = true, features = ["serde"] }
 
 # workspace
-atlas = { path = "./crates/atlas" }
 common = { path = "./crates/common" }
 macros = { path = "./crates/macros" }
 notify = { path = "./crates/notify" }
@@ -131,7 +129,7 @@ walkdir = "2.5.0"
 xml-rs = "1.0.0"
 
 [features]
-default = ["dev"]
+default = ["dev", "watch"]
 dev = ["bevy/track_location", "bevy/asset_processor"]
 profiling = ["bevy/trace_tracy", "dep:tracing-tracy"]
 watch = ["bevy/file_watcher"]

@@ -29,9 +29,13 @@ use bevy::{
 		schedule::ScheduleLabel,
 		system::{SystemState, entity_command},
 	},
-	picking::pointer::PointerId,
+	picking::{
+		hover::{PickingInteraction, update_interactions},
+		pointer::PointerId,
+	},
 	platform::collections::HashMap,
 	prelude::*,
+	ui::ui_focus_system,
 };
 use bevy_egui::{
 	EguiContext, EguiContextSettings, EguiGlobalSettings, EguiMultipassSchedule, EguiPlugin,
@@ -78,6 +82,12 @@ impl Plugin for EditorUiPlugin {
 			.add_systems(
 				OnEnter(EditorState::Exiting),
 				(save_context_options, save_scale_factor, save_layouts),
+			)
+			.add_systems(
+				PreUpdate,
+				forward_interactions
+					.after(ui_focus_system)
+					.after(update_interactions),
 			)
 			.add_systems(
 				FixedUpdate,
@@ -805,5 +815,21 @@ fn reparent_editor_ui(
 ) {
 	for ui in &q_uis {
 		commands.entity(*editor_ui).add_child(ui);
+	}
+}
+
+fn forward_interactions(
+	mut q_interactions: EditorInternalQuery<(&mut Interaction, &PickingInteraction)>,
+) {
+	for (mut entity_interaction, picking_interaction) in &mut q_interactions {
+		let interaction = match picking_interaction {
+			PickingInteraction::Pressed => Interaction::Pressed,
+			PickingInteraction::Hovered => Interaction::Hovered,
+			PickingInteraction::None => Interaction::None,
+		};
+
+		if *entity_interaction != interaction {
+			*entity_interaction = interaction;
+		}
 	}
 }

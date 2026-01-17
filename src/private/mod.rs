@@ -8,7 +8,7 @@ pub mod ui;
 pub mod util;
 
 use crate::{
-	AppSystems, EditorExtensionPlugin, EditorState, SimulationState,
+	AppSystems, EditorExtensionPlugin, EditorState, SimulationState, StandalonePlugins,
 	reg::{components::ComponentRegistry, serde::SerdeRegistry},
 	storage::{
 		GlobalEditorSettings,
@@ -32,12 +32,12 @@ impl Plugin for InternalPlugin {
 			.init_resource::<ComponentRegistry>()
 			.init_resource::<SerdeRegistry>()
 			.add_plugins((
+				StandalonePlugins,
 				scene::EditorScenePlugin,
 				cam::EditorCamPlugin,
 				input::EditorInputPlugin,
 				ui::EditorUiPlugin,
 				reflection::ReflectionExtensionsPlugin,
-				assets::AssetsPlugin,
 				EditorExtensionPlugin::<ext::InternalEditorExtensions>::default(),
 			))
 			.add_systems(

@@ -429,16 +429,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atlas"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "nameof",
- "ron 0.12.0",
- "serde",
-]
-
-[[package]]
 name = "atomic-polyfill"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -527,7 +517,6 @@ version = "0.17.3"
 dependencies = [
  "anyhow",
  "async-std",
- "atlas",
  "bevy",
  "bevy_egui",
  "bevy_infinite_grid",

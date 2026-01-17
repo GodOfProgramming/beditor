@@ -10,6 +10,7 @@ const COLOR_MATERIAL_UUID: Uuid = uuid!("47cd28d6-d14f-40a7-be9f-8af97577694b");
 
 const BASE_COLOR: Color = Color::srgb_u8(124, 144, 255);
 
+#[derive(Default)]
 pub struct AssetsPlugin;
 
 impl Plugin for AssetsPlugin {

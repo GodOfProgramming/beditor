@@ -76,6 +76,14 @@ impl Setting for EditorUiScale {
 	const NAME: &str = "ui_scale";
 }
 
+pub struct SimulateOnLaunch;
+
+impl Setting for SimulateOnLaunch {
+	type Type = bool;
+	type Group = EditorSettingsGroup;
+	const NAME: &str = "simulate_on_launch";
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 pub struct WindowSettingsGroup;

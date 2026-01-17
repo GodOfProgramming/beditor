@@ -9,7 +9,10 @@ use crate::{
 			misc::{DockExtensions as _, MissingUi},
 		},
 	},
-	storage::{ProjectSettings, settings::SaveLayoutOnExitSetting},
+	storage::{
+		ProjectSettings,
+		settings::{SaveLayoutOnExitSetting, SimulateOnLaunch},
+	},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use convert_case::{Case, Casing};
@@ -69,6 +72,7 @@ struct CategoryParams<'w, 's> {
 
 	layout_name: Local<'s, String>,
 	save_layout_on_exit: Local<'s, bool>,
+	simulate_on_launch: Local<'s, bool>,
 }
 
 impl EditorUi for ProjectSettingsUi {
@@ -86,6 +90,12 @@ impl EditorUi for ProjectSettingsUi {
 			.project_settings
 			.get(SaveLayoutOnExitSetting)
 			.unwrap_or(true);
+
+		*params.category_params.simulate_on_launch = params
+			.category_params
+			.project_settings
+			.get(SimulateOnLaunch)
+			.unwrap_or(false);
 
 		Self {
 			save_layout_dialog: widgets::Dialog::new(egui::Id::new("save_layout_dialog"), "Save Layout"),
@@ -151,6 +161,7 @@ impl EditorUi for ProjectSettingsUi {
 
 #[derive(Reflect, Clone, Copy, Display, PartialEq, Eq, VariantArray)]
 enum ProjectSettingCategory {
+	Startup,
 	Camera,
 	Layouts,
 	Scenes,
@@ -176,6 +187,19 @@ impl ProjectSettingCategory {
 		settings_ui: &mut ProjectSettingsUi,
 	) {
 		match self {
+			Self::Startup => {
+				ui.horizontal(|ui| {
+					if ui
+						.checkbox(&mut params.simulate_on_launch, "Simulate on launch")
+						.clicked()
+					{
+						params
+							.project_settings
+							.set(SimulateOnLaunch, *params.simulate_on_launch)
+							.ok();
+					}
+				});
+			}
 			Self::Camera => {
 				ui.horizontal(|ui| {
 					ui.label("Editor Camera Mode:");

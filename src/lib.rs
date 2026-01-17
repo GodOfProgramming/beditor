@@ -20,7 +20,7 @@ use crate::{
 		ui::EditorUiEguiContextPass,
 	},
 	reg::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
-	storage::{Global, Project, Settings},
+	storage::{Global, Project, Settings, settings::SimulateOnLaunch},
 };
 use bevy::{
 	app::{PluginGroupBuilder, plugin_group},
@@ -147,9 +147,13 @@ impl Plugin for EditorPlugin {
 	fn build(&self, app: &mut App) {
 		dotenvy::dotenv().ok();
 
+		let mut project_settings = Settings::<Project>::new().unwrap();
+
+		let start_in_simulation = project_settings.get(SimulateOnLaunch).unwrap_or(false);
+
 		app
 			.insert_resource(Settings::<Global>::new().unwrap())
-			.insert_resource(Settings::<Project>::new().unwrap())
+			.insert_resource(project_settings)
 			.add_plugins(private::util::log::LogPlugin);
 
 		if let Some(config_fn) = &self.default_plugins {
@@ -167,8 +171,14 @@ impl Plugin for EditorPlugin {
 			(f)(&mut prefabs);
 		}
 
+		let starting_state = if start_in_simulation {
+			EditorState::SimulationPrep
+		} else {
+			EditorState::Editing
+		};
+
 		app
-			.insert_state(EditorState::Editing)
+			.insert_state(starting_state)
 			// bevy
 			.try_add_plugin(MeshPickingPlugin)
 			.try_add_plugin(DebugPickingPlugin)

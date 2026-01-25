@@ -139,8 +139,10 @@ where
 	}
 
 	/// Splits this view into one view that only has access the the resource `resource` (`.0`), and the rest (`.1`).
-	pub fn split_off_resource(&self, resource: TypeId) -> (Self, Self) {
-		assert!(self.allows_access_to_resource(resource));
+	pub fn split_off_resource(&self, resource: TypeId) -> Option<(Self, Self)> {
+		if !self.allows_access_to_resource(resource) {
+			return None;
+		}
 
 		// INVARIANTS: `self` had `resource` access, so `split` has access if we remove it from `self`
 		let split = RestrictedWorldView {
@@ -155,12 +157,14 @@ where
 			components: self.components.clone(),
 		};
 
-		(split, rest)
+		Some((split, rest))
 	}
 
 	/// Splits this view into one view that only has access the the component `component.1` at the entity `component.0` (`.0`), and the rest (`.1`).
-	pub fn split_off_component(&self, component: EntityComponent) -> (Self, Self) {
-		assert!(self.allows_access_to_component(component));
+	pub fn split_off_component(&self, component: EntityComponent) -> Option<(Self, Self)> {
+		if !self.allows_access_to_component(component) {
+			return None;
+		}
 
 		// INVARIANTS: `self` had `component` access, so `split` has access if we remove it from `self`
 		let split = RestrictedWorldView {
@@ -175,16 +179,18 @@ where
 			components: self.components.without(component),
 		};
 
-		(split, rest)
+		Some((split, rest))
 	}
 
 	/// Splits this view into one view that only has access the the component-entity pairs `components` (`.0`), and the rest (`.1`)
 	pub fn split_off_components(
 		&self,
 		components: impl Iterator<Item = EntityComponent> + Copy,
-	) -> (Self, Self) {
+	) -> Option<(Self, Self)> {
 		for component in components {
-			assert!(self.allows_access_to_component(component));
+			if !self.allows_access_to_component(component) {
+				return None;
+			}
 		}
 
 		// INVARIANTS: `self` had `component` access, so `split` has access if we remove it from `self`
@@ -199,7 +205,7 @@ where
 			components: self.components.without_many(components),
 		};
 
-		(split, rest)
+		Some((split, rest))
 	}
 
 	/// Splits the world into one view which may only be used for resource access, and another which may only be used for component access.
@@ -399,7 +405,10 @@ impl<'w> RestrictedWorldView<MutableWorldView<'w>> {
 	/// Like [`RestrictedWorldView::split_off_resource`], but takes `self` and returns `'w` lifetimes.
 	pub fn split_off_resource_typed<R: Resource>(self) -> Option<(Mut<'w, R>, Self)> {
 		let type_id = TypeId::of::<R>();
-		assert!(self.allows_access_to_resource(type_id));
+
+		if !self.allows_access_to_resource(type_id) {
+			return None;
+		}
 
 		// SAFETY: `self` had `R` access, so we have unique access if we remove it from `self`
 		let resource = unsafe { self.world_view.world_mut().get_resource_mut::<R>()? };
@@ -522,6 +531,7 @@ unsafe fn mut_untyped_to_reflect<'a>(
 	let registration = type_registry
 		.get(type_id)
 		.ok_or(Error::NoTypeRegistration)?;
+
 	let reflect_from_ptr = registration
 		.data::<ReflectFromPtr>()
 		.ok_or(Error::NoTypeData("ReflectFromPtr"))?;
@@ -545,6 +555,7 @@ unsafe fn ptr_untyped_to_reflect<'a>(
 	let registration = type_registry
 		.get(type_id)
 		.ok_or(Error::NoTypeRegistration)?;
+
 	let reflect_from_ptr = registration
 		.data::<ReflectFromPtr>()
 		.ok_or(Error::NoTypeData("ReflectFromPtr"))?;
@@ -581,7 +592,7 @@ mod tests {
 
 		let world = RestrictedWorldView::<ImmutableWorldView>::from(&mut world);
 
-		let (a_view, world) = world.split_off_resource(TypeId::of::<A>());
+		let (a_view, world) = world.split_off_resource(TypeId::of::<A>()).unwrap();
 		a_view.resource::<A>().unwrap();
 		world.resource::<B>().unwrap();
 	}
@@ -594,7 +605,7 @@ mod tests {
 
 		let world = RestrictedWorldView::<MutableWorldView>::from(&mut world);
 
-		let (mut a_view, mut world) = world.split_off_resource(TypeId::of::<A>());
+		let (mut a_view, mut world) = world.split_off_resource(TypeId::of::<A>()).unwrap();
 		let mut a = a_view.resource_mut::<A>().unwrap();
 
 		let mut type_registry = TypeRegistry::empty();
@@ -624,14 +635,14 @@ mod tests {
 		let world = World::new();
 		let world = RestrictedWorldView::<ImmutableWorldView>::from(&world);
 
-		let (a_view, a_remaining) = world.split_off_resource(TypeId::of::<A>());
+		let (a_view, a_remaining) = world.split_off_resource(TypeId::of::<A>()).unwrap();
 
 		assert!(a_view.allows_access_to_resource(TypeId::of::<A>()));
 		assert!(!a_remaining.allows_access_to_resource(TypeId::of::<A>()));
 		assert!(!a_view.allows_access_to_resource(TypeId::of::<B>()));
 		assert!(a_remaining.allows_access_to_resource(TypeId::of::<B>()));
 
-		let (b_view, b_remaining) = a_remaining.split_off_resource(TypeId::of::<B>());
+		let (b_view, b_remaining) = a_remaining.split_off_resource(TypeId::of::<B>()).unwrap();
 
 		assert!(b_view.allows_access_to_resource(TypeId::of::<B>()));
 		assert!(!b_remaining.allows_access_to_resource(TypeId::of::<B>()));
@@ -652,8 +663,9 @@ mod tests {
 
 		let world = RestrictedWorldView::<MutableWorldView>::from(&mut world);
 
-		let (mut component_view, mut world) =
-			world.split_off_component((entity, TypeId::of::<ComponentA>()));
+		let (mut component_view, mut world) = world
+			.split_off_component((entity, TypeId::of::<ComponentA>()))
+			.unwrap();
 		let mut component = component_view
 			.entity_component_reflect_mut(entity, TypeId::of::<ComponentA>(), &type_registry)
 			.unwrap();

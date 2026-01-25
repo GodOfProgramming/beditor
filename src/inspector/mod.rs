@@ -204,7 +204,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 			let Some((mut resource, world_view)) =
 				RestrictedWorldView::<MutableWorldView>::from(world).split_off_resource_typed::<R>()
 			else {
-				errors::resource_does_not_exist(ui, &common::types::pretty_name::<R>());
+				errors::resource_does_not_exist(ui, common::types::pretty_name::<R>());
 				return;
 			};
 
@@ -227,7 +227,11 @@ pub trait WorldExtensions: BorrowMut<World> {
 		self.borrow_mut().queue(|world, queue| {
 			// create a context with access to the world except for the current resource
 			let world_view = RestrictedWorldView::<MutableWorldView>::from(world);
-			let (mut resource_view, world_view) = world_view.split_off_resource(resource_type_id);
+			let Some((mut resource_view, world_view)) = world_view.split_off_resource(resource_type_id)
+			else {
+				errors::no_access_resource(ui, name_of_type);
+				return;
+			};
 
 			let mut ctx = MutableContext::from_world_view(world_view, queue);
 			let mut env = InspectorUi::new(type_registry, &mut ctx);
@@ -276,8 +280,13 @@ pub trait WorldExtensions: BorrowMut<World> {
 
 			let world = RestrictedWorldView::<MutableWorldView>::from(world);
 
-			let (assets_view, world_view) =
-				world.split_off_resource(reflect_asset.assets_resource_type_id());
+			let Some((assets_view, world_view)) =
+				world.split_off_resource(reflect_asset.assets_resource_type_id())
+			else {
+				let type_name = common::types::pretty_name_of_str(registration.type_info().type_path());
+				errors::no_access_resource(ui, type_name);
+				return false;
+			};
 
 			let Some(asset_value) = ({
 				assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));

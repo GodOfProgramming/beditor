@@ -116,7 +116,16 @@ pub fn ui_for_entity_components(
 		}
 
 		// create a context with access to the world except for the currently viewed component
-		let (mut component_view, world_view) = ctx.world_view.split_off_component((entity, type_id));
+		let Some((mut component_view, world_view)) =
+			ctx.world_view.split_off_component((entity, type_id))
+		else {
+			let name = type_registry
+				.get(type_id)
+				.map(|tr| tr.type_info().type_path().to_string())
+				.unwrap_or_else(|| format!("{type_id:?}"));
+			errors::no_access_component(ui, entity, name);
+			continue;
+		};
 
 		let component_result =
 			component_view.entity_component_reflect_mut(entity, type_id, type_registry);

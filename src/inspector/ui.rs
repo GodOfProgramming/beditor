@@ -1591,7 +1591,7 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 		let reflect_handle = self.type_registry.get_type_data::<ReflectHandle>(type_id)?;
 
 		let Some(handle) = reflect_handle.downcast_handle_untyped(reflected_value.as_any()) else {
-			errors::no_asset_handle(ui, &name_of_type(type_id, self.type_registry));
+			errors::no_asset_handle(ui, name_of_type(type_id, self.type_registry));
 			return Some(false);
 		};
 
@@ -1609,8 +1609,17 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			return Some(false);
 		};
 
-		let (assets_view, world) =
-			world_view.split_off_resource(reflect_asset.assets_resource_type_id());
+		let Some((assets_view, world)) =
+			world_view.split_off_resource(reflect_asset.assets_resource_type_id())
+		else {
+			let name = self
+				.type_registry
+				.get(type_id)
+				.map(|tr| tr.type_info().type_path().to_string())
+				.unwrap_or_else(|| format!("{type_id:?}"));
+			errors::no_access_resource(ui, name);
+			return Some(false);
+		};
 
 		assert!(assets_view.allows_access_to_resource(reflect_asset.assets_resource_type_id()));
 
@@ -1664,8 +1673,17 @@ impl<'t, 'c> InspectorUi<'t, MutableContext<'c>> {
 			return Some(false);
 		};
 
-		let (assets_view, world) =
-			world_view.split_off_resource(reflect_asset.assets_resource_type_id());
+		let Some((assets_view, world)) =
+			world_view.split_off_resource(reflect_asset.assets_resource_type_id())
+		else {
+			let name = self
+				.type_registry
+				.get(type_id)
+				.map(|tr| tr.type_info().type_path().to_string())
+				.unwrap_or_else(|| format!("{type_id:?}"));
+			errors::no_access_resource(ui, name);
+			return Some(false);
+		};
 
 		let mut new_values = Vec::with_capacity(values.len());
 		let mut used_handles = Vec::with_capacity(values.len());

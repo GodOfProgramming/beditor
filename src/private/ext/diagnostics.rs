@@ -2,7 +2,7 @@ use super::inspector::InspectorSettings;
 use crate::{
 	EditorExtension,
 	private::{
-		EditorInternal, EditorInternalQuery,
+		EditorInternal,
 		cam::{RenderCameras, RenderCamerasSetting},
 		util::log::LogLevel,
 	},
@@ -20,7 +20,7 @@ use bevy::{
 		storage::ShaderStorageBuffer,
 	},
 };
-use bevy_egui::{EguiContext, EguiTextureHandle, EguiUserTextures, egui};
+use bevy_egui::{EguiTextureHandle, EguiUserTextures, egui};
 use common::extensions::egui::ContextExtensions;
 use uuid::uuid;
 
@@ -33,10 +33,7 @@ impl EditorExtension for DiagnosticsUiExtension {
 	}
 
 	fn build_app(&self, app: &mut App) {
-		app
-			.init_resource::<FrameTimeGraph>()
-			.add_observer(on_spawn)
-			.add_observer(handle_ui_debug);
+		app.init_resource::<FrameTimeGraph>().add_observer(on_spawn);
 	}
 }
 
@@ -146,9 +143,6 @@ impl EditorUi for DiagnosticsUi {
 	}
 }
 
-#[derive(Event)]
-struct DebugUiEvent(bool);
-
 #[derive(Resource, Default)]
 struct FrameTimeGraph {
 	image: Handle<Image>,
@@ -214,11 +208,4 @@ fn on_spawn(
 		MaterialNode::from(graph.mat.clone()),
 		ChildOf(event.event_target()),
 	));
-}
-
-fn handle_ui_debug(event: On<DebugUiEvent>, mut q_egui_ctx: EditorInternalQuery<&mut EguiContext>) {
-	for mut ctx in &mut q_egui_ctx {
-		let ctx = ctx.get_mut();
-		ctx.set_debug_on_hover(event.0);
-	}
 }

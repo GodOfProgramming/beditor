@@ -88,12 +88,15 @@ fn tools_menu(ui: &mut egui::Ui) {
 
 fn view_menu(ui: &mut egui::Ui) {
 	ui.menu_button("View", |ui| {
-		let mut debug_on_hover = ui.ctx().debug_on_hover();
-		if ui
-			.checkbox(&mut debug_on_hover, "Debug Editor UI")
-			.clicked()
+		#[cfg(debug_assertions)]
 		{
-			ui.ctx().set_debug_on_hover(debug_on_hover);
+			let mut debug_on_hover = ui.ctx().debug_on_hover();
+			if ui
+				.checkbox(&mut debug_on_hover, "Debug Editor UI")
+				.clicked()
+			{
+				ui.ctx().set_debug_on_hover(debug_on_hover);
+			}
 		}
 	});
 }

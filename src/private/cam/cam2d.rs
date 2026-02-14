@@ -8,6 +8,7 @@ use crate::{
 	storage::{ProjectSettings, settings::Setting},
 };
 use bevy::{
+	camera::RenderTarget,
 	input::mouse::MouseMotion,
 	prelude::*,
 	window::{PrimaryWindow, SystemCursorIcon},
@@ -273,7 +274,7 @@ fn zoom_system(
 fn pan_system(
 	mut camera: EditorInternalSingle<
 		(
-			&Camera,
+			&RenderTarget,
 			&EditorManagedCamera,
 			&Projection,
 			&mut Transform,
@@ -285,14 +286,13 @@ fn pan_system(
 	images: Res<Assets<Image>>,
 	window: Single<&Window, With<PrimaryWindow>>,
 ) {
-	let (camera, managed_camera, projection, ref mut transform, settings) = *camera;
+	let (target, managed_camera, projection, ref mut transform, settings) = *camera;
 
 	let Projection::Orthographic(ortho) = projection else {
 		return;
 	};
 
-	let texture_size = camera
-		.target
+	let texture_size = target
 		.as_image()
 		.and_then(|handle| images.get(handle.id()))
 		.map(|image| image.size())

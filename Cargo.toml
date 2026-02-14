@@ -18,8 +18,8 @@ members = [
 ]
 
 [workspace.dependencies]
-bevy = "0.17.3"
-bevy_egui = { version = "0.38.0", default-features = false }
+bevy = "0.18.0"
+bevy_egui = { version = "0.39.1", default-features = false }
 derive-new = "0.7.0"
 derive_more = "1.0.0"
 egui = "0.33.2"
@@ -68,9 +68,9 @@ bevy_egui = { workspace = true, features = [
   "open_url",
   "render",
 ] }
-bevy_infinite_grid = "0.17.0"
-bevy_mod_outline = { git = "https://github.com/komadori/bevy_mod_outline", rev = "9b509abe41ac1d2b882adaf63855e24a20ced3ff" }
-brefabs = "0.7.0"
+bevy_infinite_grid = "0.18.0"
+bevy_mod_outline = { git = "https://github.com/LesserKnownThings/bevy_mod_outline", rev = "531d8cff46fae8b5d5acc008dd4860dd0a42489a" }
+bevy_transform_tools = { git = "https://github.com/8th-Boundary/bevy_transform_tools", branch = "main" }
 bytemuck = "1.24.0"
 camino = "1.2.1"
 const_format = "0.2.35"
@@ -94,7 +94,7 @@ include_dir = "0.7.4"
 inventory = "0.3.21"
 itertools = { workspace = true }
 lazy_static = "1.5.0"
-leafwing-input-manager = "0.19.0"
+leafwing-input-manager = "0.20.0"
 log = "0.4.28"
 maplit = "1.0.2"
 mimalloc = "*"
@@ -122,7 +122,6 @@ toml = "0.9.8"
 tracing = "0.1.41"
 tracing-log = "0.2.0"
 tracing-tracy = { version = "0.11.4", optional = true }
-transform-gizmo-bevy = { git = "https://github.com/GodOfProgramming/transform-gizmo.git", rev = "b1b2ac13e0526dff01915758dd4ba4c576d2bfd2" }
 variadics_please = { workspace = true }
 vfs = { git = "https://github.com/GodOfProgramming/vfs-rs.git", rev = "ed5ba004878e076bc3e9bdf8b133e62ccba1ba0c" }
 walkdir = "2.5.0"

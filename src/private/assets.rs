@@ -1,5 +1,4 @@
 use bevy::{ecs::system::SystemParam, prelude::*};
-use brefabs::{Prefabs, StaticPrefab};
 use uuid::{Uuid, uuid};
 
 const CUBE_MESH_UUID: Uuid = uuid!("feee5079-0028-4558-be58-d0a4d343245a");
@@ -20,11 +19,6 @@ impl Plugin for AssetsPlugin {
 }
 
 pub fn add_prefabs(world: &mut World) {
-	world.resource_scope(|world, mut prefabs: Mut<Prefabs>| {
-		prefabs.register_static_prefab::<Cube>(world);
-		prefabs.register_static_prefab::<Square>(world);
-	});
-
 	let mut meshes = world.resource_mut::<Assets<Mesh>>();
 
 	for (id, mesh) in [
@@ -74,25 +68,25 @@ struct Cube {
 	material: MeshMaterial3d<StandardMaterial>,
 }
 
-impl StaticPrefab for Cube {
-	type Params<'w, 's> = SharedParams<'w>;
+impl Cube {
+	// type Params<'w, 's> = SharedParams<'w>;
 
-	fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
-		Self {
-			mesh: Mesh3d(
-				params
-					.meshes
-					.get_strong_handle(AssetId::from(CUBE_MESH_UUID))
-					.unwrap(),
-			),
-			material: MeshMaterial3d(
-				params
-					.std_mats
-					.get_strong_handle(AssetId::from(STANDARD_MATERIAL_UUID))
-					.unwrap(),
-			),
-		}
-	}
+	// fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
+	// 	Self {
+	// 		mesh: Mesh3d(
+	// 			params
+	// 				.meshes
+	// 				.get_strong_handle(AssetId::from(CUBE_MESH_UUID))
+	// 				.unwrap(),
+	// 		),
+	// 		material: MeshMaterial3d(
+	// 			params
+	// 				.std_mats
+	// 				.get_strong_handle(AssetId::from(STANDARD_MATERIAL_UUID))
+	// 				.unwrap(),
+	// 		),
+	// 	}
+	// }
 }
 
 #[derive(Bundle, Reflect, Clone)]
@@ -102,23 +96,23 @@ struct Square {
 	material: MeshMaterial2d<ColorMaterial>,
 }
 
-impl StaticPrefab for Square {
-	type Params<'w, 's> = SharedParams<'w>;
+impl Square {
+	// type Params<'w, 's> = SharedParams<'w>;
 
-	fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
-		Self {
-			mesh: Mesh2d(
-				params
-					.meshes
-					.get_strong_handle(AssetId::from(RECT_MESH_UUID))
-					.unwrap(),
-			),
-			material: MeshMaterial2d(
-				params
-					.color_mats
-					.get_strong_handle(AssetId::from(COLOR_MATERIAL_UUID))
-					.unwrap(),
-			),
-		}
-	}
+	// fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
+	// 	Self {
+	// 		mesh: Mesh2d(
+	// 			params
+	// 				.meshes
+	// 				.get_strong_handle(AssetId::from(RECT_MESH_UUID))
+	// 				.unwrap(),
+	// 		),
+	// 		material: MeshMaterial2d(
+	// 			params
+	// 				.color_mats
+	// 				.get_strong_handle(AssetId::from(COLOR_MATERIAL_UUID))
+	// 				.unwrap(),
+	// 		),
+	// 	}
+	// }
 }

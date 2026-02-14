@@ -1,14 +1,17 @@
+// TODO asset/content window
+/*
+
 use std::{any::TypeId, borrow::Cow, num::NonZeroUsize};
 
 use crate::{
 	EditorExtension,
-	private::{ EditorInternal,
-	ext::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
-   },
+	private::{
+		EditorInternal,
+		ext::{BundleDnd, SearchableVfs, type_editor::OpenTypeEditor},
+	},
 	ui::EditorUiWorld,
 };
 use bevy::prelude::*;
-use brefabs::{Prefabs, SpawnUntypedPrefabEvent, WorldExtensions};
 use notify::Notification;
 use uuid::{Uuid, uuid};
 use vfs::Vfs;
@@ -207,3 +210,5 @@ impl EditPrefabDescriptorMessage {
 		}
 	}
 }
+
+*/

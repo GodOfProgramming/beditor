@@ -16,7 +16,7 @@ use crate::{
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
 };
-use bevy::prelude::*;
+use bevy::{camera::RenderTarget, prelude::*};
 use common::extensions::bevy::WorldMutExtensions as _;
 use notify::Notification;
 use std::sync::Arc;
@@ -54,7 +54,7 @@ impl EditorUiWorld for HierarchyUi {
 
 	const UNIQUE: bool = true;
 
-	const SCROLL_BARS: [bool; 2] = [true, false];
+	const SCROLL_BARS: [bool; 2] = [true, true];
 
 	fn spawn(_entity: Entity, _world: &mut World) -> Self {
 		default()
@@ -139,7 +139,7 @@ impl HierarchyUi {
 						});
 					}
 
-					if let Some(camera) = entity_ref.get::<Camera>() {
+					if let Some(target) = entity_ref.get::<RenderTarget>() {
 						ui.menu_button("Camera", |ui| {
 							if entity_ref.contains::<EditorManagedCamera>() {
 								if ui.button("Open Live").clicked() {
@@ -156,7 +156,7 @@ impl HierarchyUi {
 								});
 							}
 
-							if let Some(image) = camera.target.as_image()
+							if let Some(image) = target.as_image()
 								&& ui.button("Observe").clicked()
 							{
 								queue.push(OpenUi::open_with(

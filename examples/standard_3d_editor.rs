@@ -1,4 +1,4 @@
-use beditor::{brefabs::StaticPrefab, prelude::*};
+use beditor::prelude::*;
 use bevy::{ecs::system::SystemParam, prelude::*};
 use mimalloc::MiMalloc;
 
@@ -7,11 +7,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
 	App::new()
-		.add_plugins((EditorPlugin::new()
-			.with_prefabs(|prefabs| {
-				prefabs.add_static_prefab::<Cube>();
-			})
-			.register_game_camera::<GameCamera>(),))
+		.add_plugins(EditorPlugin::new().register_game_camera::<GameCamera>())
 		.add_systems(Startup, startup)
 		.run();
 }
@@ -83,22 +79,22 @@ struct CubeParams<'w, 's> {
 	spiral: Local<'s, Spiral>,
 }
 
-impl StaticPrefab for Cube {
-	type Params<'w, 's> = CubeParams<'w, 's>;
+impl Cube {
+	// type Params<'w, 's> = CubeParams<'w, 's>;
 
-	fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
-		let offset = Vec2::new(
-			params.spiral.r * params.spiral.theta.cos(),
-			params.spiral.r * params.spiral.theta.sin(),
-		);
+	// fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
+	// 	let offset = Vec2::new(
+	// 		params.spiral.r * params.spiral.theta.cos(),
+	// 		params.spiral.r * params.spiral.theta.sin(),
+	// 	);
 
-		params.spiral.theta += 30.0f32.to_radians();
-		params.spiral.h += 0.5;
+	// 	params.spiral.theta += 30.0f32.to_radians();
+	// 	params.spiral.h += 0.5;
 
-		Self {
-			mesh: Mesh3d(params.meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-			material: MeshMaterial3d(params.materials.add(Color::srgb_u8(124, 144, 255))),
-			transform: Transform::from_xyz(offset.x, params.spiral.h, offset.y),
-		}
-	}
+	// 	Self {
+	// 		mesh: Mesh3d(params.meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
+	// 		material: MeshMaterial3d(params.materials.add(Color::srgb_u8(124, 144, 255))),
+	// 		transform: Transform::from_xyz(offset.x, params.spiral.h, offset.y),
+	// 	}
+	// }
 }

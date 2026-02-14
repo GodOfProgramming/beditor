@@ -3,7 +3,9 @@ use crate::{
 	EditorExtension, EditorUi,
 	private::{EditorInternal, EditorInternalQuery, cam::EditorManagedCamera},
 };
-use bevy::{ecs::system::SystemParam, prelude::*, render::render_resource::Extent3d};
+use bevy::{
+	camera::RenderTarget, ecs::system::SystemParam, prelude::*, render::render_resource::Extent3d,
+};
 use bevy_egui::EguiUserTextures;
 use common::extensions::egui::ContextExtensions;
 use derive_new::new;
@@ -35,7 +37,8 @@ impl Default for CameraViewUi {
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
 	image_viewer: Local<'s, ImageViewerUi>,
-	q_cameras: EditorInternalQuery<'w, 's, (&'static mut Camera, &'static mut EditorManagedCamera)>,
+	q_targets:
+		EditorInternalQuery<'w, 's, (&'static mut RenderTarget, &'static mut EditorManagedCamera)>,
 	user_textures: ResMut<'w, EguiUserTextures>,
 	images: ResMut<'w, Assets<Image>>,
 }
@@ -61,17 +64,17 @@ impl EditorUi for CameraViewUi {
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
 			mut image_viewer,
-			mut q_cameras,
+			mut q_targets,
 			mut user_textures,
 			mut images,
 		} = params;
 
-		let Ok((camera, mut managed_camera)) = q_cameras.get_mut(self.entity) else {
+		let Ok((target, mut managed_camera)) = q_targets.get_mut(self.entity) else {
 			ui.label("No camera selected");
 			return;
 		};
 
-		let Some(handle) = &camera.target.as_image() else {
+		let Some(handle) = &target.as_image() else {
 			ui.label("Camera render target is not an image");
 			return;
 		};
@@ -142,12 +145,12 @@ impl EditorUi for CameraViewUi {
 		_node: egui_dock::NodeIndex,
 	) {
 		let Params {
-			mut q_cameras,
+			mut q_targets,
 			mut images,
 			..
 		} = params;
 
-		let Ok((camera, mut managed_camera)) = q_cameras.get_mut(self.entity) else {
+		let Ok((target, mut managed_camera)) = q_targets.get_mut(self.entity) else {
 			return;
 		};
 
@@ -155,7 +158,7 @@ impl EditorUi for CameraViewUi {
 
 		ui.menu_button("Aspect Ratio Overrides", |ui| {
 			if ui.button("480p").clicked()
-				&& let Some(image_handle) = camera.target.as_image()
+				&& let Some(image_handle) = target.as_image()
 				&& let Some(image) = images.get_mut(image_handle.id())
 			{
 				managed_camera.ignore_viewport_size();

@@ -38,7 +38,6 @@ use notify::Notification;
 use serde::{Deserialize, Serialize};
 use singleton::{SingletonBehavior, SingletonPlugin};
 use smallvec::SmallVec;
-use transform_gizmo_bevy::{GizmoCamera, GizmoOptions};
 use uuid::Uuid;
 
 pub const EDITOR_UI_RENDER_LAYER: Layer = 31;
@@ -93,7 +92,7 @@ impl Plugin for EditorCamPlugin {
 				(
 					(
 						editor_picking_forwarding.in_set(PickingSystems::PostInput),
-						EditorManagedCamera::sync_gizmos,
+						// EditorManagedCamera::sync_gizmos,
 					),
 					EditorManagedCamera::on_frame_end,
 				)
@@ -150,22 +149,20 @@ fn init_camera(mut settings: ProjectSettings, mut active_camera: ResMut<ActiveEd
 fn on_manage_camera(
 	event: On<Add, EditorManagedCamera>,
 	mut images: ResMut<Assets<Image>>,
-	mut q_cameras: EditorInternalQuery<&mut Camera>,
+	mut q_cameras: EditorInternalQuery<&mut RenderTarget, With<Camera>>,
 	mut user_textures: ResMut<EguiUserTextures>,
 	mut commands: Commands,
 ) {
-	let Ok(mut camera) = q_cameras.get_mut(event.event_target()) else {
+	let Ok(mut target) = q_cameras.get_mut(event.event_target()) else {
 		return;
 	};
 
-	let image_handle = if let RenderTarget::Image(render_target) = &camera.target {
-		render_target.handle.clone()
-	} else {
-		let image = Image::new_target_texture(1, 1, TextureFormat::bevy_default());
+	let image_handle = target.as_image().cloned().unwrap_or_else(|| {
+		let image = Image::new_target_texture(1, 1, TextureFormat::bevy_default(), None);
 		let handle = images.add(image);
-		camera.target = RenderTarget::Image(handle.clone().into());
+		*target = RenderTarget::Image(handle.clone().into());
 		handle
-	};
+	});
 
 	user_textures.add_image(EguiTextureHandle::Weak(image_handle.id()));
 
@@ -178,13 +175,13 @@ fn on_manage_camera(
 
 fn on_unmanage_camera(
 	event: On<Remove, EditorManagedCamera>,
-	q_cameras: EditorInternalQuery<&Camera>,
+	q_targets: EditorInternalQuery<&RenderTarget>,
 	mut user_textures: ResMut<EguiUserTextures>,
 ) {
-	if let Ok(camera) = q_cameras.get(event.event_target())
-		&& let RenderTarget::Image(image) = &camera.target
+	if let Ok(target) = q_targets.get(event.event_target())
+		&& let Some(handle) = target.as_image()
 	{
-		user_textures.remove_image(image.handle.id());
+		user_textures.remove_image(handle.id());
 	}
 }
 
@@ -283,12 +280,12 @@ impl EditorManagedCamera {
 		self.ignore_size_mismatch = false;
 	}
 
-	fn sync_gizmos(
-		gizmo_camera: EditorInternalSingle<&Self, With<GizmoCamera>>,
-		mut gizmos_options: ResMut<GizmoOptions>,
-	) {
-		gizmos_options.viewport_rect = gizmo_camera.viewport_rect;
-	}
+	// fn sync_gizmos(
+	// 	gizmo_camera: EditorInternalSingle<&Self, With<TransformGizmoCamera>>,
+	// 	mut gizmos_options: ResMut<>,
+	// ) {
+	// 	gizmos_options.viewport_rect = gizmo_camera.viewport_rect;
+	// }
 
 	fn on_frame_end(mut q_managed_cameras: EditorInternalQuery<&mut Self>) {
 		for mut cam in &mut q_managed_cameras {
@@ -373,7 +370,7 @@ fn manage_camera(
 
 fn editor_picking_forwarding(
 	mut commands: Commands,
-	q_managed_cameras: EditorInternalQuery<(&Camera, &PointerId, &EditorManagedCamera)>,
+	q_managed_cameras: EditorInternalQuery<(&RenderTarget, &PointerId, &EditorManagedCamera)>,
 	mut pointer_inputs: MessageReader<PointerInput>,
 ) {
 	let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
@@ -385,11 +382,11 @@ fn editor_picking_forwarding(
 
 	let iter = q_managed_cameras
 		.iter()
-		.filter_map(|(camera, managed_camera_pointer_id, managed_camera)| {
+		.filter_map(|(target, managed_camera_pointer_id, managed_camera)| {
 			if managed_camera.hovered && !managed_camera.context_menu_opened {
 				managed_camera
 					.viewport_rect
-					.zip(camera.target.as_image())
+					.zip(target.as_image())
 					.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
 			} else {
 				None

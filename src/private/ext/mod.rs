@@ -19,7 +19,6 @@ use crate::{
 	reg::components::ComponentRegistry,
 };
 use bevy::prelude::*;
-use brefabs::Prefabs;
 use itertools::Itertools;
 use std::{
 	any::{Any, TypeId},
@@ -48,7 +47,6 @@ impl EditorExtension for InternalEditorExtensions {
 			EditorExtensionPlugin::<image_viewer::ImageViewerUiExtension>::default(),
 			EditorExtensionPlugin::<inspector::InspectorUiExtension>::default(),
 			EditorExtensionPlugin::<logs::LogsUiExtension>::default(),
-			EditorExtensionPlugin::<prefabs::PrefabsUiExtension>::default(),
 			EditorExtensionPlugin::<resources::ResourcesUiExtension>::default(),
 			EditorExtensionPlugin::<settings::SettingsUiExtension>::default(),
 			EditorExtensionPlugin::<type_editor::TypeEditorUiExtension>::default(),
@@ -103,13 +101,14 @@ impl BundleDnd {
 	) -> bool {
 		let mut success = true;
 
-		world.resource_scope(|world, prefabs: Mut<Prefabs>| {
-			for entity in entities {
-				success &= prefabs
-					.apply_untyped_to(world, type_id, variant, entity)
-					.is_some();
-			}
-		});
+		// TODO insert asset logic here
+		// world.resource_scope(|world, prefabs: Mut<Prefabs>| {
+		// 	for entity in entities {
+		// 		success &= prefabs
+		// 			.apply_untyped_to(world, type_id, variant, entity)
+		// 			.is_some();
+		// 	}
+		// });
 
 		success
 	}

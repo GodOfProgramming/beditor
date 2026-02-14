@@ -105,7 +105,7 @@ pub enum PayloadFormat {
 	Ron,
 }
 
-#[derive(Default)]
+#[derive(Default, Reflect)]
 struct MetaAssetLoader;
 
 impl AssetLoader for MetaAssetLoader {

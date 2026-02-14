@@ -3,7 +3,9 @@
 use super::{EDITOR_AXIS_RENDER_LAYER, EditorCamera};
 use crate::private::{EditorInternalQuery, EditorInternalSingle, UserHidden};
 use bevy::{
-	camera::visibility::RenderLayers, prelude::*, render::render_resource::TextureFormat,
+	camera::{RenderTarget, visibility::RenderLayers},
+	prelude::*,
+	render::render_resource::TextureFormat,
 	ui::FocusPolicy,
 };
 
@@ -89,6 +91,7 @@ fn on_new_editor_camera(
 		256,
 		256,
 		TextureFormat::Bgra8UnormSrgb,
+		None,
 	));
 
 	commands.spawn((
@@ -124,8 +127,8 @@ fn on_new_editor_camera(
 	.insert((
 		Name::new("Axes Gizmo Camera"),
 		AxesGizmoCamera,
+		RenderTarget::Image(handle.into()),
 		Camera {
-			target: handle.into(),
 			clear_color: ClearColorConfig::Custom(Color::NONE),
 			..default()
 		},

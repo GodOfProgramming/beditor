@@ -12,8 +12,9 @@ use crate::{
 		UserHidden,
 		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
 		ext::{
-			assets, components, diagnostics, editor_view, hierarchy, inspector, menu_bar, prefabs,
-			resources,
+			assets, components, diagnostics,
+			editor_view::{self, GizmoOptions},
+			hierarchy, inspector, menu_bar, resources,
 		},
 		util::entity::insert_bundle_from_world,
 	},
@@ -41,6 +42,7 @@ use bevy_egui::{
 	EguiContext, EguiContextSettings, EguiGlobalSettings, EguiMultipassSchedule, EguiPlugin,
 };
 use bevy_mod_outline::{OutlineMode, OutlineRenderLayers, OutlineVolume};
+use bevy_transform_tools::{GizmoActive, TransformGizmoTarget};
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex, TabIndex};
 use events::{AppendUiMessage, RemoveUiEvent};
@@ -50,7 +52,6 @@ use misc::{MissingUi, UiState};
 use persistent_id::PersistentId;
 use serde::{Deserialize, Serialize};
 use std::{any::TypeId, cell::RefCell, collections::BTreeSet};
-use transform_gizmo_bevy::GizmoTarget;
 
 pub(crate) struct EditorUiPlugin;
 
@@ -317,7 +318,6 @@ impl UiManager {
 		let [central_panel, _right_panel] = tree.split_right(central_panel, 4.0 / 5.0, tabs);
 
 		let tabs = vec![
-			TabState::new::<prefabs::PrefabsUi>(world),
 			TabState::new::<components::ComponentsUi>(world),
 			TabState::new::<resources::ResourcesUi>(world),
 			TabState::new::<assets::AssetsUi>(world),
@@ -668,12 +668,17 @@ fn handle_selected(
 	mut commands: Commands,
 	q_3d_meshes: Query<(), With<Mesh3d>>,
 	q_transforms: Query<(), With<Transform>>,
+	gizmo_options: Res<GizmoOptions>,
 ) {
 	let entity = event.event_target();
 	if q_transforms.contains(entity)
 		&& let Ok(mut entity_commands) = commands.get_entity(entity)
 	{
-		entity_commands.insert(GizmoTarget::default());
+		if gizmo_options.enabled() {
+			// TODO wait or fork transform gizmos to offset the viewport for proper mouse ray casting
+			// entity_commands.insert((TransformGizmoTarget, GizmoActive));
+		}
+
 		if q_3d_meshes.contains(entity_commands.id()) {
 			entity_commands.queue(insert_bundle_from_world::<Highlight>());
 		}
@@ -682,7 +687,11 @@ fn handle_selected(
 
 fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 	if let Ok(mut entity) = commands.get_entity(event.event_target()) {
-		entity.queue_silenced(entity_command::remove::<(GizmoTarget, Highlight)>());
+		entity.queue_silenced(entity_command::remove::<(
+			TransformGizmoTarget,
+			GizmoActive,
+			Highlight,
+		)>());
 	}
 }
 

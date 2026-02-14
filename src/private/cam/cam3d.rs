@@ -8,11 +8,11 @@ use crate::{
 	storage::{ProjectSettings, settings::Setting},
 };
 use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorOptions};
+use bevy_transform_tools::TransformGizmoCamera;
 use derive_new::new;
 use leafwing_input_manager::prelude::*;
 use notify::Notification;
 use serde::{Deserialize, Serialize};
-use transform_gizmo_bevy::GizmoCamera;
 
 pub struct EditorCam3dPlugin;
 
@@ -50,11 +50,11 @@ impl Plugin for EditorCam3dPlugin {
 
 #[derive(Component, Default)]
 #[require(
-  Camera3d,
-  EditorCamera,
-  UserHidden,
-  CameraSettings,
-  GizmoCamera = GizmoCamera,
+	Camera3d,
+	EditorCamera,
+	UserHidden,
+	CameraSettings,
+	TransformGizmoCamera = TransformGizmoCamera
 )]
 struct EditorCamera3d;
 
@@ -407,7 +407,7 @@ fn render_3d_camera(
 	gizmos: &mut Gizmos,
 	cam_color: &GameCameraColor,
 ) {
-	gizmos.cuboid(transform, **cam_color);
+	gizmos.cube(transform, **cam_color);
 
 	let forward = transform.forward().as_vec3();
 

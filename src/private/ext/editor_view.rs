@@ -15,9 +15,9 @@ use crate::{
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContext;
+use bevy_transform_tools::{AxisSnap, TransformGizmoMode, TransformGizmoSnap, TransformGizmoState};
 use egui_phosphor_icons::icons;
 use singleton::{SingletonBehavior, SingletonPlugin};
-use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
 use uuid::uuid;
 
 #[derive(Default)]
@@ -30,6 +30,7 @@ impl EditorExtension for EditorViewUiExtension {
 
 	fn build_app(&self, app: &mut App) {
 		app
+			.init_resource::<GizmoOptions>()
 			.add_plugins(
 				SingletonPlugin::<TemporaryEntity, EditorInternalFilter>::new(
 					SingletonBehavior::RemoveOther,
@@ -47,6 +48,18 @@ impl EditorExtension for EditorViewUiExtension {
 	}
 }
 
+#[derive(Resource, Default)]
+pub struct GizmoOptions {
+	snap: bool,
+	disabled: bool,
+}
+
+impl GizmoOptions {
+	pub fn enabled(&self) -> bool {
+		!self.disabled
+	}
+}
+
 #[derive(Component, Reflect, Default)]
 #[require(EditorInternal)]
 pub struct EditorViewUi;
@@ -57,6 +70,8 @@ pub struct Params<'w, 's> {
 	camera_view_params: camera_view::Params<'w, 's>,
 	camera_view: Local<'s, CameraViewUi>,
 	gizmo_options: ResMut<'w, GizmoOptions>,
+	snap: ResMut<'w, TransformGizmoSnap>,
+	state: ResMut<'w, TransformGizmoState>,
 
 	temporary_dnd_entity: Option<
 		EditorInternalSingle<'w, 's, (Entity, Option<&'static Transform>), With<TemporaryEntity>>,
@@ -89,9 +104,11 @@ impl EditorUi for EditorViewUi {
 			mut commands,
 			camera_view_params,
 			mut camera_view,
-			mut gizmo_options,
 			temporary_dnd_entity,
 			editor_camera,
+			mut gizmo_options,
+			mut snap,
+			mut state,
 		} = params;
 
 		let Some(editor_camera) = editor_camera else {
@@ -120,7 +137,7 @@ impl EditorUi for EditorViewUi {
 						overlay2d();
 					}
 					(false, true) => {
-						overlay3d(ui, &mut gizmo_options);
+						overlay3d(ui, &mut gizmo_options, &mut snap, &mut state);
 					}
 					(false, false) => {
 						ui.label("No camera kind");
@@ -251,30 +268,46 @@ fn despawn_temporaries(
 
 fn overlay2d() {}
 
-fn overlay3d(ui: &mut egui::Ui, gizmo_options: &mut GizmoOptions) {
+fn overlay3d(
+	ui: &mut egui::Ui,
+	gizmo_options: &mut GizmoOptions,
+	snap: &mut TransformGizmoSnap,
+	state: &mut TransformGizmoState,
+) {
 	let style = ui.style_mut();
 	style.spacing.window_margin = egui::Margin::same(6);
 	style.spacing.item_spacing.x = 6.0;
 
 	ui.horizontal(|ui| {
 		if ui
-			.selectable_label(gizmo_options.snapping, icons::MAGNET)
+			.selectable_label(gizmo_options.snap, icons::MAGNET)
 			.clicked()
 		{
-			gizmo_options.snapping ^= true;
+			gizmo_options.snap ^= true;
+			if !gizmo_options.snap {
+				snap.translate = AxisSnap::none();
+				snap.rotate = AxisSnap::none();
+				snap.scale = AxisSnap::none();
+			}
 		}
 
-		if gizmo_options.snapping {
+		if gizmo_options.snap {
 			ui.scope(|ui| {
 				ui.style_mut().spacing.item_spacing.x = 0.0;
 				ui.add_enabled(false, egui::Button::selectable(false, icons::GRID_NINE));
-				ui.add(egui::DragValue::new(&mut gizmo_options.snap_distance));
+
+				let mut snap_val = snap.translate.x.unwrap_or_default();
+				ui.add(egui::DragValue::new(&mut snap_val));
+				snap.translate = AxisSnap::uniform(snap_val);
 			});
 
 			ui.scope(|ui| {
 				ui.style_mut().spacing.item_spacing.x = 0.0;
 				ui.add_enabled(false, egui::Button::selectable(false, icons::ANGLE));
-				ui.drag_angle(&mut gizmo_options.snap_angle);
+
+				let mut snap_val = snap.rotate.x.unwrap_or_default();
+				ui.drag_angle(&mut snap_val);
+				snap.rotate = AxisSnap::uniform(snap_val);
 			});
 
 			ui.scope(|ui| {
@@ -283,30 +316,33 @@ fn overlay3d(ui: &mut egui::Ui, gizmo_options: &mut GizmoOptions) {
 					false,
 					egui::Button::selectable(false, icons::ARROWS_OUT_SIMPLE),
 				);
-				ui.add(egui::DragValue::new(&mut gizmo_options.snap_scale));
+
+				let mut snap_val = snap.scale.x.unwrap_or_default();
+				ui.add(egui::DragValue::new(&mut snap_val));
+				snap.scale = AxisSnap::uniform(snap_val);
 			});
 		}
 
 		ui.scope(|ui| {
 			ui.style_mut().spacing.item_spacing.x = 0.0;
 
-			let only_selecting = gizmo_options.gizmo_modes.is_empty();
+			let only_selecting = gizmo_options.disabled;
 			if ui.selectable_label(only_selecting, icons::CURSOR).clicked() {
-				gizmo_options.gizmo_modes.clear();
+				gizmo_options.disabled = true;
 			}
 
-			for (set, icon) in [
-				(GizmoMode::all_translate(), icons::ARROWS_OUT_CARDINAL),
-				(GizmoMode::all_rotate(), icons::ARROWS_CLOCKWISE),
-				(GizmoMode::all_scale(), icons::ARROW_SQUARE_OUT),
+			for (mode, icon) in [
+				(TransformGizmoMode::Translate, icons::ARROWS_OUT_CARDINAL),
+				(TransformGizmoMode::Rotate, icons::ARROWS_CLOCKWISE),
+				(TransformGizmoMode::Scale, icons::ARROW_SQUARE_OUT),
 			] {
-				let enabled = set.is_subset(gizmo_options.gizmo_modes);
-				if ui.selectable_label(enabled, icon).clicked() {
-					if enabled {
-						gizmo_options.gizmo_modes.remove_all(set);
-					} else {
-						gizmo_options.gizmo_modes.insert_all(set);
-					}
+				gizmo_options.disabled = false;
+
+				if ui
+					.selectable_label(!gizmo_options.disabled && state.mode == mode, icon)
+					.clicked()
+				{
+					state.mode = mode;
 				}
 			}
 		});

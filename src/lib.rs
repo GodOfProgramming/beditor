@@ -34,14 +34,14 @@ use bevy::{
 };
 use bevy_infinite_grid::InfiniteGridPlugin;
 use bevy_mod_outline::OutlinePlugin;
-use brefabs::PrefabPlugin;
+use bevy_transform_tools::{GizmoActive, TransformGizmoPlugin};
 use common::extensions::bevy::{AppExtensions as _, WorldMutExtensions as _};
 use derive_new::new;
 use notify::NotificationPlugin;
 use platform_dirs::AppDirs;
 use private::ui::UiManager;
+use singleton::SingletonPlugin;
 use std::{path::PathBuf, sync::LazyLock};
-use transform_gizmo_bevy::TransformGizmoPlugin;
 
 pub use prelude::*;
 
@@ -52,7 +52,6 @@ pub mod prelude {
 		ui::{EditorUi, EditorUiWorld},
 	};
 	pub use bevy_egui;
-	pub use brefabs;
 	pub use common::NoParams;
 	pub use egui;
 	pub use macros::{self, Identifiable};
@@ -88,23 +87,16 @@ static APP_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
 });
 
 type AppRegistrationFn = Box<dyn Send + Sync + Fn(&mut App)>;
-type PrefabModFn = Box<dyn Send + Sync + Fn(&mut PrefabPlugin)>;
 
 #[derive(Default)]
 pub struct EditorPlugin {
 	default_plugins: Option<AppRegistrationFn>,
 	camera_registrations: Vec<fn(&mut App)>,
-	prefab_mods: Vec<PrefabModFn>,
 }
 
 impl EditorPlugin {
 	pub fn new() -> Self {
 		Self::default()
-	}
-
-	pub fn with_prefabs(mut self, f: impl 'static + Send + Sync + Fn(&mut PrefabPlugin)) -> Self {
-		self.prefab_mods.push(Box::new(f));
-		self
 	}
 
 	pub fn configure_defaults<P, F>(mut self, f: F) -> Self
@@ -166,11 +158,6 @@ impl Plugin for EditorPlugin {
 			(f)(app);
 		}
 
-		let mut prefabs = PrefabPlugin::default();
-		for f in self.prefab_mods.iter() {
-			(f)(&mut prefabs);
-		}
-
 		let starting_state = if start_in_simulation {
 			EditorState::SimulationPrep
 		} else {
@@ -196,7 +183,11 @@ impl Plugin for EditorPlugin {
 			.try_add_plugin(OutlinePlugin)
 			.try_add_plugin(TransformGizmoPlugin)
 			// internal
-			.add_plugins((private::InternalPlugin, prefabs));
+			.add_plugins(private::InternalPlugin)
+			// utility
+			.add_plugins(SingletonPlugin::<GizmoActive>::new(
+				singleton::SingletonBehavior::RemoveSelf,
+			));
 	}
 }
 

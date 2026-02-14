@@ -166,6 +166,7 @@ fn on_spawn(
 		1,
 		1,
 		TextureFormat::bevy_default(),
+		None,
 	));
 
 	graph.tex = user_textures.add_image(EguiTextureHandle::Weak(graph.image.id()));
@@ -187,10 +188,7 @@ fn on_spawn(
 			EditorInternal,
 			FrameTimeGraphCamera,
 			Camera2d,
-			Camera {
-				target: RenderTarget::Image(ImageRenderTarget::from(graph.image.clone())),
-				..default()
-			},
+			RenderTarget::Image(ImageRenderTarget::from(graph.image.clone())),
 			ChildOf(event.event_target()),
 		))
 		.id();

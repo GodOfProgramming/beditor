@@ -1,136 +1,152 @@
-use std::time::Duration;
-
+use async_std::fs;
+use async_walkdir::{DirEntry, Filtering};
 use bevy::{
-	asset::{AssetLoader, LoadedFolder, ReflectAsset},
 	prelude::*,
+	tasks::{
+		IoTaskPool, Task,
+		futures::check_ready,
+		futures_lite::{StreamExt, stream},
+	},
 	time::common_conditions::on_timer,
 };
+use macros::EditorAsset;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use std::{ffi::OsStr, path::PathBuf, time::Duration};
+use tokio::sync::watch;
 
-pub struct MetaAssetPlugin;
+#[derive(Default)]
+pub struct ContentPlugin;
 
-impl Plugin for MetaAssetPlugin {
+impl Plugin for ContentPlugin {
 	fn build(&self, app: &mut App) {
-		app
-			.init_resource::<MetaAssetHandles>()
-			.init_asset::<MetaAsset>()
-			.init_asset_loader::<MetaAssetLoader>()
-			.add_observer(on_process_meta_handle)
-			.add_systems(Startup, startup)
-			.add_systems(
-				First,
-				monitor_folder_loads
-					.run_if(on_timer(Duration::from_secs(1)))
-					.run_if(resource_exists::<MetaAssetFolderHandle>),
-			);
+		app.add_systems(Startup, load_all_content).add_systems(
+			FixedUpdate,
+			(
+				file_count_task_poll,
+				poll_load_progress.run_if(on_timer(Duration::from_secs(1))),
+				poll_asset_load,
+			),
+		);
 	}
 }
 
-#[derive(Resource, Deref)]
-struct MetaAssetFolderHandle(Handle<LoadedFolder>);
+#[typetag::serde(tag = "ns", content = "data")]
+pub trait AssetDef: 'static + Send + Sync + AssetHandlers {}
 
-#[derive(Resource, Default, Deref, DerefMut)]
-struct MetaAssetHandles(Vec<Handle<MetaAsset>>);
-
-fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
-	let handle = asset_server.load_folder("meta");
-	commands.insert_resource(MetaAssetFolderHandle(handle));
+pub trait AssetHandlers {
+	fn on_drag_into_world(&self, world: &mut World);
 }
 
-fn monitor_folder_loads(
-	mut commands: Commands,
-	mut messages: MessageReader<AssetEvent<LoadedFolder>>,
-	folders: ResMut<Assets<LoadedFolder>>,
-	meta_folder_handle: Res<MetaAssetFolderHandle>,
-) {
-	let Some(id) = messages.read().find_map(|msg| {
-		if let AssetEvent::LoadedWithDependencies { id } = msg
-			&& meta_folder_handle.id() == *id
-		{
-			Some(id)
-		} else {
-			None
+#[derive(Reflect, Serialize, Deserialize, EditorAsset)]
+#[ns("editor")]
+enum EditorAssetDefs {
+	Audio(),
+}
+
+impl AssetHandlers for EditorAssetDefs {
+	fn on_drag_into_world(&self, world: &mut World) {
+		match self {
+			EditorAssetDefs::Audio() => todo!(),
 		}
-	}) else {
-		return;
-	};
+	}
+}
 
-	let Some(folder) = folders.get(*id) else {
-		return;
-	};
+#[derive(Component)]
+struct AssetLoadProgress(
+	Task<(
+		usize,
+		watch::Receiver<(usize, Option<PathBuf>)>,
+		Task<Vec<Box<dyn AssetDef>>>,
+	)>,
+);
 
-	commands.remove_resource::<MetaAssetFolderHandle>();
+#[derive(Component)]
+struct AssetProgress(usize, watch::Receiver<(usize, Option<PathBuf>)>);
 
-	for handle in folder.handles.iter().cloned() {
-		let Ok(meta_handle) = handle.try_typed::<MetaAsset>() else {
+#[derive(Component)]
+struct AssetLoadTask(Task<Vec<Box<dyn AssetDef>>>);
+
+fn load_all_content(mut commands: Commands, assets: Res<AssetServer>) {
+	let io_task_pool = IoTaskPool::get();
+	let task = io_task_pool.spawn(async {
+		let files_to_load = async_walkdir::WalkDir::new("assets")
+			.filter(async |ent| {
+				if ent.path().extension() == Some(OsStr::new("bass")) {
+					Filtering::Continue
+				} else {
+					Filtering::Ignore
+				}
+			})
+			.flat_map(stream::iter)
+			.collect::<Vec<_>>()
+			.await;
+
+		let file_count = files_to_load.len();
+
+		let (tx, rx) = watch::channel((0, None));
+
+		let io_task_pool = IoTaskPool::get();
+		let asset_load_task = io_task_pool.spawn(load_asset_defs(files_to_load, tx));
+
+		(file_count, rx, asset_load_task)
+	});
+
+	commands.spawn(AssetLoadProgress(task));
+}
+
+fn file_count_task_poll(
+	mut commands: Commands,
+	mut q_tasks: Query<(Entity, &mut AssetLoadProgress)>,
+) {
+	for (entity, mut task) in &mut q_tasks {
+		let Some((file_count, progress_output, load_task)) = check_ready(&mut task.0) else {
 			continue;
 		};
-		commands.trigger(ProcessMetaHandle(meta_handle));
+
+		commands.spawn(AssetProgress(file_count, progress_output));
+		commands.spawn(AssetLoadTask(load_task));
+		commands.entity(entity).despawn();
 	}
 }
 
-#[derive(Event, Deref)]
-struct ProcessMetaHandle(Handle<MetaAsset>);
-
-fn on_process_meta_handle(
-	event: On<ProcessMetaHandle>,
-	mut assets: ResMut<Assets<MetaAsset>>,
-	mut handles: ResMut<MetaAssetHandles>,
-) {
-	let Some(meta_asset) = assets.get(event.id()) else {
-		return;
-	};
-
-	if let Some(uuid) = meta_asset.uuid {
-		let meta_asset = meta_asset.clone();
-		assets.remove(event.id());
-		assets.insert(uuid, meta_asset).ok();
-	} else {
-		handles.push(Handle::clone(&event));
+fn poll_asset_load(mut q_tasks: Query<(Entity, &mut AssetLoadTask)>) {
+	for (entity, mut task) in &mut q_tasks {
+		let Some(asset_defs) = check_ready(&mut task.0) else {
+			continue;
+		};
 	}
 }
 
-#[derive(Asset, Reflect, Clone, Serialize, Deserialize)]
-#[reflect(Asset, Serialize, Deserialize)]
-pub struct MetaAsset {
-	format: PayloadFormat,
-	uuid: Option<Uuid>,
-	payload: Vec<u8>,
-}
+async fn load_asset_defs(
+	files_to_load: Vec<DirEntry>,
+	output: watch::Sender<(usize, Option<PathBuf>)>,
+) -> Vec<Box<dyn AssetDef>> {
+	let mut asset_defs = Vec::with_capacity(files_to_load.len());
 
-#[derive(Reflect, Clone, Serialize, Deserialize)]
-#[reflect(Serialize, Deserialize)]
-pub enum PayloadFormat {
-	Ron,
-}
+	for (i, file) in files_to_load.iter().enumerate() {
+		let data = common::match_else!(fs::read_to_string(file.path()).await; else err => {
+			error!(
+				err = format!("{err}"),
+				"Failed to load asset: {}",
+				file.path().display()
+			);
+			continue;
+		});
 
-#[derive(Default, Reflect)]
-struct MetaAssetLoader;
+		let asset_def = common::match_else!(ron::de::from_str::<Box<dyn AssetDef>>(&data); else err => {
+			error!(
+				err = format!("{err}"),
+				"Failed to deserialize asset: {}",
+				file.path().display()
+			);
+			continue;
+		});
 
-impl AssetLoader for MetaAssetLoader {
-	type Asset = MetaAsset;
-
-	type Settings = ();
-
-	type Error = BevyError;
-
-	async fn load(
-		&self,
-		reader: &mut dyn bevy::asset::io::Reader,
-		_settings: &Self::Settings,
-		_load_context: &mut bevy::asset::LoadContext<'_>,
-	) -> Result<Self::Asset, Self::Error> {
-		let mut buf = Vec::new();
-		reader.read_to_end(&mut buf).await?;
-		let meta_asset = ron::de::from_bytes(&buf)?;
-		Ok(meta_asset)
+		output.send((i + 1, Some(file.path()))).ok();
+		asset_defs.push(asset_def);
 	}
 
-	fn extensions(&self) -> &[&str] {
-		&["meta.ron"]
-	}
+	asset_defs
 }
 
-#[reflect_trait]
-pub trait MetaAssetPayload {}
+fn poll_load_progress() {}

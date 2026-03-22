@@ -90,7 +90,7 @@ pub fn ron_deserializer(bytes: &[u8], type_registry: &TypeRegistry) -> Result<Bo
 	use serde::de::DeserializeSeed;
 	// have to use short names until this is resolved https://github.com/ron-rs/ron/issues/302
 
-	let Some(output) = common::serde::ron::newtype_name(bytes) else {
+	let Some(output) = common::serde::ron::type_name_of(bytes) else {
 		return Err(String::from("Name of ron struct not found"))?;
 	};
 

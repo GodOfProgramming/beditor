@@ -42,6 +42,7 @@ variadics_please = "1.1.0"
 serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true, features = ["serde"] }
 egui = { workspace = true, features = ["serde"] }
+typetag = "0.2.21"
 
 # workspace
 common = { path = "./crates/common" }
@@ -54,6 +55,7 @@ widgets = { path = "./crates/widgets" }
 # internal
 anyhow = "1.0.100"
 async-std = "1.13.2"
+async-walkdir = "2.1.0"
 bevy = { workspace = true, features = [
   "asset_processor",
   "bevy_dev_tools",
@@ -118,6 +120,7 @@ static_assertions = "1.1.0"
 strum = "0.27"
 strum_macros = "0.27"
 thiserror = "2.0.17"
+tokio = { version = "1.50.0", default-features = false, features = ["sync"] }
 toml = "0.9.8"
 tracing = "0.1.41"
 tracing-log = "0.2.0"

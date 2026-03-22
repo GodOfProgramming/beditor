@@ -1,13 +1,13 @@
 use serde::Deserializer;
 
-pub fn newtype_name(bytes: &[u8]) -> Option<String> {
+pub fn type_name_of(bytes: impl AsRef<[u8]>) -> Option<String> {
 	const PLACEHOLDER: &str = "__☠_PLACEHOLDER_DO_NOT_USE_☠__";
 
 	let mut output = None;
 
 	let wrapper = Wrapper {
 		output: &mut output,
-		inner: ron::Deserializer::from_bytes(bytes).ok()?,
+		inner: ron::Deserializer::from_bytes(bytes.as_ref()).ok()?,
 	};
 
 	let _ = wrapper.deserialize_newtype_struct(PLACEHOLDER, ExtractVisitor);
@@ -69,5 +69,36 @@ impl<'de, 'o> Deserializer<'de> for Wrapper<'de, 'o> {
 			bool i8 i16 i32 i64 u8 u16 u32 u64 f32 f64 char str string
 			bytes byte_buf option unit unit_struct seq tuple tuple_struct
 			map struct enum identifier ignored_any
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::serde::ron::type_name_of;
+
+	#[test]
+	fn extract_type_name() {
+		const RON_DATA: &str = r#"
+      CoolType(
+        value: "hello world",
+      )
+    "#;
+
+		let type_name = type_name_of(RON_DATA).unwrap();
+
+		assert_eq!(type_name, "CoolType");
+	}
+
+	#[test]
+	fn extract_scoped_name() {
+		const RON_DATA: &str = r#"
+      (
+        value: "hello world",
+      )
+    "#;
+
+		let type_name = type_name_of(RON_DATA).unwrap();
+
+		assert_eq!(type_name, "");
 	}
 }

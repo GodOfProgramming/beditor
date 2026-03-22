@@ -49,6 +49,7 @@ pub mod prelude {
 	pub use crate::{
 		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
 		EditorState,
+		content::AssetDef,
 		ui::{EditorUi, EditorUiWorld},
 	};
 	pub use bevy_egui;
@@ -275,5 +276,6 @@ plugin_group! {
 		/// Plugins that are needed to leverage editor created assets in a game, without including the editor
 		pub struct StandalonePlugins {
 			private::assets:::AssetsPlugin,
+			content:::ContentPlugin,
 		}
 }

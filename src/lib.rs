@@ -49,7 +49,7 @@ pub mod prelude {
 	pub use crate::{
 		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
 		EditorState,
-		content::AssetDef,
+		content::ContentDef,
 		ui::{EditorUi, EditorUiWorld},
 	};
 	pub use bevy_egui;

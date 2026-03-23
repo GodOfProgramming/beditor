@@ -15,7 +15,7 @@ pub mod settings;
 pub mod type_editor;
 
 use crate::{
-	AssetDef, EditorExtension, EditorExtensionContext, EditorExtensionPlugin,
+	ContentDef, EditorExtension, EditorExtensionContext, EditorExtensionPlugin,
 	reg::components::ComponentRegistry,
 };
 use bevy::prelude::*;
@@ -57,7 +57,7 @@ impl EditorExtension for InternalEditorExtensions {
 
 pub enum EntityDnd {
 	AddComponent(TypeId),
-	AddAsset(Arc<dyn AssetDef>),
+	AddAsset(Arc<dyn ContentDef>),
 }
 
 impl EntityDnd {

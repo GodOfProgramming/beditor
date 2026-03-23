@@ -29,30 +29,30 @@ pub struct ContentPlugin;
 impl Plugin for ContentPlugin {
 	fn build(&self, app: &mut App) {
 		app
-			.init_resource::<AssetDefs>()
+			.init_resource::<ContentDefs>()
 			.add_systems(Startup, load_all_content)
-			.add_systems(FixedUpdate, (file_count_task_poll, poll_asset_load))
+			.add_systems(FixedUpdate, (poll_load_prep_task, poll_content_loading))
 			.add_systems(EditorUiEguiContextPass, display_load_progress);
 	}
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct AssetDefs(vfs::Vfs<Arc<dyn AssetDef>>);
+pub struct ContentDefs(vfs::Vfs<Arc<dyn ContentDef>>);
 
 #[typetag::serde(tag = "ns", content = "data")]
-pub trait AssetDef: 'static + Send + Sync + AssetHandlers {}
+pub trait ContentDef: 'static + Send + Sync + ContentHandlers {}
 
-pub trait AssetHandlers {
+pub trait ContentHandlers {
 	fn insert_into_entities(&self, entity: Entity, world: &mut World);
 }
 
 #[derive(Reflect, Serialize, Deserialize, EditorAsset)]
 #[ns("editor")]
-enum EditorAssetDefs {
+pub enum EditorAssetDefs {
 	Audio { source: PathBuf },
 }
 
-impl AssetHandlers for EditorAssetDefs {
+impl ContentHandlers for EditorAssetDefs {
 	fn insert_into_entities(&self, entity: Entity, world: &mut World) {
 		match self {
 			EditorAssetDefs::Audio { source } => {
@@ -67,26 +67,26 @@ impl AssetHandlers for EditorAssetDefs {
 
 #[derive(Component)]
 #[require(EditorInternal)]
-struct AssetLoadProgress(
+struct LoadPrepTask(
 	Task<(
 		usize,
 		watch::Receiver<(usize, Option<PathBuf>)>,
-		Task<Vec<AssetInfo>>,
+		Task<Vec<ContentInfo>>,
 	)>,
 );
 
 #[derive(Component, Struple)]
 #[require(EditorInternal)]
-struct AssetProgress(usize, watch::Receiver<(usize, Option<PathBuf>)>);
+struct ContentLoadProgress(usize, watch::Receiver<(usize, Option<PathBuf>)>);
 
 #[derive(Component)]
 #[require(EditorInternal)]
-struct AssetLoadTask(Task<Vec<AssetInfo>>);
+struct ContentLoadTask(Task<Vec<ContentInfo>>);
 
 #[derive(Struple)]
-struct AssetInfo {
+struct ContentInfo {
 	file: PathBuf,
-	asset: Arc<dyn AssetDef>,
+	def: Arc<dyn ContentDef>,
 }
 
 fn load_all_content(mut commands: Commands) {
@@ -114,32 +114,32 @@ fn load_all_content(mut commands: Commands) {
 		(file_count, rx, asset_load_task)
 	});
 
-	commands.spawn(AssetLoadProgress(task));
+	commands.spawn(LoadPrepTask(task));
 }
 
-fn file_count_task_poll(
+fn poll_load_prep_task(
 	mut commands: Commands,
-	mut q_tasks: EditorInternalQuery<(Entity, &mut AssetLoadProgress)>,
+	mut q_tasks: EditorInternalQuery<(Entity, &mut LoadPrepTask)>,
 ) {
 	for (entity, mut task) in &mut q_tasks {
 		let Some((file_count, progress_output, load_task)) = check_ready(&mut task.0) else {
 			continue;
 		};
 
-		commands.spawn(AssetProgress(file_count, progress_output));
-		commands.spawn(AssetLoadTask(load_task));
+		commands.spawn(ContentLoadProgress(file_count, progress_output));
+		commands.spawn(ContentLoadTask(load_task));
 		commands.entity(entity).despawn();
 	}
 }
 
-fn poll_asset_load(
+fn poll_content_loading(
 	mut commands: Commands,
-	mut q_tasks: EditorInternalQuery<(Entity, &mut AssetLoadTask)>,
-	q_progress: EditorInternalQuery<Entity, With<AssetProgress>>,
-	mut asset_defs: ResMut<AssetDefs>,
+	mut q_tasks: EditorInternalQuery<(Entity, &mut ContentLoadTask)>,
+	q_progress: EditorInternalQuery<Entity, With<ContentLoadProgress>>,
+	mut content_defs: ResMut<ContentDefs>,
 ) {
 	for (entity, mut task) in &mut q_tasks {
-		let Some(assets) = check_ready(&mut task.0) else {
+		let Some(content_infos) = check_ready(&mut task.0) else {
 			continue;
 		};
 
@@ -147,26 +147,26 @@ fn poll_asset_load(
 			commands.entity(entity).despawn();
 		}
 
-		for asset in assets {
-			let Some(parent) = asset.file.parent() else {
+		for info in content_infos {
+			let Some(parent) = info.file.parent() else {
 				unreachable!();
 			};
 
 			let dir_path = parent.components().map(|c| c.as_os_str().to_string_lossy());
-			let Ok(path) = asset_defs.mkdir_p(dir_path) else {
-				error!("Failed to register asset {}", asset.file.display());
+			let Ok(path) = content_defs.mkdir_p(dir_path) else {
+				error!("Failed to register asset {}", info.file.display());
 				continue;
 			};
 
-			let Some(name) = asset.file.file_stem() else {
+			let Some(name) = info.file.file_stem() else {
 				unreachable!();
 			};
 
 			let humanized_name = name.to_string_lossy().to_sentence_case();
-			if let Err(err) = asset_defs.new_item(path, humanized_name, asset.asset)
+			if let Err(err) = content_defs.new_item(path, humanized_name, info.def)
 				&& !matches!(err, vfs::VfsError::ItemAlreadyExists(_))
 			{
-				error!("Failed to register asset {}: {err}", asset.file.display());
+				error!("Failed to register asset {}: {err}", info.file.display());
 			}
 		}
 	}
@@ -175,7 +175,7 @@ fn poll_asset_load(
 async fn load_asset_defs(
 	files_to_load: Vec<DirEntry>,
 	output: watch::Sender<(usize, Option<PathBuf>)>,
-) -> Vec<AssetInfo> {
+) -> Vec<ContentInfo> {
 	let mut asset_defs = Vec::with_capacity(files_to_load.len());
 
 	for (i, file) in files_to_load.iter().enumerate() {
@@ -188,7 +188,7 @@ async fn load_asset_defs(
 			continue;
 		});
 
-		let asset_def = common::match_else!(ron::de::from_str::<Arc<dyn AssetDef>>(&data); else err => {
+		let asset_def = common::match_else!(ron::de::from_str::<Arc<dyn ContentDef>>(&data); else err => {
 			error!(
 				err = format!("{err}"),
 				"Failed to deserialize asset: {}",
@@ -198,9 +198,9 @@ async fn load_asset_defs(
 		});
 
 		output.send((i + 1, Some(file.path()))).ok();
-		asset_defs.push(AssetInfo {
+		asset_defs.push(ContentInfo {
 			file: file.path(),
-			asset: asset_def,
+			def: asset_def,
 		});
 	}
 
@@ -222,7 +222,7 @@ impl Default for AssetLoadModal {
 
 fn display_load_progress(
 	mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
-	progress: Option<EditorInternalSingle<&AssetProgress>>,
+	progress: Option<EditorInternalSingle<&ContentLoadProgress>>,
 	mut modal: Local<AssetLoadModal>,
 ) {
 	let Some(progress) = progress else {

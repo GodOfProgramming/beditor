@@ -48,7 +48,7 @@ pub fn editor_asset(input: TokenStream) -> TokenStream {
 
 	quote! {
 		#tt_macro
-		impl #beditor::AssetDef for #name { }
+		impl #beditor::ContentDef for #name { }
 	}
 	.into()
 }

@@ -4,8 +4,8 @@ use bevy::{ecs::system::SystemParam, prelude::*};
 use widgets::Card;
 
 use crate::{
-	AssetDef, EditorExtension, EditorUi,
-	content::AssetDefs,
+	ContentDef, EditorExtension, EditorUi,
+	content::ContentDefs,
 	private::ext::{EntityDnd, SearchableVfs},
 };
 
@@ -23,7 +23,7 @@ pub struct ContentUi;
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
-	asset_defs: Res<'w, AssetDefs>,
+	asset_defs: Res<'w, ContentDefs>,
 	searchable_vfs: Local<'s, SearchableVfs>,
 }
 
@@ -59,7 +59,7 @@ fn ui_for_item(
 	ui: &mut egui::Ui,
 	size: egui::Vec2,
 	label: &str,
-	asset_def: Arc<dyn AssetDef>,
+	asset_def: Arc<dyn ContentDef>,
 	id: egui::Id,
 ) {
 	ui.dnd_drag_source(id, EntityDnd::AddAsset(asset_def), |ui| {

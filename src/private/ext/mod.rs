@@ -1,6 +1,7 @@
 pub mod assets;
 pub mod camera_view;
 pub mod components;
+pub mod content;
 pub mod diagnostics;
 pub mod editor_view;
 pub mod game_camera_view;
@@ -9,13 +10,12 @@ pub mod image_viewer;
 pub mod inspector;
 pub mod logs;
 pub mod menu_bar;
-pub mod prefabs;
 pub mod resources;
 pub mod settings;
 pub mod type_editor;
 
 use crate::{
-	EditorExtension, EditorExtensionContext, EditorExtensionPlugin,
+	AssetDef, EditorExtension, EditorExtensionContext, EditorExtensionPlugin,
 	reg::components::ComponentRegistry,
 };
 use bevy::prelude::*;
@@ -41,6 +41,7 @@ impl EditorExtension for InternalEditorExtensions {
 			EditorExtensionPlugin::<assets::AssetsUiExtension>::default(),
 			EditorExtensionPlugin::<camera_view::CameraViewUiExtension>::default(),
 			EditorExtensionPlugin::<components::ComponentsUiExtension>::default(),
+			EditorExtensionPlugin::<content::ContentUiExtension>::default(),
 			EditorExtensionPlugin::<diagnostics::DiagnosticsUiExtension>::default(),
 			EditorExtensionPlugin::<editor_view::EditorViewUiExtension>::default(),
 			EditorExtensionPlugin::<hierarchy::HierarchyExtension>::default(),
@@ -54,16 +55,21 @@ impl EditorExtension for InternalEditorExtensions {
 	}
 }
 
-pub enum BundleDnd {
+pub enum EntityDnd {
 	AddComponent(TypeId),
-	AddPrefab(TypeId, Option<Name>),
+	AddAsset(Arc<dyn AssetDef>),
 }
 
-impl BundleDnd {
+impl EntityDnd {
 	fn insert(&self, entities: impl Iterator<Item = Entity>, world: &mut World) -> bool {
 		match self {
-			BundleDnd::AddComponent(type_id) => Self::insert_component(entities, world, type_id),
-			BundleDnd::AddPrefab(type_id, name) => Self::insert_prefab(entities, world, *type_id, name),
+			EntityDnd::AddComponent(type_id) => Self::insert_component(entities, world, type_id),
+			EntityDnd::AddAsset(asset_def) => {
+				for entity in entities {
+					asset_def.insert_into_entities(entity, world);
+				}
+				true
+			}
 		}
 	}
 
@@ -89,26 +95,6 @@ impl BundleDnd {
 				success = false;
 			}
 		}
-
-		success
-	}
-
-	fn insert_prefab(
-		entities: impl Iterator<Item = Entity>,
-		world: &mut World,
-		type_id: TypeId,
-		variant: &Option<Name>,
-	) -> bool {
-		let mut success = true;
-
-		// TODO insert asset logic here
-		// world.resource_scope(|world, prefabs: Mut<Prefabs>| {
-		// 	for entity in entities {
-		// 		success &= prefabs
-		// 			.apply_untyped_to(world, type_id, variant, entity)
-		// 			.is_some();
-		// 	}
-		// });
 
 		success
 	}

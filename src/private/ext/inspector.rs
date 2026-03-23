@@ -1,4 +1,4 @@
-use super::{BundleDnd, panel_dnd_drop_ui};
+use super::{EntityDnd, panel_dnd_drop_ui};
 use crate::{
 	EditorExtension,
 	inspector::{
@@ -34,7 +34,7 @@ impl InspectorUi {
 	where
 		F: FnOnce(&mut World, &mut egui::Ui),
 	{
-		let (_, payload) = panel_dnd_drop_ui::<BundleDnd, ()>(ui, |ui| {
+		let (_, payload) = panel_dnd_drop_ui::<EntityDnd, ()>(ui, |ui| {
 			render_fn(world, ui);
 		});
 

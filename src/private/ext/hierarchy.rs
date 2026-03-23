@@ -1,4 +1,4 @@
-use super::{BundleDnd, camera_view::CameraViewUi, image_viewer::ImageViewerUi};
+use super::{EntityDnd, camera_view::CameraViewUi, image_viewer::ImageViewerUi};
 use crate::{
 	EditorExtension,
 	inspector::{
@@ -109,9 +109,9 @@ impl HierarchyUi {
 		ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
 
 		let Some(response) = (if cfg!(feature = "editor-dev") {
-			world.hierarchy_ui::<EditorInternalFilter, BundleDnd>(ui, selected, dnd_handler)
+			world.hierarchy_ui::<EditorInternalFilter, EntityDnd>(ui, selected, dnd_handler)
 		} else {
-			world.hierarchy_ui::<Without<UserHidden>, BundleDnd>(ui, selected, dnd_handler)
+			world.hierarchy_ui::<Without<UserHidden>, EntityDnd>(ui, selected, dnd_handler)
 		}) else {
 			return false;
 		};
@@ -263,7 +263,7 @@ impl ClearSelectedMessage {
 	}
 }
 
-fn dnd_handler(_: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc<BundleDnd>) {
+fn dnd_handler(_: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc<EntityDnd>) {
 	let Some(new_entity) = world.spawn_stateful_entity() else {
 		return;
 	};

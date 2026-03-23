@@ -12,7 +12,7 @@ use crate::{
 		UserHidden,
 		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
 		ext::{
-			assets, components, diagnostics,
+			assets, components, content, diagnostics,
 			editor_view::{self, GizmoOptions},
 			hierarchy, inspector, menu_bar, resources,
 		},
@@ -318,6 +318,7 @@ impl UiManager {
 		let [central_panel, _right_panel] = tree.split_right(central_panel, 4.0 / 5.0, tabs);
 
 		let tabs = vec![
+			TabState::new::<content::ContentUi>(world),
 			TabState::new::<components::ComponentsUi>(world),
 			TabState::new::<resources::ResourcesUi>(world),
 			TabState::new::<assets::AssetsUi>(world),

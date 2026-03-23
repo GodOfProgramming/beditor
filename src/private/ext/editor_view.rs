@@ -1,5 +1,5 @@
 use super::{
-	BundleDnd,
+	EntityDnd,
 	camera_view::{self, CameraViewUi},
 };
 use crate::{
@@ -122,7 +122,7 @@ impl EditorUi for EditorViewUi {
 
 		let window_rect = ui.clip_rect();
 
-		let (_, Some(payload)) = super::panel_dnd_drop_ui::<BundleDnd, ()>(ui, |ui| {
+		let (_, Some(payload)) = super::panel_dnd_drop_ui::<EntityDnd, ()>(ui, |ui| {
 			camera_view.ui(ui, camera_view_params);
 
 			let margin = ui.style().spacing.window_margin;
@@ -240,7 +240,7 @@ fn detect_enter(
 	let left = hovered_before && !is_hovered;
 	*hovered = is_hovered;
 
-	if entered && let Some(payload) = egui::DragAndDrop::take_payload::<BundleDnd>(ctx) {
+	if entered && let Some(payload) = egui::DragAndDrop::take_payload::<EntityDnd>(ctx) {
 		if let Some(temporary) = &temporary {
 			commands.entity(**temporary).despawn();
 		}

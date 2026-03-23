@@ -3,6 +3,16 @@
 version = 4
 
 [[package]]
+name = "Inflector"
+version = "0.11.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
+dependencies = [
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "ab_glyph"
 version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -526,6 +536,7 @@ checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 name = "beditor"
 version = "0.17.3"
 dependencies = [
+ "Inflector",
  "anyhow",
  "async-std",
  "async-walkdir",
@@ -588,6 +599,7 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
+ "struple",
  "thiserror 2.0.18",
  "tokio",
  "toml",
@@ -6767,6 +6779,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7695ce3845ea4b33927c055a39dc438a45b059f7c1b3d91d38d10355fb8cbca7"
 dependencies = [
  "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.110",
+]
+
+[[package]]
+name = "struple"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8574c4bc0d1a23fd92df103574812badd294dc3dea6e80b095f60a87a5fa5938"
+dependencies = [
+ "struple-impl",
+]
+
+[[package]]
+name = "struple-impl"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "934863dc48fa9e2b100706446b7f08e56612b0f867987372ef1e2dbc97c92e6e"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.110",

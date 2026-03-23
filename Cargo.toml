@@ -93,6 +93,7 @@ egui_tracing = { git = "https://github.com/GodOfProgramming/egui_tracing.git", b
 fuzzy-matcher = "0.3.7"
 image = "0.25.9"
 include_dir = "0.7.4"
+Inflector = "*"
 inventory = "0.3.21"
 itertools = { workspace = true }
 lazy_static = "1.5.0"
@@ -119,6 +120,7 @@ speculoos = "0.13.0"
 static_assertions = "1.1.0"
 strum = "0.27"
 strum_macros = "0.27"
+struple = "0.2.0"
 thiserror = "2.0.17"
 tokio = { version = "1.50.0", default-features = false, features = ["sync"] }
 toml = "0.9.8"

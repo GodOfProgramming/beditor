@@ -7,6 +7,8 @@ use itertools::Itertools;
 pub struct MenuModal {
 	pub open: bool,
 	order: egui::Order,
+	closeable: bool,
+	percentage_of_window: f32,
 }
 
 impl Default for MenuModal {
@@ -14,6 +16,8 @@ impl Default for MenuModal {
 		Self {
 			open: false,
 			order: egui::Order::Foreground,
+			closeable: true,
+			percentage_of_window: 0.9,
 		}
 	}
 }
@@ -21,6 +25,16 @@ impl Default for MenuModal {
 impl MenuModal {
 	pub fn new() -> Self {
 		Self::default()
+	}
+
+	pub fn closeable(mut self, value: bool) -> Self {
+		self.closeable = value;
+		self
+	}
+
+	pub fn with_proportion_to_window(mut self, value: f32) -> Self {
+		self.percentage_of_window = value;
+		self
 	}
 
 	pub fn order(mut self, order: egui::Order) -> Self {
@@ -38,7 +52,7 @@ impl MenuModal {
 			return None;
 		}
 
-		let area_size = ctx.input(|i| i.content_rect()).size() * 0.9;
+		let area_size = ctx.input(|i| i.content_rect()).size() * self.percentage_of_window;
 
 		let response = egui::Modal {
 			area: egui::Modal::default_area(id).order(self.order),
@@ -51,17 +65,19 @@ impl MenuModal {
 				.show(ui, |ui| {
 					let retval = (content)(ui);
 
-					ui.separator();
+					if self.closeable {
+						ui.separator();
 
-					if ui.button("Close").clicked() {
-						self.open = false;
+						if ui.button("Close").clicked() {
+							self.open = false;
+						}
 					}
 
 					retval
 				})
 		});
 
-		if response.backdrop_response.clicked() {
+		if self.closeable && response.backdrop_response.clicked() {
 			self.open = false;
 		}
 

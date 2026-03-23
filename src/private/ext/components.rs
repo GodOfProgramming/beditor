@@ -1,4 +1,4 @@
-use super::{BundleDnd, SearchableVfs};
+use super::{EntityDnd, SearchableVfs};
 use crate::{
 	EditorExtension, EditorUi,
 	reg::components::{ComponentRegistry, RegisteredComponent},
@@ -81,7 +81,7 @@ fn ui_for_item(
 	component: &RegisteredComponent,
 	id: egui::Id,
 ) {
-	ui.dnd_drag_source(id, BundleDnd::AddComponent(component.type_id()), |ui| {
+	ui.dnd_drag_source(id, EntityDnd::AddComponent(component.type_id()), |ui| {
 		Card::new(size).with_label(label).show(ui, |ui| {
 			ui.label(egui_phosphor_icons::icons::PUZZLE_PIECE.regular());
 		});

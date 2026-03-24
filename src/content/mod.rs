@@ -152,25 +152,21 @@ fn poll_content_loading(
 			AssetEvent::Added { id }
 			| AssetEvent::Modified { id }
 			| AssetEvent::LoadedWithDependencies { id } => {
-				common::here!();
-
 				let Some(handle) = content_def_assets.get_strong_handle(*id) else {
-					common::here!();
 					continue;
 				};
 
 				let Some(content_def) = content_def_assets.get(*id) else {
-					common::here!();
+					error!("No content def for asset id");
 					continue;
 				};
 
 				let Some((dir_path, name)) = vfs_entry_from_path(&content_def.asset_path) else {
-					common::here!();
 					continue;
 				};
 
 				let Ok(vfs_node) = content_defs.mkdir_p(dir_path) else {
-					common::here!();
+					error!("Could not make content def dir in vfs");
 					continue;
 				};
 
@@ -179,13 +175,11 @@ fn poll_content_loading(
 				'add_item: loop {
 					match content_defs.new_item(vfs_node, humanized_name.clone(), handle.clone()) {
 						Ok(node) => {
-							common::here!();
 							handle_node_map.insert(*id, node);
 							break 'add_item;
 						}
 						Err(err) => match err {
 							vfs::VfsError::ItemAlreadyExists(vfs_node) => {
-								common::here!();
 								content_defs.rm(vfs_node);
 							}
 							err => {
@@ -198,10 +192,9 @@ fn poll_content_loading(
 			}
 			AssetEvent::Removed { id } => {
 				let Some(node) = handle_node_map.remove(id) else {
-					common::here!();
+					error!("Removed asset that was not added");
 					continue;
 				};
-				common::here!();
 				content_defs.rm(node);
 			}
 			AssetEvent::Unused { id: _ } => {}
@@ -215,14 +208,14 @@ fn vfs_entry_from_path<'a>(
 	let path = asset_path.path();
 
 	let Some(parent) = path.parent() else {
-		common::here!("path = {}", path.display());
+		error!("Asset path has no parent: {}", path.display());
 		return None;
 	};
 
 	let dir_path = parent.components().map(|c| c.as_os_str().to_string_lossy());
 
 	let Some(name) = path.file_stem() else {
-		common::here!("path = {}", path.display());
+		error!("Asset path has no file stem: {}", path.display());
 		return None;
 	};
 

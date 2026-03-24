@@ -1,7 +1,7 @@
-use async_std::fs;
-use async_walkdir::{DirEntry, Filtering};
+use async_walkdir::Filtering;
 use bevy::{
-	asset::AssetPath,
+	asset::{AssetLoader, AssetPath, LoadedFolder},
+	platform::{collections::HashMap, sync::atomic},
 	prelude::*,
 	tasks::{
 		IoTaskPool, Task,
@@ -10,12 +10,16 @@ use bevy::{
 	},
 };
 use bevy_egui::EguiContext;
+use derive_new::new;
 use egui::Widget;
 use inflector::Inflector;
 use macros::EditorAsset;
 use serde::{Deserialize, Serialize};
-use std::{ffi::OsStr, path::PathBuf, sync::Arc};
-use struple::Struple;
+use std::{
+	ffi::OsStr,
+	path::PathBuf,
+	sync::{Arc, atomic::Ordering},
+};
 use tokio::sync::watch;
 
 use crate::private::{
@@ -28,16 +32,33 @@ pub struct ContentPlugin;
 
 impl Plugin for ContentPlugin {
 	fn build(&self, app: &mut App) {
+		let (tx, rx) = watch::channel((0, None));
 		app
 			.init_resource::<ContentDefs>()
-			.add_systems(Startup, load_all_content)
-			.add_systems(FixedUpdate, (poll_load_prep_task, poll_content_loading))
+			.init_asset::<ContentDefAsset>()
+			.register_asset_loader(ContentDefLoader::new(tx))
+			.insert_resource(ContentDefProgress(rx))
+			.add_systems(Startup, startup)
+			.add_systems(FixedUpdate, (poll_file_count_task, poll_content_loading))
 			.add_systems(EditorUiEguiContextPass, display_load_progress);
 	}
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct ContentDefs(vfs::Vfs<Arc<dyn ContentDef>>);
+pub struct ContentDefs(vfs::Vfs<Handle<ContentDefAsset>>);
+
+#[derive(Resource)]
+struct ContentDefTotal(usize);
+
+#[derive(Resource, Deref, DerefMut)]
+struct ContentDefProgress(watch::Receiver<(usize, Option<PathBuf>)>);
+
+#[derive(new, Asset, TypePath, Deref)]
+pub struct ContentDefAsset {
+	#[deref]
+	def: Arc<dyn ContentDef>,
+	asset_path: AssetPath<'static>,
+}
 
 #[typetag::serde(tag = "ns", content = "data")]
 pub trait ContentDef: 'static + Send + Sync + ContentHandlers {}
@@ -67,145 +88,10 @@ impl ContentHandlers for EditorAssetDefs {
 
 #[derive(Component)]
 #[require(EditorInternal)]
-struct LoadPrepTask(
-	Task<(
-		usize,
-		watch::Receiver<(usize, Option<PathBuf>)>,
-		Task<Vec<ContentInfo>>,
-	)>,
-);
+struct FileCountTask(Task<usize>);
 
-#[derive(Component, Struple)]
-#[require(EditorInternal)]
-struct ContentLoadProgress(usize, watch::Receiver<(usize, Option<PathBuf>)>);
-
-#[derive(Component)]
-#[require(EditorInternal)]
-struct ContentLoadTask(Task<Vec<ContentInfo>>);
-
-#[derive(Struple)]
-struct ContentInfo {
-	file: PathBuf,
-	def: Arc<dyn ContentDef>,
-}
-
-fn load_all_content(mut commands: Commands) {
-	let io_task_pool = IoTaskPool::get();
-	let task = io_task_pool.spawn(async {
-		let files_to_load = async_walkdir::WalkDir::new("assets")
-			.filter(async |ent| {
-				if ent.path().extension() == Some(OsStr::new("bass")) {
-					Filtering::Continue
-				} else {
-					Filtering::Ignore
-				}
-			})
-			.flat_map(stream::iter)
-			.collect::<Vec<_>>()
-			.await;
-
-		let file_count = files_to_load.len();
-
-		let (tx, rx) = watch::channel((0, None));
-
-		let io_task_pool = IoTaskPool::get();
-		let asset_load_task = io_task_pool.spawn(load_asset_defs(files_to_load, tx));
-
-		(file_count, rx, asset_load_task)
-	});
-
-	commands.spawn(LoadPrepTask(task));
-}
-
-fn poll_load_prep_task(
-	mut commands: Commands,
-	mut q_tasks: EditorInternalQuery<(Entity, &mut LoadPrepTask)>,
-) {
-	for (entity, mut task) in &mut q_tasks {
-		let Some((file_count, progress_output, load_task)) = check_ready(&mut task.0) else {
-			continue;
-		};
-
-		commands.spawn(ContentLoadProgress(file_count, progress_output));
-		commands.spawn(ContentLoadTask(load_task));
-		commands.entity(entity).despawn();
-	}
-}
-
-fn poll_content_loading(
-	mut commands: Commands,
-	mut q_tasks: EditorInternalQuery<(Entity, &mut ContentLoadTask)>,
-	q_progress: EditorInternalQuery<Entity, With<ContentLoadProgress>>,
-	mut content_defs: ResMut<ContentDefs>,
-) {
-	for (entity, mut task) in &mut q_tasks {
-		let Some(content_infos) = check_ready(&mut task.0) else {
-			continue;
-		};
-
-		for entity in std::iter::once(entity).chain(q_progress.iter()) {
-			commands.entity(entity).despawn();
-		}
-
-		for info in content_infos {
-			let Some(parent) = info.file.parent() else {
-				unreachable!();
-			};
-
-			let dir_path = parent.components().map(|c| c.as_os_str().to_string_lossy());
-			let Ok(path) = content_defs.mkdir_p(dir_path) else {
-				error!("Failed to register asset {}", info.file.display());
-				continue;
-			};
-
-			let Some(name) = info.file.file_stem() else {
-				unreachable!();
-			};
-
-			let humanized_name = name.to_string_lossy().to_sentence_case();
-			if let Err(err) = content_defs.new_item(path, humanized_name, info.def)
-				&& !matches!(err, vfs::VfsError::ItemAlreadyExists(_))
-			{
-				error!("Failed to register asset {}: {err}", info.file.display());
-			}
-		}
-	}
-}
-
-async fn load_asset_defs(
-	files_to_load: Vec<DirEntry>,
-	output: watch::Sender<(usize, Option<PathBuf>)>,
-) -> Vec<ContentInfo> {
-	let mut asset_defs = Vec::with_capacity(files_to_load.len());
-
-	for (i, file) in files_to_load.iter().enumerate() {
-		let data = common::match_else!(fs::read_to_string(file.path()).await; else err => {
-			error!(
-				err = format!("{err}"),
-				"Failed to load asset: {}",
-				file.path().display()
-			);
-			continue;
-		});
-
-		let asset_def = common::match_else!(ron::de::from_str::<Arc<dyn ContentDef>>(&data); else err => {
-			error!(
-				err = format!("{err}"),
-				"Failed to deserialize asset: {}",
-				file.path().display()
-			);
-			continue;
-		});
-
-		output.send((i + 1, Some(file.path()))).ok();
-		asset_defs.push(ContentInfo {
-			file: file.path(),
-			def: asset_def,
-		});
-	}
-
-	asset_defs
-}
+#[derive(Resource, Deref)]
+struct ContentFolder(Handle<LoadedFolder>);
 
 #[derive(Deref, DerefMut)]
 struct AssetLoadModal(widgets::MenuModal);
@@ -220,27 +106,175 @@ impl Default for AssetLoadModal {
 	}
 }
 
+fn startup(mut commands: Commands, asset_server: Res<AssetServer>) {
+	let loaded_folder_handle = asset_server.load_folder("content");
+	commands.insert_resource(ContentFolder(loaded_folder_handle));
+
+	let io_task_pool = IoTaskPool::get();
+	let task = io_task_pool.spawn(
+		async_walkdir::WalkDir::new("assets/content")
+			.filter(async |ent| {
+				if ent.path().extension() == Some(OsStr::new("bass")) {
+					Filtering::Continue
+				} else {
+					Filtering::Ignore
+				}
+			})
+			.flat_map(stream::iter)
+			.count(),
+	);
+
+	commands.spawn(FileCountTask(task));
+}
+
+fn poll_file_count_task(
+	mut commands: Commands,
+	mut q_tasks: EditorInternalQuery<(Entity, &mut FileCountTask)>,
+) {
+	for (entity, mut task) in &mut q_tasks {
+		let Some(file_count) = check_ready(&mut task.0) else {
+			continue;
+		};
+
+		commands.insert_resource(ContentDefTotal(file_count));
+		commands.entity(entity).despawn();
+	}
+}
+
+fn poll_content_loading(
+	mut content_defs: ResMut<ContentDefs>,
+	mut asset_events: MessageReader<AssetEvent<ContentDefAsset>>,
+	mut content_def_assets: ResMut<Assets<ContentDefAsset>>,
+	mut handle_node_map: Local<HashMap<AssetId<ContentDefAsset>, vfs::VfsNode>>,
+) {
+	for msg in asset_events.read() {
+		match msg {
+			AssetEvent::Added { id }
+			| AssetEvent::Modified { id }
+			| AssetEvent::LoadedWithDependencies { id } => {
+				common::here!();
+
+				let Some(handle) = content_def_assets.get_strong_handle(*id) else {
+					common::here!();
+					continue;
+				};
+
+				let Some(content_def) = content_def_assets.get(*id) else {
+					common::here!();
+					continue;
+				};
+
+				let Some((dir_path, name)) = vfs_entry_from_path(&content_def.asset_path) else {
+					common::here!();
+					continue;
+				};
+
+				let Ok(vfs_node) = content_defs.mkdir_p(dir_path) else {
+					common::here!();
+					continue;
+				};
+
+				let humanized_name = name.to_string_lossy().to_sentence_case();
+
+				'add_item: loop {
+					match content_defs.new_item(vfs_node, humanized_name.clone(), handle.clone()) {
+						Ok(node) => {
+							common::here!();
+							handle_node_map.insert(*id, node);
+							break 'add_item;
+						}
+						Err(err) => match err {
+							vfs::VfsError::ItemAlreadyExists(vfs_node) => {
+								common::here!();
+								content_defs.rm(vfs_node);
+							}
+							err => {
+								error!("Failed to register asset {err}");
+								break 'add_item;
+							}
+						},
+					}
+				}
+			}
+			AssetEvent::Removed { id } => {
+				let Some(node) = handle_node_map.remove(id) else {
+					common::here!();
+					continue;
+				};
+				common::here!();
+				content_defs.rm(node);
+			}
+			AssetEvent::Unused { id: _ } => {}
+		}
+	}
+}
+
+fn vfs_entry_from_path<'a>(
+	asset_path: &'a AssetPath<'static>,
+) -> Option<(impl Iterator<Item = std::borrow::Cow<'a, str>>, &'a OsStr)> {
+	let path = asset_path.path();
+
+	let Some(parent) = path.parent() else {
+		common::here!("path = {}", path.display());
+		return None;
+	};
+
+	let dir_path = parent.components().map(|c| c.as_os_str().to_string_lossy());
+
+	let Some(name) = path.file_stem() else {
+		common::here!("path = {}", path.display());
+		return None;
+	};
+
+	Some((dir_path, name))
+}
+
+#[derive(Deref)]
+struct AssetLoadModalId(egui::Id);
+
+impl Default for AssetLoadModalId {
+	fn default() -> Self {
+		Self(egui::Id::new("beditor-editor-asset-load-modal"))
+	}
+}
+
 fn display_load_progress(
 	mut contexts: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
-	progress: Option<EditorInternalSingle<&ContentLoadProgress>>,
+	total: Option<Res<ContentDefTotal>>,
+	progress: Res<ContentDefProgress>,
 	mut modal: Local<AssetLoadModal>,
+	mut asset_events: MessageReader<AssetEvent<LoadedFolder>>,
+	id: Local<AssetLoadModalId>,
+	loaded_folder_handle: Res<ContentFolder>,
+	mut loading_finished: Local<bool>,
 ) {
-	let Some(progress) = progress else {
-		modal.open = false;
+	*loading_finished = *loading_finished
+		|| asset_events.read().any(|msg| {
+			if let AssetEvent::LoadedWithDependencies { id } = msg {
+				*id == loaded_folder_handle.id()
+			} else {
+				false
+			}
+		});
+
+	if *loading_finished {
+		return;
+	}
+
+	let Some(total) = total else {
 		return;
 	};
 
-	let (total, rx) = (progress.0, &progress.1);
-	let (current, path) = &*rx.borrow();
+	let total = total.0;
+	let (current, path) = &*progress.borrow();
 
-	if *current != 0
-		&& let Some(path) = path
-	{
+	let is_counting = *current != 0;
+
+	if is_counting && let Some(path) = path {
 		modal.open = true;
 
 		let ctx = contexts.get_mut();
-		let id = egui::Id::new("beditor-editor-asset-load-modal");
-		modal.show(ctx, id, |ui| {
+		modal.show(ctx, **id, |ui| {
 			ui.label("TODO help text or something fun");
 
 			ui.scope_builder(
@@ -254,5 +288,51 @@ fn display_load_progress(
 				},
 			);
 		});
+	}
+}
+
+#[derive(Default, TypePath)]
+struct ContentDefLoader {
+	count: atomic::AtomicUsize,
+	output: watch::Sender<(usize, Option<PathBuf>)>,
+}
+
+impl ContentDefLoader {
+	fn new(output: watch::Sender<(usize, Option<PathBuf>)>) -> Self {
+		Self {
+			count: default(),
+			output,
+		}
+	}
+}
+
+impl AssetLoader for ContentDefLoader {
+	type Asset = ContentDefAsset;
+
+	type Settings = ();
+
+	type Error = BevyError;
+
+	async fn load(
+		&self,
+		reader: &mut dyn bevy::asset::io::Reader,
+		_: &Self::Settings,
+		load_context: &mut bevy::asset::LoadContext<'_>,
+	) -> Result<Self::Asset, Self::Error> {
+		let mut buf = Vec::new();
+		reader.read_to_end(&mut buf).await?;
+		let content_def = ron::de::from_bytes::<Arc<dyn ContentDef>>(&buf)?;
+
+		let prev = self.count.fetch_add(1, Ordering::Relaxed);
+		let asset_path = load_context.path();
+		self
+			.output
+			.send((prev + 1, Some(asset_path.path().to_path_buf())))?;
+
+		Ok(ContentDefAsset::new(content_def, asset_path.clone()))
+	}
+
+	fn extensions(&self) -> &[&str] {
+		&["bass"]
 	}
 }

@@ -1,11 +1,11 @@
-use std::{num::NonZeroUsize, sync::Arc};
+use std::num::NonZeroUsize;
 
 use bevy::{ecs::system::SystemParam, prelude::*};
 use widgets::Card;
 
 use crate::{
-	ContentDef, EditorExtension, EditorUi,
-	content::ContentDefs,
+	EditorExtension, EditorUi,
+	content::{ContentDefAsset, ContentDefs},
 	private::ext::{EntityDnd, SearchableVfs},
 };
 
@@ -49,9 +49,14 @@ impl EditorUi for ContentUi {
 
 		let num_columns = NonZeroUsize::new(10).unwrap();
 
-		searchable_vfs.display_ui(ui, vfs, num_columns, |ui, size, basename, id, asset_def| {
-			ui_for_item(ui, size, basename, Arc::clone(asset_def), id);
-		});
+		searchable_vfs.display_ui(
+			ui,
+			vfs,
+			num_columns,
+			|ui, size, basename, id, asset_def_handle| {
+				ui_for_item(ui, size, basename, asset_def_handle.clone(), id);
+			},
+		);
 	}
 }
 
@@ -59,10 +64,10 @@ fn ui_for_item(
 	ui: &mut egui::Ui,
 	size: egui::Vec2,
 	label: &str,
-	asset_def: Arc<dyn ContentDef>,
+	asset_def_handle: Handle<ContentDefAsset>,
 	id: egui::Id,
 ) {
-	ui.dnd_drag_source(id, EntityDnd::AddAsset(asset_def), |ui| {
+	ui.dnd_drag_source(id, EntityDnd::AddAsset(asset_def_handle), |ui| {
 		Card::new(size).with_label(label).show(ui, |ui| {
 			ui.label(egui_phosphor_icons::icons::CUBE.regular());
 		});

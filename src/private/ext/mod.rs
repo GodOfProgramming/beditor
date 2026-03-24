@@ -15,7 +15,7 @@ pub mod settings;
 pub mod type_editor;
 
 use crate::{
-	ContentDef, EditorExtension, EditorExtensionContext, EditorExtensionPlugin,
+	EditorExtension, EditorExtensionContext, EditorExtensionPlugin, content::ContentDefAsset,
 	reg::components::ComponentRegistry,
 };
 use bevy::prelude::*;
@@ -57,18 +57,24 @@ impl EditorExtension for InternalEditorExtensions {
 
 pub enum EntityDnd {
 	AddComponent(TypeId),
-	AddAsset(Arc<dyn ContentDef>),
+	AddAsset(Handle<ContentDefAsset>),
 }
 
 impl EntityDnd {
 	fn insert(&self, entities: impl Iterator<Item = Entity>, world: &mut World) -> bool {
 		match self {
 			EntityDnd::AddComponent(type_id) => Self::insert_component(entities, world, type_id),
-			EntityDnd::AddAsset(asset_def) => {
-				for entity in entities {
-					asset_def.insert_into_entities(entity, world);
-				}
-				true
+			EntityDnd::AddAsset(asset_def_handle) => {
+				world.resource_scope(|world, assets: Mut<Assets<ContentDefAsset>>| {
+					if let Some(asset_def) = assets.get(asset_def_handle.id()) {
+						for entity in entities {
+							asset_def.insert_into_entities(entity, world);
+						}
+						true
+					} else {
+						false
+					}
+				})
 			}
 		}
 	}

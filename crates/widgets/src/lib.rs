@@ -27,6 +27,11 @@ impl MenuModal {
 		Self::default()
 	}
 
+	pub fn start_opened(mut self) -> Self {
+		self.open = true;
+		self
+	}
+
 	pub fn closeable(mut self, value: bool) -> Self {
 		self.closeable = value;
 		self

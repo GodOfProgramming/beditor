@@ -7449,7 +7449,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 [[package]]
 name = "vfs"
 version = "0.1.0"
-source = "git+https://github.com/GodOfProgramming/vfs-rs.git?rev=ed5ba004878e076bc3e9bdf8b133e62ccba1ba0c#ed5ba004878e076bc3e9bdf8b133e62ccba1ba0c"
+source = "git+https://github.com/GodOfProgramming/vfs-rs.git?rev=5c2128f8537b0055e0e35fb548dcbe8a660a9c20#5c2128f8537b0055e0e35fb548dcbe8a660a9c20"
 dependencies = [
  "bimap",
  "derive_enum_accessors",

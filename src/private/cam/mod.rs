@@ -28,6 +28,7 @@ use bevy::{
 	},
 	prelude::*,
 	render::render_resource::TextureFormat,
+	window::PrimaryWindow,
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
 use cam2d::EditorCam2dPlugin;
@@ -372,6 +373,7 @@ fn editor_picking_forwarding(
 	mut commands: Commands,
 	q_managed_cameras: EditorInternalQuery<(&RenderTarget, &PointerId, &EditorManagedCamera)>,
 	mut pointer_inputs: MessageReader<PointerInput>,
+	window: Single<&Window, With<PrimaryWindow>>,
 ) {
 	let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
 
@@ -398,9 +400,11 @@ fn editor_picking_forwarding(
 				.map(move |input| (target, viewport_rect, managed_camera_pointer_id, input))
 		});
 
+	let sf = window.scale_factor();
+
 	for (image_target, viewport_rect, managed_camera_pointer_id, pointer_input) in iter {
 		let location = Location {
-			position: pointer_input.location.position - viewport_rect.min,
+			position: pointer_input.location.position * sf - viewport_rect.min,
 			target: NormalizedRenderTarget::Image(image_target.clone().into()),
 		};
 

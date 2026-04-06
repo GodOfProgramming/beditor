@@ -1,0 +1,7 @@
+(
+  ns: "example",
+  data: Cube(
+    mesh: Uuid("feee5079-0028-4558-be58-d0a4d343245a"),
+    material: Uuid("04e6554c-596c-4f76-b851-682a86539e71")
+  )
+)

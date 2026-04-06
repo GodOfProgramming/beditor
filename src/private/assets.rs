@@ -1,4 +1,4 @@
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::prelude::*;
 use uuid::{Uuid, uuid};
 
 const CUBE_MESH_UUID: Uuid = uuid!("feee5079-0028-4558-be58-d0a4d343245a");
@@ -14,11 +14,11 @@ pub struct AssetsPlugin;
 
 impl Plugin for AssetsPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_systems(Startup, add_prefabs);
+		app.add_systems(Startup, add_assets);
 	}
 }
 
-pub fn add_prefabs(world: &mut World) {
+pub fn add_assets(world: &mut World) {
 	let mut meshes = world.resource_mut::<Assets<Mesh>>();
 
 	for (id, mesh) in [
@@ -52,67 +52,4 @@ pub fn add_prefabs(world: &mut World) {
 			ColorMaterial::from(BASE_COLOR),
 		)
 		.ok();
-}
-
-#[derive(SystemParam)]
-struct SharedParams<'w> {
-	meshes: ResMut<'w, Assets<Mesh>>,
-	std_mats: ResMut<'w, Assets<StandardMaterial>>,
-	color_mats: ResMut<'w, Assets<ColorMaterial>>,
-}
-
-#[derive(Bundle, Reflect, Clone)]
-#[reflect(Clone)]
-struct Cube {
-	mesh: Mesh3d,
-	material: MeshMaterial3d<StandardMaterial>,
-}
-
-impl Cube {
-	// type Params<'w, 's> = SharedParams<'w>;
-
-	// fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
-	// 	Self {
-	// 		mesh: Mesh3d(
-	// 			params
-	// 				.meshes
-	// 				.get_strong_handle(AssetId::from(CUBE_MESH_UUID))
-	// 				.unwrap(),
-	// 		),
-	// 		material: MeshMaterial3d(
-	// 			params
-	// 				.std_mats
-	// 				.get_strong_handle(AssetId::from(STANDARD_MATERIAL_UUID))
-	// 				.unwrap(),
-	// 		),
-	// 	}
-	// }
-}
-
-#[derive(Bundle, Reflect, Clone)]
-#[reflect(Clone)]
-struct Square {
-	mesh: Mesh2d,
-	material: MeshMaterial2d<ColorMaterial>,
-}
-
-impl Square {
-	// type Params<'w, 's> = SharedParams<'w>;
-
-	// fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
-	// 	Self {
-	// 		mesh: Mesh2d(
-	// 			params
-	// 				.meshes
-	// 				.get_strong_handle(AssetId::from(RECT_MESH_UUID))
-	// 				.unwrap(),
-	// 		),
-	// 		material: MeshMaterial2d(
-	// 			params
-	// 				.color_mats
-	// 				.get_strong_handle(AssetId::from(COLOR_MATERIAL_UUID))
-	// 				.unwrap(),
-	// 		),
-	// 	}
-	// }
 }

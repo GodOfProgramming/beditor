@@ -68,7 +68,7 @@ impl EntityDnd {
 				world.resource_scope(|world, assets: Mut<Assets<ContentDefAsset>>| {
 					if let Some(asset_def) = assets.get(asset_def_handle.id()) {
 						for entity in entities {
-							asset_def.insert_into_entities(entity, world);
+							asset_def.insert(entity, world);
 						}
 						true
 					} else {

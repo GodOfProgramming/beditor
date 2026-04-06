@@ -49,13 +49,13 @@ pub mod prelude {
 	pub use crate::{
 		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
 		EditorState,
-		content::ContentDef,
+		content::{AssetRef, ContentDef, ContentHandlers},
 		ui::{EditorUi, EditorUiWorld},
 	};
 	pub use bevy_egui;
 	pub use common::NoParams;
 	pub use egui;
-	pub use macros::{self, Identifiable};
+	pub use macros::{self, EditorAsset, Identifiable};
 	pub use persistent_id::{self, Identifiable};
 	pub use serde;
 	pub use uuid;

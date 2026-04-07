@@ -47,16 +47,17 @@ pub trait ContentHandlers {
 }
 
 pub trait ContentUtils {
-	fn spawn(&self, world: &mut World);
+	fn spawn(&self, world: &mut World) -> Entity;
 }
 
 impl<T> ContentUtils for T
 where
 	Self: ContentHandlers,
 {
-	fn spawn(&self, world: &mut World) {
+	fn spawn(&self, world: &mut World) -> Entity {
 		let ent = world.spawn_empty().id();
 		self.insert(ent, world);
+		ent
 	}
 }
 
@@ -68,14 +69,11 @@ pub enum AssetRef {
 }
 
 impl AssetRef {
-	pub fn get_handle<A: Asset>(&self, world: &mut World) -> Option<Handle<A>> {
+	pub fn get_handle<A: Asset>(&self, world: &mut World) -> Handle<A> {
 		match self {
-			Self::Uuid(uuid) => {
-				let mut assets = world.resource_mut::<Assets<A>>();
-				assets.get_strong_handle(AssetId::from(*uuid))
-			}
-			Self::File(path) => Some(world.load_asset(AssetPath::from_path(path))),
-			Self::AssetPath(asset_path) => Some(world.load_asset(asset_path)),
+			Self::Uuid(uuid) => Handle::from(*uuid),
+			Self::File(path) => world.load_asset(AssetPath::from_path(path)),
+			Self::AssetPath(asset_path) => world.load_asset(asset_path),
 		}
 	}
 }

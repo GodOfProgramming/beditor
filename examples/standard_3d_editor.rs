@@ -53,23 +53,30 @@ fn startup(
 #[derive(Reflect, Serialize, Deserialize, EditorAsset)]
 #[ns("example")]
 enum ExampleContent {
-	Cube { mesh: AssetRef, material: AssetRef },
+	Cube {
+		mesh: AssetRef,
+		material: AssetRef,
+		name: String,
+	},
 }
 
 impl ContentHandlers for ExampleContent {
 	fn insert(&self, entity: Entity, world: &mut World) {
 		match self {
-			ExampleContent::Cube { mesh, material } => {
-				let mesh = mesh.get_handle(world);
+			ExampleContent::Cube {
+				mesh,
+				material,
+				name,
+			} => {
+				let mesh = mesh.get_handle::<Mesh>(world);
 				let material = material.get_handle::<StandardMaterial>(world);
 
-				let Some((mesh, material)) = mesh.zip(material) else {
-					return;
-				};
-
-				world
-					.entity_mut(entity)
-					.insert((Mesh3d(mesh), MeshMaterial3d(material)));
+				world.entity_mut(entity).insert((
+					Name::new(name.clone()),
+					Transform::IDENTITY,
+					Mesh3d(mesh),
+					MeshMaterial3d(material),
+				));
 			}
 		}
 	}

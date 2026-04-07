@@ -217,22 +217,28 @@ pub fn poll_content_loading(
 					continue;
 				};
 
-				let Ok(vfs_node) = content_defs.mkdir_p(dir_path) else {
+				let Ok(dir_node) = content_defs.mkdir_p(dir_path) else {
 					error!("Could not make content def dir in vfs");
 					continue;
 				};
 
 				let humanized_name = name.to_string_lossy().to_sentence_case();
 
+				let mut count = 0;
 				'add_item: loop {
-					match content_defs.new_item(vfs_node, humanized_name.clone(), handle.clone()) {
+					match content_defs.new_item(dir_node, humanized_name.clone(), handle.clone()) {
 						Ok(node) => {
 							handle_node_map.insert(*id, node);
 							break 'add_item;
 						}
 						Err(err) => match err {
-							vfs::VfsError::ItemAlreadyExists(vfs_node) => {
-								content_defs.rm(vfs_node);
+							vfs::VfsError::ItemAlreadyExists(existing_item) => {
+								content_defs.rm(existing_item);
+
+								handle_node_map.remove(id);
+
+								count += 1;
+								debug_assert!(count < 2);
 							}
 							err => {
 								error!("Failed to register asset {err}");

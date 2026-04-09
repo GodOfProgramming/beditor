@@ -24,6 +24,7 @@ use crate::{
 };
 use bevy::{
 	app::{PluginGroupBuilder, plugin_group},
+	asset::UnapprovedPathMode,
 	dev_tools::{frame_time_graph::FrameTimeGraphPlugin, picking_debug::DebugPickingPlugin},
 	diagnostic::{
 		EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
@@ -123,6 +124,10 @@ impl EditorPlugin {
 					..default()
 				}),
 				close_when_requested: false,
+				..default()
+			})
+			.set(AssetPlugin {
+				unapproved_path_mode: UnapprovedPathMode::Allow,
 				..default()
 			})
 			.disable::<bevy::log::LogPlugin>()

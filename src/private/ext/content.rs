@@ -32,6 +32,8 @@ impl EditorUi for ContentUi {
 
 	const ID: uuid::Uuid = uuid::uuid!("73835581-7c79-494a-a191-f0b4922cdbfc");
 
+	const UNIQUE: bool = true;
+
 	type Params<'w, 's> = Params<'w, 's>;
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {

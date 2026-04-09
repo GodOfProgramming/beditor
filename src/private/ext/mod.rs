@@ -11,6 +11,7 @@ pub mod inspector;
 pub mod logs;
 pub mod menu_bar;
 pub mod resources;
+pub mod scene_inspector;
 pub mod settings;
 pub mod type_editor;
 
@@ -49,6 +50,7 @@ impl EditorExtension for InternalEditorExtensions {
 			EditorExtensionPlugin::<inspector::InspectorUiExtension>::default(),
 			EditorExtensionPlugin::<logs::LogsUiExtension>::default(),
 			EditorExtensionPlugin::<resources::ResourcesUiExtension>::default(),
+			EditorExtensionPlugin::<scene_inspector::SceneInspectorUiExtension>::default(),
 			EditorExtensionPlugin::<settings::SettingsUiExtension>::default(),
 			EditorExtensionPlugin::<type_editor::TypeEditorUiExtension>::default(),
 		));

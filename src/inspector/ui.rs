@@ -15,9 +15,15 @@ use bevy::{
 	ecs::{query::QueryFilter, world::CommandQueue},
 	prelude::*,
 	reflect::{
-		Array, DynamicEnum, DynamicStruct, DynamicTuple, DynamicTyped, DynamicVariant, Enum, EnumInfo,
-		List, ListInfo, Map, ReflectMut, ReflectRef, Set, SetInfo, StructInfo, Tuple, TupleInfo,
-		TupleStructInfo, TypeInfo, TypeRegistry, VariantInfo, VariantType,
+		DynamicTyped, ReflectMut, ReflectRef, TypeInfo, TypeRegistry,
+		array::Array,
+		enums::{DynamicEnum, DynamicVariant, Enum, EnumInfo, VariantInfo, VariantType},
+		list::{List, ListInfo},
+		map::Map,
+		set::{Set, SetInfo},
+		structs::{DynamicStruct, StructInfo},
+		tuple::{DynamicTuple, Tuple, TupleInfo},
+		tuple_struct::TupleStructInfo,
 	},
 };
 use derive_new::new;
@@ -2425,6 +2431,7 @@ pub struct Selected;
 pub struct SelectEntity(pub Entity);
 
 impl Command for SelectEntity {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		let mut selection = world.resource_mut::<InspectorSelection>();
 		let event = selection.add_selected(self.0, false);

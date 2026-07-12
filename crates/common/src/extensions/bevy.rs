@@ -1,4 +1,4 @@
-use bevy::{asset::AssetPath, ecs::world::CommandQueue, prelude::*};
+use bevy::{ecs::world::CommandQueue, prelude::*};
 use std::borrow::{Borrow, BorrowMut};
 
 pub trait AppExtensions: BorrowMut<App> {

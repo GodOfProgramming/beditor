@@ -25,7 +25,10 @@ use crate::{
 use bevy::{
 	app::{PluginGroupBuilder, plugin_group},
 	asset::UnapprovedPathMode,
-	dev_tools::{frame_time_graph::FrameTimeGraphPlugin, picking_debug::DebugPickingPlugin},
+	dev_tools::{
+		frame_time_graph::FrameTimeGraphPlugin, infinite_grid::InfiniteGridPlugin,
+		picking_debug::DebugPickingPlugin,
+	},
 	diagnostic::{
 		EntityCountDiagnosticsPlugin, FrameTimeDiagnosticsPlugin, SystemInformationDiagnosticsPlugin,
 	},
@@ -33,15 +36,12 @@ use bevy::{
 	remote::{RemotePlugin, http::RemoteHttpPlugin},
 	window::WindowMode,
 };
-use bevy_infinite_grid::InfiniteGridPlugin;
 use bevy_mod_outline::OutlinePlugin;
-use bevy_transform_tools::{GizmoActive, TransformGizmoPlugin};
 use common::extensions::bevy::{AppExtensions as _, WorldMutExtensions as _};
 use derive_new::new;
 use notify::NotificationPlugin;
 use platform_dirs::AppDirs;
 use private::ui::UiManager;
-use singleton::SingletonPlugin;
 use std::{path::PathBuf, sync::LazyLock};
 
 pub use prelude::*;
@@ -186,14 +186,10 @@ impl Plugin for EditorPlugin {
 			)
 			// crates
 			.try_add_plugin(InfiniteGridPlugin)
-			.try_add_plugin(OutlinePlugin)
+			.try_add_plugin(OutlinePlugin::EXTRUDE_VERTEX)
 			.try_add_plugin(TransformGizmoPlugin)
 			// internal
-			.add_plugins(private::InternalPlugin)
-			// utility
-			.add_plugins(SingletonPlugin::<GizmoActive>::new(
-				singleton::SingletonBehavior::RemoveSelf,
-			));
+			.add_plugins(private::InternalPlugin);
 	}
 }
 

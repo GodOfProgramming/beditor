@@ -14,8 +14,8 @@ use bevy::{
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
 use egui::{Widget, load::SizedTexture};
-use egui_autocomplete::AutoCompleteTextEdit;
 use std::any::Any;
+use widgets::autocomplete::AutoCompleteTextEdit;
 
 impl InspectorPrimitive for uuid::Uuid {
 	fn ui_mut<'c>(
@@ -145,12 +145,12 @@ impl InspectorPrimitive for Handle<Mesh> {
 			|_, _, _| {},
 			|ui, handle, meshes| {
 				ui.horizontal(|ui| {
-					let Some(mesh) = meshes.get_mut(handle.id()) else {
+					let Some(mut mesh) = meshes.get_mut(handle.id()) else {
 						dead_asset_handle(ui, handle.id().untyped());
 						return false;
 					};
 
-					mesh_ui_inner(mesh, ui);
+					mesh_ui_inner(&mesh, ui);
 
 					let mut changed = false;
 
@@ -620,6 +620,7 @@ fn mesh_ui_inner(mesh: &Mesh, ui: &mut egui::Ui) {
 struct MakeEguiTexture(Handle<Image>);
 
 impl Command for MakeEguiTexture {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		let mut egui_user_textures = world.resource_mut::<EguiUserTextures>();
 		egui_user_textures.add_image(EguiTextureHandle::Weak(self.id()));

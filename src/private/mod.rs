@@ -16,13 +16,12 @@ use crate::{
 	},
 };
 use bevy::{
-	dev_tools::states::log_transitions,
+	dev_tools::{infinite_grid::InfiniteGrid, states::log_transitions},
 	ecs::{entity_disabling::DefaultQueryFilters, system::NonSendMarker},
 	prelude::*,
 	window::{CursorOptions, PrimaryWindow, WindowCloseRequested},
 	winit::WINIT_WINDOWS,
 };
-use bevy_infinite_grid::InfiniteGridBundle;
 
 pub struct InternalPlugin;
 
@@ -96,8 +95,9 @@ pub type EditorInternalSingle<'w, 's, Q, F = ()> = Single<'w, 's, Q, EditorInter
 #[derive(Component)]
 #[require(
   UserHidden,
-  SceneRoot,
-  Name = Name::new("Editor Scene")
+  Name = Name::new("Editor Scene"),
+  InheritedVisibility,
+  Transform,
 )]
 pub struct EditorScene;
 
@@ -142,7 +142,7 @@ fn spawn_scene(mut commands: Commands) {
 		Children::spawn(Spawn((
 			UserHidden,
 			Name::new("Infinite Grid"),
-			InfiniteGridBundle::default(),
+			InfiniteGrid,
 		))),
 	));
 }

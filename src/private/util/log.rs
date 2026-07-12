@@ -34,7 +34,9 @@ impl Plugin for LogPlugin {
 	#[expect(clippy::print_stderr, reason = "Allowed during logger setup")]
 	fn build(&self, app: &mut App) {
 		let mut system_state = SystemState::<ProjectSettings>::new(app.world_mut());
-		let mut settings = system_state.get_mut(app.world_mut());
+		let mut settings = system_state
+			.get_mut(app.world_mut())
+			.expect("ProjectSettings expected to be available");
 		let level = settings.get(LogLevelSetting).unwrap_or_default();
 
 		app.add_observer(on_setting_changed);
@@ -47,7 +49,7 @@ impl Plugin for LogPlugin {
 			app.insert_resource(LogHandle(handle));
 			app.world_mut().trigger(LogLevelChangedEvent(level));
 
-			let collector = EventCollector::default().with_level(level.into());
+			let collector = EventCollector::default().with_max_level(level.into());
 			let collector_arc = Arc::new(Mutex::new(collector));
 			app.insert_resource(EventCollectorHandle(Arc::clone(&collector_arc)));
 

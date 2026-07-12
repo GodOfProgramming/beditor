@@ -1,13 +1,13 @@
 use crate::{
-	EditorExtension, EditorState, EditorUi,
+	EditorExtension, EditorUi,
 	private::{
 		EditorInternal, EditorInternalQuery,
 		cam::ActiveEditorCamera,
-		scene::{UseScenes, UseScenesSetting},
 		ui::{
 			LayoutManager, LoadLayout, SavedLayout, UiManager,
 			misc::{DockExtensions as _, MissingUi},
 		},
+		util::WorldExtensions,
 	},
 	storage::{
 		ProjectSettings,
@@ -67,8 +67,6 @@ struct CategoryParams<'w, 's> {
 	project_settings: ProjectSettings<'w, 's>,
 	active_camera: ResMut<'w, ActiveEditorCamera>,
 	layout_manager: ResMut<'w, LayoutManager>,
-	use_scenes: ResMut<'w, UseScenes>,
-	editor_state: Res<'w, State<EditorState>>,
 
 	layout_name: Local<'s, String>,
 	save_layout_on_exit: Local<'s, bool>,
@@ -259,22 +257,7 @@ impl ProjectSettingCategory {
 					}
 				});
 			}
-			Self::Scenes => {
-				ui.add_enabled_ui(**params.editor_state == EditorState::Editing, |ui| {
-					if ui
-						.checkbox(&mut params.use_scenes, "*Use Scenes")
-						.on_hover_text("This change requires a restart")
-						.clicked()
-						&& let Err(err) = params
-							.project_settings
-							.set(UseScenesSetting, **params.use_scenes)
-					{
-						params
-							.commands
-							.trigger(Notification::error("Failed to save setting").with_context(err));
-					}
-				});
-			}
+			Self::Scenes => {}
 		}
 	}
 }
@@ -334,8 +317,16 @@ impl ResetLayoutMessage {
 
 		commands.queue(|world: &mut World| {
 			world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-				let default_state = ui_manager.default_dock_state(world);
-				ui_manager.switch_state(default_state, world);
+				world
+					.notify_on_error(
+						|world| {
+							let default_state = ui_manager.default_dock_state(world)?;
+							ui_manager.switch_state(default_state, world)?;
+							Ok(())
+						},
+						|_, err: BevyError| ("Failed to restore default dock", Some(err)),
+					)
+					.ok();
 			});
 		});
 	}

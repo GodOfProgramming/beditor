@@ -50,7 +50,9 @@ pub struct EditorCamPlugin;
 impl Plugin for EditorCamPlugin {
 	fn build(&self, app: &mut App) {
 		let mut system_state = SystemState::<ProjectSettings>::new(app.world_mut());
-		let mut settings = system_state.get_mut(app.world_mut());
+		let mut settings = system_state
+			.get_mut(app.world_mut())
+			.expect("Logic Error: Project Settings should be available");
 		let active_cam_state = settings.get(ActiveEditorCameraSetting).unwrap_or_default();
 
 		app
@@ -91,10 +93,7 @@ impl Plugin for EditorCamPlugin {
 			.add_systems(
 				First,
 				(
-					(
-						editor_picking_forwarding.in_set(PickingSystems::PostInput),
-						// EditorManagedCamera::sync_gizmos,
-					),
+					(editor_picking_forwarding.in_set(PickingSystems::PostInput),),
 					EditorManagedCamera::on_frame_end,
 				)
 					.chain(),
@@ -137,6 +136,7 @@ impl MoveTo {
 }
 
 impl Command for MoveTo {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		world.trigger(self);
 	}
@@ -159,7 +159,7 @@ fn on_manage_camera(
 	};
 
 	let image_handle = target.as_image().cloned().unwrap_or_else(|| {
-		let image = Image::new_target_texture(1, 1, TextureFormat::bevy_default(), None);
+		let image = Image::new_target_texture(1, 1, TextureFormat::Rgba8UnormSrgb, None);
 		let handle = images.add(image);
 		*target = RenderTarget::Image(handle.clone().into());
 		handle
@@ -222,8 +222,9 @@ pub struct EditorCamera;
 #[derive(Component)]
 #[require(
   UserHidden,
-  SceneRoot,
-  Name = Name::new("Editor Camera Scene")
+  Name = Name::new("Editor Camera Scene"),
+  InheritedVisibility,
+  Transform
 )]
 pub struct EditorCameraScene;
 
@@ -232,10 +233,11 @@ pub struct EditorCameraScene;
   UserHidden,
   EditorEguiContext,
   Camera2d,
-  Camera = Camera { order: isize::MAX, ..default() },
+  Camera,
   RenderLayers = RenderLayers::layer(EDITOR_UI_RENDER_LAYER),
   PointerId = PointerId::Custom(Uuid::new_v4()),
   Name = Name::new("Editor Window Camera"),
+  InheritedVisibility,
 )]
 pub struct EditorWindowCamera;
 
@@ -281,18 +283,11 @@ impl EditorManagedCamera {
 		self.ignore_size_mismatch = false;
 	}
 
-	// fn sync_gizmos(
-	// 	gizmo_camera: EditorInternalSingle<&Self, With<TransformGizmoCamera>>,
-	// 	mut gizmos_options: ResMut<>,
-	// ) {
-	// 	gizmos_options.viewport_rect = gizmo_camera.viewport_rect;
-	// }
-
 	fn on_frame_end(mut q_managed_cameras: EditorInternalQuery<&mut Self>) {
-		for mut cam in &mut q_managed_cameras {
-			cam.last_viewport = cam.viewport_rect.take();
-			cam.set_ctx_menu_open(false);
-			cam.hovered = false;
+		for mut mcam in &mut q_managed_cameras {
+			mcam.last_viewport = mcam.viewport_rect.take();
+			mcam.set_ctx_menu_open(false);
+			mcam.hovered = false;
 		}
 	}
 }

@@ -11,7 +11,6 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalFilter, UserHidden,
 		cam::{ActiveEditorCamera, EditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
-		scene::{ActiveScene, ShowSceneSettings},
 		util::WorldExtensions as _,
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
@@ -56,11 +55,11 @@ impl EditorUiWorld for HierarchyUi {
 
 	const SCROLL_BARS: [bool; 2] = [true, true];
 
-	fn spawn(_entity: Entity, _world: &mut World) -> Self {
-		default()
+	fn spawn(_entity: Entity, _world: &mut World) -> Result<Self> {
+		Ok(default())
 	}
 
-	fn ui(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(_entity: Entity, ui: &mut egui::Ui, world: &mut World) -> Result {
 		world.resource_scope(|world, mut selection: Mut<InspectorSelection>| {
 			if let InspectorSelection::Entities(selected_entities) = selection.as_mut() {
 				Self::show(ui, world, selected_entities);
@@ -71,6 +70,8 @@ impl EditorUiWorld for HierarchyUi {
 				}
 			}
 		});
+
+		Ok(())
 	}
 
 	fn context_menu(
@@ -79,7 +80,7 @@ impl EditorUiWorld for HierarchyUi {
 		world: &mut World,
 		_surface: egui_dock::SurfaceIndex,
 		_node: egui_dock::NodeIndex,
-	) {
+	) -> Result {
 		if ui.button("New Empty Entity").clicked()
 			&& let Some(entity) = world.spawn_stateful_entity()
 		{
@@ -100,6 +101,8 @@ impl EditorUiWorld for HierarchyUi {
 		{
 			world.commands().queue(SelectEntity(entity));
 		}
+
+		Ok(())
 	}
 }
 
@@ -180,14 +183,6 @@ impl HierarchyUi {
 							queue.push(ReparentMessage(entity));
 						}
 
-						if entity_ref.contains::<ActiveScene>() {
-							if !entity_ref.contains::<DynamicSceneRoot>() && ui.button("Edit Scene").clicked() {
-								queue.push(ShowSceneSettings::new(entity));
-							}
-						} else if ui.button("Make Scene").clicked() {
-							entity_ref.insert(ActiveScene);
-						}
-
 						if ui.button("Despawn").clicked() {
 							entity_ref.despawn();
 						}
@@ -207,6 +202,7 @@ impl HierarchyUi {
 struct AddChild(Entity);
 
 impl Command for AddChild {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		world.spawn(ChildOf(self.0));
 	}
@@ -236,6 +232,7 @@ impl ReparentMessage {
 }
 
 impl Command for ReparentMessage {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		world.write_message(self);
 	}

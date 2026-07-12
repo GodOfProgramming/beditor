@@ -7,7 +7,7 @@ pub mod world_view;
 
 use bevy::{
 	asset::{ReflectAsset, UntypedAssetId},
-	ecs::query::QueryFilter,
+	ecs::{component::Mutable, query::QueryFilter},
 	prelude::*,
 	reflect::TypeRegistry,
 };
@@ -195,7 +195,7 @@ pub trait WorldExtensions: BorrowMut<World> {
 		components::ui_for_entities_with_shared_components(world, entities, ui)
 	}
 
-	fn ui_for_resource<R: Resource + Reflect>(&mut self, ui: &mut egui::Ui) {
+	fn ui_for_resource<R: Resource<Mutability = Mutable> + Reflect>(&mut self, ui: &mut egui::Ui) {
 		self.borrow_mut().queue(|world, queue| {
 			let type_registry = world.resource::<AppTypeRegistry>().0.clone();
 			let type_registry = type_registry.read();

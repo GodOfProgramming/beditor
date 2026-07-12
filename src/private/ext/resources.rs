@@ -59,7 +59,7 @@ impl EditorUi for ResourcesUi {
 					.then(|| (name, registration.type_id()))
 			})
 			.collect();
-		resources.sort_by(|(name_a, _), (name_b, _)| name_a.cmp(name_b));
+		resources.sort_by_key(|r| r.0);
 
 		ui.text_edit_singleline(&mut *filter);
 

@@ -1,4 +1,7 @@
-use crate::private::ui::{NewTabs, TabState, UiManager, misc::UiExtensions};
+use crate::private::{
+	ui::{NewTabs, TabState, UiManager, misc::UiExtensions},
+	util::WorldExtensions,
+};
 use bevy::{
 	ecs::{component::Mutable, system::SystemParam},
 	prelude::*,
@@ -28,20 +31,21 @@ pub trait EditorUiWorld: Bundle + Send + Sync + Sized {
 
 	const REOPEN_ON_STARTUP: bool = true;
 
-	fn spawn(entity: Entity, world: &mut World) -> Self;
+	fn spawn(entity: Entity, world: &mut World) -> Result<Self>;
 
-	fn on_despawn(entity: Entity, world: &mut World) {
+	fn on_despawn(entity: Entity, world: &mut World) -> Result {
 		let _ = entity;
 		let _ = world;
+		Ok(())
 	}
 
-	fn title(entity: Entity, world: &mut World) -> egui::WidgetText {
+	fn title(entity: Entity, world: &mut World) -> Result<egui::WidgetText> {
 		let _ = entity;
 		let _ = world;
-		Self::NAME.into()
+		Ok(Self::NAME.into())
 	}
 
-	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World);
+	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) -> Result<()>;
 
 	fn context_menu(
 		entity: Entity,
@@ -49,23 +53,30 @@ pub trait EditorUiWorld: Bundle + Send + Sync + Sized {
 		world: &mut World,
 		surface: SurfaceIndex,
 		node: NodeIndex,
-	) {
+	) -> Result<()> {
 		let _ = entity;
 		let _ = ui;
 		let _ = world;
 		let _ = surface;
 		let _ = node;
+		Ok(())
 	}
 
-	fn on_panel_changed(entity: Entity, world: &mut World) {
+	fn on_panel_changed(entity: Entity, world: &mut World) -> Result<()> {
 		let _ = entity;
 		let _ = world;
+		Ok(())
 	}
 
-	fn handle_tab_response(entity: Entity, world: &mut World, response: &egui::Response) {
+	fn handle_tab_response(
+		entity: Entity,
+		world: &mut World,
+		response: &egui::Response,
+	) -> Result<()> {
 		let _ = entity;
 		let _ = world;
 		let _ = response;
+		Ok(())
 	}
 }
 
@@ -150,16 +161,16 @@ where
 
 	const REOPEN_ON_STARTUP: bool = <Self as EditorUi>::REOPEN_ON_STARTUP;
 
-	fn spawn(entity: Entity, world: &mut World) -> Self {
+	fn spawn(entity: Entity, world: &mut World) -> Result<Self> {
 		Self::register_params(entity, world);
 		Self::with_params(entity, world, EditorUi::spawn)
 	}
 
-	fn title(entity: Entity, world: &mut World) -> egui::WidgetText {
+	fn title(entity: Entity, world: &mut World) -> Result<egui::WidgetText> {
 		Self::with_entity_params(entity, world, EditorUi::title)
 	}
 
-	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) -> Result<()> {
 		Self::with_entity_params(entity, world, |this, params| {
 			this.ui(ui, params);
 		})
@@ -171,23 +182,27 @@ where
 		world: &mut World,
 		surface: SurfaceIndex,
 		node: NodeIndex,
-	) {
+	) -> Result<()> {
 		Self::with_entity_params(entity, world, |this, params| {
 			this.context_menu(ui, params, surface, node);
 		})
 	}
 
-	fn handle_tab_response(entity: Entity, world: &mut World, response: &egui::Response) {
+	fn handle_tab_response(
+		entity: Entity,
+		world: &mut World,
+		response: &egui::Response,
+	) -> Result<()> {
 		Self::with_entity_params(entity, world, |this, params| {
 			this.handle_tab_response(params, response);
-		});
+		})
 	}
 
-	fn on_panel_changed(entity: Entity, world: &mut World) {
+	fn on_panel_changed(entity: Entity, world: &mut World) -> Result<()> {
 		Self::with_entity_params(entity, world, <Self as EditorUi>::on_panel_changed)
 	}
 
-	fn on_despawn(entity: Entity, world: &mut World) {
+	fn on_despawn(entity: Entity, world: &mut World) -> Result<()> {
 		Self::with_entity_params(entity, world, <Self as EditorUi>::on_despawn)
 	}
 }
@@ -198,14 +213,24 @@ pub struct OpenUi(pub(crate) Box<dyn 'static + Send + Sync + FnOnce(&mut World)>
 impl OpenUi {
 	pub fn open<T: EditorUiWorld>(mode: OpenMode) -> Self {
 		Self::new(move |world| {
-			let tab = TabState::new::<T>(world);
+			let Ok(tab) = world.notify_on_error(
+				|world| TabState::new::<T>(world),
+				|_, err| ("Failed to open ui", Some(err)),
+			) else {
+				return;
+			};
 			mode.open(world, tab);
 		})
 	}
 
 	pub fn open_with<T: EditorUiWorld>(mode: OpenMode, value: T) -> Self {
 		Self::new(move |world| {
-			let tab = TabState::new::<T>(world);
+			let Ok(tab) = world.notify_on_error(
+				|world| TabState::new::<T>(world),
+				|_, err| ("Failed to open ui", Some(err)),
+			) else {
+				return;
+			};
 			world.entity_mut(tab.entity()).insert(value);
 			mode.open(world, tab);
 		})
@@ -220,6 +245,7 @@ impl OpenUi {
 }
 
 impl Command for OpenUi {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		world.resource_mut::<NewTabs>().push(self);
 	}

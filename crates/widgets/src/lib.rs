@@ -1,3 +1,4 @@
+pub mod autocomplete;
 use core::f32;
 use std::{collections::HashSet, hash::Hash, ops::Range, sync::Arc};
 

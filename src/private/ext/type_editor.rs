@@ -1,12 +1,13 @@
 use crate::{
 	EditorExtension, EditorUiWorld,
-	inspector::WorldExtensions,
+	inspector::WorldExtensions as _,
 	private::{
 		EditorInternal, EditorInternalQuery, EditorInternalSingle,
 		reflection::ReflectDefaultCache,
 		ui::{
 			EditorEguiContext, EditorUiEguiContextPass, TabState, UiManager, misc::CenteredFileDialog,
 		},
+		util::WorldExtensions as _,
 	},
 	reg::serde::SerdeRegistry,
 };
@@ -44,7 +45,7 @@ impl EditorExtension for TypeEditorUiExtension {
 pub struct TypeEditorUi {
 	#[reflect(ignore)]
 	state: TypeEditorState,
-	_marker: TypeEditorMarker,
+	marker: TypeEditorMarker,
 }
 
 #[derive(Component, Reflect, Default)]
@@ -60,14 +61,14 @@ impl EditorUiWorld for TypeEditorUi {
 
 	const REOPEN_ON_STARTUP: bool = false;
 
-	fn spawn(_entity: Entity, _world: &mut World) -> Self {
-		default()
+	fn spawn(_entity: Entity, _world: &mut World) -> Result<Self> {
+		Ok(default())
 	}
 
-	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) -> Result {
 		let mut entity_mut = world.entity_mut(entity);
 		let Some(mut state) = entity_mut.get_mut::<TypeEditorState>() else {
-			return;
+			return Err(BevyError::error("Failed to get TypeEditorState"));
 		};
 
 		let can_open_file_dialog = matches!(
@@ -88,7 +89,7 @@ impl EditorUiWorld for TypeEditorUi {
 
 			ui.separator();
 
-			return;
+			return Ok(());
 		};
 
 		let m = arc.lock();
@@ -126,6 +127,8 @@ impl EditorUiWorld for TypeEditorUi {
 		if let Some(msg) = message {
 			world.write_message(msg);
 		}
+
+		Ok(())
 	}
 }
 
@@ -220,9 +223,14 @@ impl TypeEditorState {
 pub struct OpenTypeEditor(Box<dyn Reflect>);
 
 impl Command for OpenTypeEditor {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-			let tab = TabState::new::<TypeEditorUi>(world);
+			let Ok(tab) = world.notify_on_error(TabState::new::<TypeEditorUi>, |_, err| {
+				("Failed to open type editor", Some(err))
+			}) else {
+				return;
+			};
 			world
 				.entity_mut(tab.entity())
 				.insert(TypeEditorState::new(self.0));

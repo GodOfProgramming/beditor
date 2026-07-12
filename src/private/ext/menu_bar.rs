@@ -1,9 +1,8 @@
 use crate::{
 	EditorState, SimulationState,
 	private::{
-		EditorInternalQuery,
+		EditorInternalQuery, EditorScene,
 		ext::settings::{ProjectSettingsUi, ShowEditorSettings},
-		scene::{EditorSceneRoot, LoadScene},
 		ui::misc::CenteredFileDialog,
 	},
 	ui::{OpenMode, OpenUi},
@@ -33,10 +32,6 @@ struct CachedSettings {
 pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 	params.file_dialog.update(ui.ctx());
 
-	if let Some(file) = params.file_dialog.take_picked() {
-		params.commands.queue(LoadScene::new(file));
-	}
-
 	egui::MenuBar::new().ui(ui, |ui| {
 		file_menu(ui, &mut params);
 		edit_menu(ui, &mut params);
@@ -49,7 +44,7 @@ pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 fn file_menu(ui: &mut egui::Ui, params: &mut Params) {
 	ui.menu_button("File", |ui| {
 		if ui.button("New Scene").clicked() {
-			params.commands.spawn(EditorSceneRoot);
+			params.commands.spawn(EditorScene);
 		}
 
 		if ui.button("Open Scene").clicked() {

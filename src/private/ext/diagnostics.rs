@@ -17,7 +17,7 @@ use bevy::{
 	prelude::*,
 	render::{
 		render_resource::{Extent3d, TextureFormat},
-		storage::ShaderStorageBuffer,
+		storage::ShaderBuffer,
 	},
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures, egui};
@@ -130,7 +130,7 @@ impl EditorUi for DiagnosticsUi {
 			return;
 		}
 
-		let Some(image) = images.get_mut(graph.image.id()) else {
+		let Some(mut image) = images.get_mut(graph.image.id()) else {
 			ui.label("No Graph Image (mut)");
 			return;
 		};
@@ -157,7 +157,7 @@ fn on_spawn(
 	event: On<Add, DiagnosticsUi>,
 	mut commands: Commands,
 	mut frame_time_graph_materials: ResMut<Assets<FrametimeGraphMaterial>>,
-	mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+	mut buffers: ResMut<Assets<ShaderBuffer>>,
 	mut images: ResMut<Assets<Image>>,
 	mut graph: ResMut<FrameTimeGraph>,
 	mut user_textures: ResMut<EguiUserTextures>,
@@ -165,14 +165,14 @@ fn on_spawn(
 	graph.image = images.add(Image::new_target_texture(
 		1,
 		1,
-		TextureFormat::bevy_default(),
+		TextureFormat::Rgba8UnormSrgb,
 		None,
 	));
 
 	graph.tex = user_textures.add_image(EguiTextureHandle::Weak(graph.image.id()));
 
 	graph.mat = frame_time_graph_materials.add(FrametimeGraphMaterial {
-		values: buffers.add(ShaderStorageBuffer {
+		values: buffers.add(ShaderBuffer {
 			// Initialize with dummy data because the default (`data: None`) will
 			// cause a panic in the shader if the frame time graph is constructed
 			// with `enabled: false`.

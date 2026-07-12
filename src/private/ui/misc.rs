@@ -5,7 +5,7 @@ use crate::{
 		InspectorPrimitive,
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
-	private::{EditorInternal, EditorInternalFilter, EditorInternalQuery},
+	private::{EditorInternal, EditorInternalFilter, EditorInternalQuery, util::WorldExtensions},
 };
 use bevy::{
 	ecs::{
@@ -92,7 +92,7 @@ pub unsafe trait UiExtensions: EditorUi {
 		entity: Entity,
 		world: &mut World,
 		f: impl FnOnce(&mut Self, Self::Params<'_, '_>) -> T,
-	) -> T
+	) -> Result<T>
 	where
 		Self: Component<Mutability = Mutable>,
 	{
@@ -102,6 +102,9 @@ pub unsafe trait UiExtensions: EditorUi {
 		let Ok((mut this, mut params)) = q.get_mut(unsafe { world_cell.world_mut() }, entity) else {
 			// # Safety
 			// This is an error path and we'll be crashing after regardless
+			//
+			// Purpose is to just test if the instance or state was missing, this is a
+			// logic error
 			let mut q = unsafe {
 				world_cell
 					.world_mut()
@@ -120,10 +123,10 @@ pub unsafe trait UiExtensions: EditorUi {
 			}
 		};
 
-		let items = params.get_mut(unsafe { world_cell.world_mut() });
-		let result = f(this.as_mut(), items);
+		let items = params.get_mut(unsafe { world_cell.world_mut() })?;
+		let out = f(this.as_mut(), items);
 		unsafe { params.apply(world_cell.world_mut()) };
-		result
+		Ok(out)
 	}
 
 	fn register_params(entity: Entity, world: &mut World) {
@@ -139,12 +142,12 @@ pub unsafe trait UiExtensions: EditorUi {
 		entity: Entity,
 		world: &mut World,
 		f: impl FnOnce(Self::Params<'_, '_>) -> T,
-	) -> T {
+	) -> Result<T> {
 		let world_cell = world.as_unsafe_world_cell();
 		let mut entity = unsafe { world_cell.world_mut() }.entity_mut(entity);
 		let mut params = entity.get_mut::<UiParams<Self>>().unwrap();
-		let params = params.get_mut(unsafe { world_cell.world_mut() });
-		f(params)
+		let params = params.get_mut(unsafe { world_cell.world_mut() })?;
+		Ok(f(params))
 	}
 }
 
@@ -267,7 +270,12 @@ pub(crate) trait DockExtensions:
 				};
 
 				if vtable.reopen_on_startup {
-					let entity = (vtable.spawn)(world);
+					let entity = world
+						.notify_on_error(
+							|world| (vtable.spawn)(world),
+							|_, err| (format!("Failed to reopen {}", vtable.name), Some(err)),
+						)
+						.ok()?;
 					Some(TabState { entity, vtable })
 				} else {
 					None

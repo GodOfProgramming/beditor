@@ -16,7 +16,7 @@ use crate::{
 			editor_view::{self, GizmoOptions},
 			hierarchy, inspector, menu_bar, resources,
 		},
-		util::entity::insert_bundle_from_world,
+		util::{WorldExtensions, entity::insert_bundle_from_world},
 	},
 	storage::{
 		DataTable, GlobalEditorSettings, PersistentData, ProjectSettings,
@@ -38,11 +38,8 @@ use bevy::{
 	prelude::*,
 	ui::ui_focus_system,
 };
-use bevy_egui::{
-	EguiContext, EguiContextSettings, EguiGlobalSettings, EguiMultipassSchedule, EguiPlugin,
-};
+use bevy_egui::{EguiContext, EguiGlobalSettings, EguiMultipassSchedule, EguiPlugin};
 use bevy_mod_outline::{OutlineMode, OutlineRenderLayers, OutlineVolume};
-use bevy_transform_tools::{GizmoActive, TransformGizmoTarget};
 use derive_new::new;
 use egui_dock::{DockArea, DockState, NodeIndex, SurfaceIndex, TabIndex};
 use events::{AppendUiMessage, RemoveUiEvent};
@@ -124,6 +121,7 @@ pub struct EditorEguiContext;
   UiTransform,
   Visibility,
   Name = Name::new("Editor Ui"),
+  InheritedVisibility,
 )]
 struct EditorUiContainer;
 
@@ -197,11 +195,11 @@ impl UiManager {
 	}
 
 	pub fn add_tab_to_focused(&mut self, tab: TabState) -> bool {
-		let Some((surface, node)) = self.state.focused_leaf() else {
+		let Some(np) = self.state.focused_leaf() else {
 			return false;
 		};
 
-		self.append_tab(surface, node, tab)
+		self.append_tab(np.surface, np.node, tab)
 	}
 
 	fn init(world: &mut World) -> Result {
@@ -212,7 +210,7 @@ impl UiManager {
 
 	fn restore_or_init(&mut self, world: &mut World) -> Result {
 		let mut sys_state = SystemState::<ProjectSettings>::new(world);
-		let mut project_settings = sys_state.get_mut(world);
+		let mut project_settings = sys_state.get_mut(world)?;
 
 		let current_layout_name = project_settings.get(CurrentLayoutSetting).ok();
 
@@ -223,17 +221,17 @@ impl UiManager {
 				if let Ok(layout) = project_settings.get(SavedLayout(name)) {
 					DockState::restore(layout, &self.vtables, world)
 				} else {
-					self.default_dock_state(world)
+					self.default_dock_state(world)?
 				}
 			}
-			None => self.default_dock_state(world),
+			None => self.default_dock_state(world)?,
 		};
 
 		// resets any surfaces that have an active
 		// tab that does not not reopen on startup
 		for (_, leaf) in dock.iter_leaves_mut() {
 			if leaf.active_focused().is_none() {
-				leaf.set_active_tab(0);
+				leaf.set_active_tab(0)?;
 			}
 		}
 
@@ -244,33 +242,37 @@ impl UiManager {
 		Ok(())
 	}
 
-	fn ui(&mut self, world: &mut World) {
+	fn ui(&mut self, world: &mut World) -> Result<()> {
 		let Ok(ctx) = world
 			.query_filtered::<&mut EguiContext, EditorInternalFilter<With<EditorEguiContext>>>()
 			.single_mut(world)
 			.map(|mut ctx| ctx.get_mut().clone())
 		else {
-			error!("No egui context to render to");
-			return;
+			return Err(BevyError::error("No egui context to render to"));
 		};
 
-		let style = ctx.style();
+		let mut ui = egui::Ui::new(ctx.clone(), "BEDITOR_UI".into(), egui::UiBuilder::new());
 
-		let dock_style = egui_dock::Style::from_egui(&style);
+		let style = ui.style();
+
+		let dock_style = egui_dock::Style::from_egui(style);
 
 		egui::CentralPanel::default()
 			.frame(
-				egui::Frame::central_panel(&style)
+				egui::Frame::central_panel(style)
 					.inner_margin(0)
 					.fill(dock_style.tab.tab_body.bg_fill),
 			)
-			.show(&ctx, |ui| {
+			.show(&mut ui, |ui| -> Result {
 				// menu bar
-				world.resource_scope(|world, mut state: Mut<UiResourceState<menu_bar::Params>>| {
-					let params = state.get_mut(world);
-					menu_bar::render(ui, params);
-					state.apply(world);
-				});
+				world.resource_scope(
+					|world, mut state: Mut<UiResourceState<menu_bar::Params>>| -> Result {
+						let params = state.get_mut(world)?;
+						menu_bar::render(ui, params);
+						state.apply(world);
+						Ok(())
+					},
+				)?;
 
 				let mut tab_viewer = TabViewer {
 					vtables: &mut self.vtables,
@@ -283,7 +285,12 @@ impl UiManager {
 					.show_add_buttons(true)
 					.show_add_popup(true)
 					.show_inside(ui, &mut tab_viewer);
-			});
+
+				Ok(())
+			})
+			.inner?;
+
+		Ok(())
 	}
 
 	fn save_state(
@@ -294,38 +301,43 @@ impl UiManager {
 		self.state.decouple(self, q_uuids, q_missing)
 	}
 
-	pub(crate) fn switch_state(&mut self, new_state: DockState<TabState>, world: &mut World) {
+	pub(crate) fn switch_state(
+		&mut self,
+		new_state: DockState<TabState>,
+		world: &mut World,
+	) -> Result {
 		for (_, tab) in self.state.iter_all_tabs() {
-			(tab.vtable.despawn)(tab.entity, world);
+			(tab.vtable.despawn)(tab.entity, world)?;
 		}
 		self.state = new_state;
+		Ok(())
 	}
 
-	pub(crate) fn default_dock_state(&self, world: &mut World) -> DockState<TabState> {
-		let mut state = DockState::new(vec![TabState::new::<editor_view::EditorViewUi>(world)]);
+	pub(crate) fn default_dock_state(&self, world: &mut World) -> Result<DockState<TabState>> {
+		let mut state = DockState::new(vec![TabState::new::<editor_view::EditorViewUi>(world)?]);
 
 		let tree = state.main_surface_mut();
 
 		let root = NodeIndex::root();
 
 		let tabs = vec![
-			TabState::new::<hierarchy::HierarchyUi>(world),
-			TabState::new::<diagnostics::DiagnosticsUi>(world),
+			TabState::new::<hierarchy::HierarchyUi>(world)?,
+			TabState::new::<diagnostics::DiagnosticsUi>(world)?,
 		];
 		let [central_panel, _left_panel] = tree.split_left(root, 1.0 / 6.0, tabs);
 
-		let tabs = vec![TabState::new::<inspector::InspectorUi>(world)];
+		let tabs = vec![TabState::new::<inspector::InspectorUi>(world)?];
 		let [central_panel, _right_panel] = tree.split_right(central_panel, 4.0 / 5.0, tabs);
 
 		let tabs = vec![
-			TabState::new::<content::ContentUi>(world),
-			TabState::new::<components::ComponentsUi>(world),
-			TabState::new::<resources::ResourcesUi>(world),
-			TabState::new::<assets::AssetsUi>(world),
+			TabState::new::<content::ContentUi>(world)?,
+			TabState::new::<components::ComponentsUi>(world)?,
+			TabState::new::<resources::ResourcesUi>(world)?,
+			TabState::new::<assets::AssetsUi>(world)?,
 		];
 		tree.split_below(central_panel, 0.7, tabs);
 
-		state
+		Ok(state)
 	}
 
 	pub(crate) fn state(&self) -> &DockState<TabState> {
@@ -345,11 +357,11 @@ pub struct TabState {
 }
 
 impl TabState {
-	pub(crate) fn new<T: EditorUiWorld>(world: &mut World) -> Self {
-		Self {
-			entity: (T::VTABLE.spawn)(world),
+	pub(crate) fn new<T: EditorUiWorld>(world: &mut World) -> Result<Self> {
+		Ok(Self {
+			entity: (T::VTABLE.spawn)(world)?,
 			vtable: &T::VTABLE,
-		}
+		})
 	}
 
 	pub fn entity(&self) -> Entity {
@@ -410,10 +422,16 @@ impl LayoutInfo {
 pub struct LoadLayout(pub DockState<LayoutInfo>);
 
 impl Command for LoadLayout {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
 			let new_state = DockState::restore(self.0, &ui_manager.vtables, world);
-			ui_manager.switch_state(new_state, world);
+			world
+				.notify_on_error(
+					|world| ui_manager.switch_state(new_state, world),
+					|_, err| ("Failed to switch to layout", Some(err)),
+				)
+				.ok();
 		})
 	}
 }
@@ -428,13 +446,13 @@ pub(crate) struct VTable {
 	pub(crate) unique: bool,
 	pub(crate) popout: bool,
 	pub(crate) reopen_on_startup: bool,
-	pub(crate) spawn: fn(&mut World) -> Entity,
-	pub(crate) despawn: fn(Entity, &mut World),
-	pub(crate) title: fn(Entity, &mut World) -> egui::WidgetText,
-	pub(crate) render: fn(Entity, &mut egui::Ui, &mut World),
-	pub(crate) context_menu: fn(Entity, &mut egui::Ui, &mut World, SurfaceIndex, NodeIndex),
-	pub(crate) handle_tab_response: fn(Entity, &mut World, &egui::Response),
-	pub(crate) on_panel_changed: fn(Entity, &mut World),
+	pub(crate) spawn: fn(&mut World) -> Result<Entity>,
+	pub(crate) despawn: fn(Entity, &mut World) -> Result,
+	pub(crate) title: fn(Entity, &mut World) -> Result<egui::WidgetText>,
+	pub(crate) render: fn(Entity, &mut egui::Ui, &mut World) -> Result,
+	pub(crate) context_menu: fn(Entity, &mut egui::Ui, &mut World, SurfaceIndex, NodeIndex) -> Result,
+	pub(crate) handle_tab_response: fn(Entity, &mut World, &egui::Response) -> Result,
+	pub(crate) on_panel_changed: fn(Entity, &mut World) -> Result,
 	pub(crate) count: fn(&mut World) -> usize,
 }
 
@@ -463,7 +481,7 @@ impl VTable {
 		}
 	}
 
-	fn spawn<T: EditorUiWorld>(world: &mut World) -> Entity {
+	fn spawn<T: EditorUiWorld>(world: &mut World) -> Result<Entity> {
 		info!("Spawning UI component {}", T::NAME);
 		let entity = world
 			.spawn((
@@ -474,14 +492,15 @@ impl VTable {
 			))
 			.id();
 
-		let instance = T::spawn(entity, world);
-		world.entity_mut(entity).insert(instance).id()
+		let instance = T::spawn(entity, world)?;
+		Ok(world.entity_mut(entity).insert(instance).id())
 	}
 
-	fn despawn<T: EditorUiWorld>(entity: Entity, world: &mut World) {
+	fn despawn<T: EditorUiWorld>(entity: Entity, world: &mut World) -> Result {
 		info!("Despawning UI component {}", T::NAME);
-		<T as EditorUiWorld>::on_despawn(entity, world);
+		<T as EditorUiWorld>::on_despawn(entity, world)?;
 		world.trigger(RemoveUiEvent::new(entity));
+		Ok(())
 	}
 
 	fn count<T: EditorUiWorld>(world: &mut World) -> usize {
@@ -497,13 +516,19 @@ struct TabViewer<'a> {
 }
 
 impl TabViewer<'_> {
-	fn ui_state_mut(&self, entity: Entity, f: impl FnOnce(&mut UiState)) {
-		let mut world = self.world.borrow_mut();
+	fn ui_state_mut(world: &mut World, entity: Entity, f: impl FnOnce(&mut UiState)) {
 		let mut q_ids = world.query_filtered::<&mut UiState, EditorInternalFilter>();
-		let ui_info = q_ids.get_mut(&mut world, entity).ok();
+		let ui_info = q_ids.get_mut(world, entity).ok();
 		if let Some(mut ui_info) = ui_info {
 			f(&mut ui_info);
 		}
+	}
+
+	fn spawn_ui(world: &mut World, vtable: &VTable) -> Result<Entity, ()> {
+		world.notify_on_error(
+			|world| (vtable.spawn)(world),
+			|_, err| (format!("Failed to spawn UI {}", vtable.name,), Some(err)),
+		)
 	}
 }
 
@@ -511,21 +536,38 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 	type Tab = TabState;
 
 	fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-		(tab.vtable.title)(tab.entity, &mut self.world.borrow_mut())
+		(tab.vtable.title)(tab.entity, &mut self.world.borrow_mut()).unwrap_or_else(|err| {
+			let msg = format!("Failed to get title of {}", tab.vtable.name);
+			error!(err = err.to_string(), "{msg}");
+			egui::WidgetText::Text(msg)
+		})
 	}
 
 	#[profiling::function]
 	fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-		(tab.vtable.render)(tab.entity, ui, &mut self.world.borrow_mut());
+		let mut world = self.world.borrow_mut();
+		let Ok(_) = world.notify_on_error(
+			|world| (tab.vtable.render)(tab.entity, ui, world),
+			|_, err| {
+				(
+					format!("Failed to render ui {}", tab.vtable.name),
+					Some(err),
+				)
+			},
+		) else {
+			return;
+		};
 		if ui.ui_contains_pointer() {
-			self.ui_state_mut(tab.entity, |state| {
+			Self::ui_state_mut(&mut world, tab.entity, |state| {
 				state.mark_hovered();
 			});
 		}
 	}
 
 	#[profiling::function]
-	fn add_popup(&mut self, ui: &mut egui::Ui, surface: SurfaceIndex, node: NodeIndex) {
+	fn add_popup(&mut self, ui: &mut egui::Ui, path: egui_dock::NodePath) {
+		let egui_dock::NodePath { surface, node } = path;
+
 		ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
 
 		for vtable in self
@@ -542,7 +584,10 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
 				ui.add_enabled_ui(!exists, |ui| {
 					if ui.checkbox(&mut exists, vtable.name).clicked() {
-						let entity = (vtable.spawn)(&mut world);
+						let Ok(entity) = Self::spawn_ui(&mut world, vtable) else {
+							return;
+						};
+
 						world.write_message(AppendUiMessage::new(
 							surface,
 							node,
@@ -552,7 +597,9 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 				});
 			} else if ui.button(vtable.name).clicked() {
 				let mut world = self.world.borrow_mut();
-				let entity = (vtable.spawn)(&mut world);
+				let Ok(entity) = Self::spawn_ui(&mut world, vtable) else {
+					return;
+				};
 				world.write_message(AppendUiMessage::new(
 					surface,
 					node,
@@ -562,18 +609,29 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 		}
 	}
 
-	fn context_menu(
-		&mut self,
-		ui: &mut egui::Ui,
-		tab: &mut Self::Tab,
-		surface: SurfaceIndex,
-		node: NodeIndex,
-	) {
-		(tab.vtable.context_menu)(tab.entity, ui, &mut self.world.borrow_mut(), surface, node);
+	fn context_menu(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab, path: egui_dock::NodePath) {
+		let mut world = self.world.borrow_mut();
+		world
+			.notify_on_error(
+				|world| (tab.vtable.context_menu)(tab.entity, ui, world, path.surface, path.node),
+				|_, err| ("Failed to render context menu", Some(err)),
+			)
+			.ok();
 	}
 
 	fn on_tab_button(&mut self, tab: &mut Self::Tab, response: &egui::Response) {
-		(tab.vtable.handle_tab_response)(tab.entity, &mut self.world.borrow_mut(), response)
+		let mut world = self.world.borrow_mut();
+		world
+			.notify_on_error(
+				|world| (tab.vtable.handle_tab_response)(tab.entity, world, response),
+				|_, err| {
+					(
+						format!("Failed to open tab button menu for {}", tab.vtable.name),
+						Some(err),
+					)
+				},
+			)
+			.ok();
 	}
 
 	fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
@@ -581,7 +639,18 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 	}
 
 	fn on_close(&mut self, tab: &mut Self::Tab) -> egui_dock::tab_viewer::OnCloseResponse {
-		(tab.vtable.despawn)(tab.entity, &mut self.world.borrow_mut());
+		let mut world = self.world.borrow_mut();
+		world
+			.notify_on_error(
+				|world| (tab.vtable.despawn)(tab.entity, world),
+				|_, err| {
+					(
+						format!("Error when closing tab {}", tab.vtable.name),
+						Some(err),
+					)
+				},
+			)
+			.ok();
 		egui_dock::tab_viewer::OnCloseResponse::Close
 	}
 
@@ -602,7 +671,18 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 	}
 
 	fn on_rect_changed(&mut self, tab: &mut Self::Tab) {
-		(tab.vtable.on_panel_changed)(tab.entity, &mut self.world.borrow_mut());
+		let mut world = self.world.borrow_mut();
+		world
+			.notify_on_error(
+				|world| (tab.vtable.on_panel_changed)(tab.entity, world),
+				|_, err| {
+					(
+						format!("Error when detecting rect change for {}", tab.vtable.name),
+						Some(err),
+					)
+				},
+			)
+			.ok();
 	}
 }
 
@@ -676,23 +756,20 @@ fn handle_selected(
 		&& let Ok(mut entity_commands) = commands.get_entity(entity)
 	{
 		if gizmo_options.enabled() {
-			// TODO wait or fork transform gizmos to offset the viewport for proper mouse ray casting
-			// entity_commands.insert((TransformGizmoTarget, GizmoActive));
+			entity_commands.insert(TransformGizmoFocus);
 		}
 
 		if q_3d_meshes.contains(entity_commands.id()) {
-			entity_commands.queue(insert_bundle_from_world::<Highlight>());
+			entity_commands.queue_handled(insert_bundle_from_world::<Highlight>(), |err, ctx| {
+				error!(ctx = ctx.to_string(), "{err}");
+			});
 		}
 	}
 }
 
 fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 	if let Ok(mut entity) = commands.get_entity(event.event_target()) {
-		entity.queue_silenced(entity_command::remove::<(
-			TransformGizmoTarget,
-			GizmoActive,
-			Highlight,
-		)>());
+		entity.queue_silenced(entity_command::remove::<(TransformGizmoFocus, Highlight)>());
 	}
 }
 
@@ -712,7 +789,7 @@ impl KeyboardFocus {
 	) {
 		let none_focused = q_contexts
 			.iter_mut()
-			.all(|mut ctx| !ctx.get_mut().wants_keyboard_input());
+			.all(|mut ctx| !ctx.get_mut().egui_wants_keyboard_input());
 
 		if none_focused {
 			keyboard_focus.set(KeyboardFocus::Unfocused);
@@ -728,10 +805,10 @@ fn on_new_scene(event: On<Add, EditorScene>, mut commands: Commands) {
 
 fn on_new_ctx(
 	event: On<Add, EditorEguiContext>,
-	mut q_ctx: EditorInternalQuery<(&mut EguiContext, &mut bevy_egui::EguiContextSettings)>,
+	mut q_ctx: EditorInternalQuery<&mut EguiContext>,
 	mut settings: GlobalEditorSettings,
 ) {
-	let Ok((mut ctx, mut ctx_settings)) = q_ctx.get_mut(event.event_target()) else {
+	let Ok(mut ctx) = q_ctx.get_mut(event.event_target()) else {
 		return;
 	};
 
@@ -747,9 +824,9 @@ fn on_new_ctx(
 		});
 	}
 
-	ctx_settings.scale_factor = settings
-		.get(EditorUiScale)
-		.unwrap_or(ctx_settings.scale_factor);
+	if let Ok(zoom) = settings.get(EditorUiScale) {
+		ctx.set_zoom_factor(zoom);
+	}
 }
 
 fn reset_ui_state(mut q_ui_state: EditorInternalQuery<&mut UiState>) {
@@ -759,9 +836,12 @@ fn reset_ui_state(mut q_ui_state: EditorInternalQuery<&mut UiState>) {
 }
 
 fn editor_ui(world: &mut World) {
-	world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
-		ui_manager.ui(world);
-	});
+	world
+		.notify_on_error(
+			|world| world.resource_scope(|world, mut ui_manager: Mut<UiManager>| ui_manager.ui(world)),
+			|_, err| ("Failed to render ui", Some(err)),
+		)
+		.ok();
 }
 
 fn save_context_options(
@@ -774,10 +854,11 @@ fn save_context_options(
 }
 
 fn save_scale_factor(
-	ctx_settings: Single<&EguiContextSettings, With<EditorEguiContext>>,
+	mut ctx: Single<&mut EguiContext, With<EditorEguiContext>>,
 	mut settings: GlobalEditorSettings,
 ) {
-	settings.set(EditorUiScale, ctx_settings.scale_factor).ok();
+	let ctx = ctx.get_mut();
+	settings.set(EditorUiScale, ctx.zoom_factor()).ok();
 }
 
 fn save_layouts(

@@ -53,11 +53,11 @@ impl EditorUiWorld for InspectorUi {
 	const UNIQUE: bool = true;
 	const SCROLL_BARS: [bool; 2] = [true, true];
 
-	fn spawn(_entity: Entity, _world: &mut World) -> Self {
-		default()
+	fn spawn(_entity: Entity, _world: &mut World) -> Result<Self> {
+		Ok(default())
 	}
 
-	fn ui(_entity: Entity, ui: &mut egui::Ui, world: &mut World) {
+	fn ui(_entity: Entity, ui: &mut egui::Ui, world: &mut World) -> Result {
 		let app_type_registry = world.resource::<AppTypeRegistry>().clone();
 		let type_registry = app_type_registry.read();
 
@@ -116,6 +116,8 @@ impl EditorUiWorld for InspectorUi {
 				}
 			},
 		);
+
+		Ok(())
 	}
 }
 

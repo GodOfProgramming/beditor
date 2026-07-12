@@ -7,7 +7,7 @@ use crate::{
 	storage::{Global, GlobalEditorSettings, settings::CurrentThemeSetting},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
-use bevy_egui::{EguiContext, EguiContextSettings};
+use bevy_egui::EguiContext;
 use convert_case::{Case, Casing};
 use egui::Widget;
 use egui_phosphor_icons::icons;
@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 use strum::VariantArray;
 use strum_macros::{Display, VariantArray};
+use widgets::autocomplete::AutoCompleteTextEdit;
 
 #[derive(Default)]
 pub struct EditorSettingsUiExtension;
@@ -37,8 +38,6 @@ pub struct Params<'w, 's> {
 	commands: Commands<'w, 's>,
 	editor_settings: ResMut<'w, EditorSettings>,
 	global_settings: GlobalEditorSettings<'w, 's>,
-	context_settings:
-		EditorInternalSingle<'w, 's, &'static mut EguiContextSettings, With<EditorEguiContext>>,
 }
 
 #[derive(Message)]
@@ -131,7 +130,6 @@ impl AppearanceSettings {
 			mut commands,
 			mut editor_settings,
 			mut global_settings,
-			mut context_settings,
 		} = params;
 
 		let EditorSettings {
@@ -140,17 +138,16 @@ impl AppearanceSettings {
 		} = &mut *editor_settings;
 
 		ui.horizontal(|ui| {
-			ui.label(format!(
-				"Zoom ({zoom:.2}x)",
-				zoom = context_settings.scale_factor
-			));
+			let zoom = ui.zoom_factor();
+
+			ui.label(format!("Zoom ({zoom:.2}x)"));
 
 			if ui.add(egui::Button::new(icons::MINUS)).clicked() {
-				context_settings.scale_factor -= 0.25;
+				ui.set_zoom_factor(zoom - 0.25);
 			}
 
 			if ui.add(egui::Button::new(icons::PLUS)).clicked() {
-				context_settings.scale_factor += 0.25;
+				ui.set_zoom_factor(zoom + 0.25);
 			}
 		});
 
@@ -159,12 +156,9 @@ impl AppearanceSettings {
 		ctx.settings_ui(ui);
 
 		ui.vertical(|ui| {
-			egui_autocomplete::AutoCompleteTextEdit::new(
-				&mut this.current_theme,
-				this.loaded_themes.keys(),
-			)
-			.popup_on_focus(true)
-			.ui(ui);
+			AutoCompleteTextEdit::new(&mut this.current_theme, this.loaded_themes.keys())
+				.popup_on_focus(true)
+				.ui(ui);
 
 			ui.horizontal(|ui| {
 				if ui.button("Change Theme").clicked()

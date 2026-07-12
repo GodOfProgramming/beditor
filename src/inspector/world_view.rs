@@ -2,6 +2,7 @@ use crate::inspector::errors::Error;
 use bevy::{
 	ecs::{
 		change_detection::MutUntyped,
+		component::Mutable,
 		world::unsafe_world_cell::{GetEntityMutByIdError, UnsafeWorldCell},
 	},
 	prelude::*,
@@ -245,7 +246,10 @@ impl RestrictedWorldView<MutableWorldView<'_>> {
 	}
 
 	/// Gets mutable reference to two resources. Panics if `R1 = R2`.
-	pub fn two_resources_mut<R1: Resource, R2: Resource>(
+	pub fn two_resources_mut<
+		R1: Resource<Mutability = Mutable>,
+		R2: Resource<Mutability = Mutable>,
+	>(
 		&mut self,
 	) -> (Result<Mut<'_, R1>, Error>, Result<Mut<'_, R2>, Error>) {
 		assert_ne!(TypeId::of::<R1>(), TypeId::of::<R2>());
@@ -258,7 +262,7 @@ impl RestrictedWorldView<MutableWorldView<'_>> {
 	}
 
 	/// Gets a mutable reference to the resource of the given type
-	pub fn resource_mut<R: Resource>(&mut self) -> Result<Mut<'_, R>, Error> {
+	pub fn resource_mut<R: Resource<Mutability = Mutable>>(&mut self) -> Result<Mut<'_, R>, Error> {
 		// SAFETY: &mut self
 		unsafe { self.resource_unchecked_mut() }
 	}
@@ -281,7 +285,7 @@ impl RestrictedWorldView<MutableWorldView<'_>> {
 			.world_view
 			.world
 			.components()
-			.get_resource_id(type_id)
+			.get_id(type_id)
 			.ok_or(Error::ResourceDoesNotExist)?;
 
 		// SAFETY: we have access to `type_id` and borrow `&mut self`
@@ -384,7 +388,9 @@ impl RestrictedWorldView<MutableWorldView<'_>> {
 	/// # Safety
 	/// This method does validate that we have access to `R`, but takes `&self`
 	/// and as such doesn't check unique access.
-	unsafe fn resource_unchecked_mut<R: Resource>(&self) -> Result<Mut<'_, R>, Error> {
+	unsafe fn resource_unchecked_mut<R: Resource<Mutability = Mutable>>(
+		&self,
+	) -> Result<Mut<'_, R>, Error> {
 		let type_id = TypeId::of::<R>();
 		if !self.allows_access_to_resource(type_id) {
 			return Err(Error::NoAccessToResource);
@@ -403,7 +409,9 @@ impl RestrictedWorldView<MutableWorldView<'_>> {
 
 impl<'w> RestrictedWorldView<MutableWorldView<'w>> {
 	/// Like [`RestrictedWorldView::split_off_resource`], but takes `self` and returns `'w` lifetimes.
-	pub fn split_off_resource_typed<R: Resource>(self) -> Option<(Mut<'w, R>, Self)> {
+	pub fn split_off_resource_typed<R: Resource<Mutability = Mutable>>(
+		self,
+	) -> Option<(Mut<'w, R>, Self)> {
 		let type_id = TypeId::of::<R>();
 
 		if !self.allows_access_to_resource(type_id) {

@@ -8,7 +8,6 @@ use crate::{
 	storage::{ProjectSettings, settings::Setting},
 };
 use bevy::{input::mouse::MouseMotion, prelude::*, window::CursorOptions};
-use bevy_transform_tools::TransformGizmoCamera;
 use derive_new::new;
 use leafwing_input_manager::prelude::*;
 use notify::Notification;
@@ -42,20 +41,15 @@ impl Plugin for EditorCam3dPlugin {
 						movement_system.in_set(CameraInputSystems::Keyboard),
 					)
 						.chain(),
-					render_3d_cameras.run_if(should_show_cameras.and(any_with_component::<EditorCamera3d>)),
+					render_3d_cameras
+						.run_if(should_show_cameras.and_then(any_with_component::<EditorCamera3d>)),
 				),
 			);
 	}
 }
 
 #[derive(Component, Default)]
-#[require(
-	Camera3d,
-	EditorCamera,
-	UserHidden,
-	CameraSettings,
-	TransformGizmoCamera = TransformGizmoCamera
-)]
+#[require(Camera3d, EditorCamera, UserHidden, CameraSettings)]
 struct EditorCamera3d;
 
 #[derive(Actionlike, PartialEq, Eq, Hash, Clone, Copy, Debug, Reflect)]
@@ -101,6 +95,7 @@ impl LookAt {
 }
 
 impl Command for LookAt {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		world.trigger(self);
 	}

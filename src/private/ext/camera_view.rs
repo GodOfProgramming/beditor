@@ -124,7 +124,7 @@ impl EditorUi for CameraViewUi {
 				return;
 			}
 
-			let Some(image) = images.get_mut(handle.id()) else {
+			let Some(mut image) = images.get_mut(handle.id()) else {
 				ui.label("No image (mut)");
 				return;
 			};
@@ -159,7 +159,7 @@ impl EditorUi for CameraViewUi {
 		ui.menu_button("Aspect Ratio Overrides", |ui| {
 			if ui.button("480p").clicked()
 				&& let Some(image_handle) = target.as_image()
-				&& let Some(image) = images.get_mut(image_handle.id())
+				&& let Some(mut image) = images.get_mut(image_handle.id())
 			{
 				managed_camera.ignore_viewport_size();
 				image.resize(Extent3d {

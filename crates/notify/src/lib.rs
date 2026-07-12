@@ -48,13 +48,19 @@ impl Notification {
 		}
 	}
 
-	pub fn with_context(mut self, ctx: impl ToString + Send + Sync + 'static) -> Self {
+	pub fn add_context(&mut self, ctx: impl ToString + Send + Sync + 'static) -> &mut Self {
 		self.ctx = Some(Box::new(ctx));
+		self
+	}
+
+	pub fn with_context(mut self, ctx: impl ToString + Send + Sync + 'static) -> Self {
+		self.add_context(ctx);
 		self
 	}
 }
 
 impl Command for Notification {
+	type Out = ();
 	fn apply(self, world: &mut World) {
 		world.trigger(self);
 	}
@@ -119,7 +125,13 @@ fn show_toasts<Q: QueryFilter>(
 ) {
 	let ctx = context.get_mut();
 
-	toasts.show(ctx);
+	let mut ui = egui::Ui::new(
+		ctx.clone(),
+		"BEDITOR_NOTIFICATIONS".into(),
+		egui::UiBuilder::new(),
+	);
+
+	toasts.show(&mut ui);
 }
 
 fn on_notification(event: On<Notification>, toasts: Option<ResMut<Toasts>>) {

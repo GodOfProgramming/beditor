@@ -39,7 +39,8 @@ impl Plugin for EditorCam2dPlugin {
 						movement_system.in_set(CameraInputSystems::Keyboard),
 					)
 						.chain(),
-					render_2d_cameras.run_if(should_show_cameras.and(any_with_component::<EditorCamera2d>)),
+					render_2d_cameras
+						.run_if(should_show_cameras.and_then(any_with_component::<EditorCamera2d>)),
 				),
 			);
 	}

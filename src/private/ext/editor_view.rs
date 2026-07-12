@@ -8,14 +8,14 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, UserHidden,
 		cam::EditorCamera,
-		scene::EditorSceneRoot,
+		scene::GameScene,
 		ui::{EditorEguiContext, misc::UiState},
 		util::WorldExtensions as _,
 	},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContext;
-use bevy_transform_tools::{AxisSnap, TransformGizmoMode, TransformGizmoSnap, TransformGizmoState};
+// use bevy_transform_tools::{AxisSnap, TransformGizmoMode, TransformGizmoSnap, TransformGizmoState};
 use egui_phosphor_icons::icons;
 use singleton::{SingletonBehavior, SingletonPlugin};
 use uuid::uuid;
@@ -70,8 +70,7 @@ pub struct Params<'w, 's> {
 	camera_view_params: camera_view::Params<'w, 's>,
 	camera_view: Local<'s, CameraViewUi>,
 	gizmo_options: ResMut<'w, GizmoOptions>,
-	snap: ResMut<'w, TransformGizmoSnap>,
-	state: ResMut<'w, TransformGizmoState>,
+	settings: ResMut<'w, TransformGizmoSettings>,
 
 	temporary_dnd_entity: Option<
 		EditorInternalSingle<'w, 's, (Entity, Option<&'static Transform>), With<TemporaryEntity>>,
@@ -107,8 +106,7 @@ impl EditorUi for EditorViewUi {
 			temporary_dnd_entity,
 			editor_camera,
 			mut gizmo_options,
-			mut snap,
-			mut state,
+			settings: mut snap,
 		} = params;
 
 		let Some(editor_camera) = editor_camera else {
@@ -137,7 +135,7 @@ impl EditorUi for EditorViewUi {
 						overlay2d();
 					}
 					(false, true) => {
-						overlay3d(ui, &mut gizmo_options, &mut snap, &mut state);
+						overlay3d(ui, &mut gizmo_options, &mut snap);
 					}
 					(false, false) => {
 						ui.label("No camera kind");
@@ -170,8 +168,7 @@ impl EditorUi for EditorViewUi {
 			payload.insert(std::iter::once(new_entity), world);
 
 			'make_child: {
-				let mut query =
-					world.query_filtered::<Entity, EditorInternalFilter<With<EditorSceneRoot>>>();
+				let mut query = world.query_filtered::<Entity, EditorInternalFilter<With<GameScene>>>();
 				let Ok(root_entity) = query.query_mut(world).single() else {
 					break 'make_child;
 				};
@@ -271,8 +268,7 @@ fn overlay2d() {}
 fn overlay3d(
 	ui: &mut egui::Ui,
 	gizmo_options: &mut GizmoOptions,
-	snap: &mut TransformGizmoSnap,
-	state: &mut TransformGizmoState,
+	settings: &mut TransformGizmoSettings,
 ) {
 	let style = ui.style_mut();
 	style.spacing.window_margin = egui::Margin::same(6);
@@ -285,9 +281,9 @@ fn overlay3d(
 		{
 			gizmo_options.snap ^= true;
 			if !gizmo_options.snap {
-				snap.translate = AxisSnap::none();
-				snap.rotate = AxisSnap::none();
-				snap.scale = AxisSnap::none();
+				settings.snap_translate = None;
+				settings.snap_rotate = None;
+				settings.snap_scale = None;
 			}
 		}
 
@@ -296,18 +292,18 @@ fn overlay3d(
 				ui.style_mut().spacing.item_spacing.x = 0.0;
 				ui.add_enabled(false, egui::Button::selectable(false, icons::GRID_NINE));
 
-				let mut snap_val = snap.translate.x.unwrap_or_default();
+				let mut snap_val = settings.snap_translate.unwrap_or_default();
 				ui.add(egui::DragValue::new(&mut snap_val));
-				snap.translate = AxisSnap::uniform(snap_val);
+				settings.snap_translate = Some(snap_val);
 			});
 
 			ui.scope(|ui| {
 				ui.style_mut().spacing.item_spacing.x = 0.0;
 				ui.add_enabled(false, egui::Button::selectable(false, icons::ANGLE));
 
-				let mut snap_val = snap.rotate.x.unwrap_or_default();
+				let mut snap_val = settings.snap_rotate.unwrap_or_default();
 				ui.drag_angle(&mut snap_val);
-				snap.rotate = AxisSnap::uniform(snap_val);
+				settings.snap_rotate = Some(snap_val);
 			});
 
 			ui.scope(|ui| {
@@ -317,9 +313,9 @@ fn overlay3d(
 					egui::Button::selectable(false, icons::ARROWS_OUT_SIMPLE),
 				);
 
-				let mut snap_val = snap.scale.x.unwrap_or_default();
+				let mut snap_val = settings.snap_scale.unwrap_or_default();
 				ui.add(egui::DragValue::new(&mut snap_val));
-				snap.scale = AxisSnap::uniform(snap_val);
+				settings.snap_scale = Some(snap_val);
 			});
 		}
 
@@ -339,10 +335,10 @@ fn overlay3d(
 				gizmo_options.disabled = false;
 
 				if ui
-					.selectable_label(!gizmo_options.disabled && state.mode == mode, icon)
+					.selectable_label(!gizmo_options.disabled && settings.mode == mode, icon)
 					.clicked()
 				{
-					state.mode = mode;
+					settings.mode = mode;
 				}
 			}
 		});

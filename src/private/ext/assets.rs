@@ -59,7 +59,7 @@ impl EditorUi for AssetsUi {
 			})
 			.collect::<Vec<_>>();
 
-		assets.sort_by(|(name_a, ..), (name_b, ..)| name_a.cmp(name_b));
+		assets.sort_by_key(|a| a.0);
 
 		let mut selection = None;
 		let current_selection = world.resource::<InspectorSelection>();

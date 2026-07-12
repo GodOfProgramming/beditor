@@ -1,5 +1,9 @@
 use beditor::prelude::*;
 use bevy::{color::palettes::css::PURPLE, prelude::*};
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
 	App::new()

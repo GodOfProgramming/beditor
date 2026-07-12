@@ -8,6 +8,52 @@ use syn::{
 };
 
 #[proc_macro_error]
+#[proc_macro_derive(EditorAsset, attributes(ns))]
+pub fn editor_asset(input: TokenStream) -> TokenStream {
+	let input = parse_macro_input!(input as DeriveInput);
+	let name = input.ident;
+
+	let ns_value = input.attrs.iter().find_map(|attr| {
+		if attr.path().is_ident("ns") {
+			match attr.parse_args::<Lit>() {
+				Ok(value) => {
+					if let Lit::Str(s) = value {
+						Some(s)
+					} else {
+						None
+					}
+				}
+				Err(err) => {
+					abort!(name, format!("{err}"));
+				}
+			}
+		} else {
+			None
+		}
+	});
+
+	let tt_macro = if let Some(ns) = ns_value {
+		quote! { #[typetag::serde(name = #ns)] }
+	} else {
+		quote! { #[typetag::serde] }
+	};
+
+	let crate_name =
+		crate_name("beditor").expect("beditor should be present for this macro to be used");
+	let span = Span::call_site();
+	let beditor = match crate_name {
+		FoundCrate::Itself => Ident::new("crate", span),
+		FoundCrate::Name(name) => Ident::new(&name, span),
+	};
+
+	quote! {
+		#tt_macro
+		impl #beditor::ContentDef for #name { }
+	}
+	.into()
+}
+
+#[proc_macro_error]
 #[proc_macro_derive(Identifiable, attributes(id))]
 pub fn identifiable(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);

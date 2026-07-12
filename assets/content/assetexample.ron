@@ -1,0 +1,4 @@
+(
+  ns: "editor",
+  data: Audio(source: "tmp/omg.ogg")
+)

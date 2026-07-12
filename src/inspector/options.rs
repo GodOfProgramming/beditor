@@ -1,7 +1,9 @@
 use bevy::{
 	platform::collections::HashMap,
 	prelude::*,
-	reflect::{self, FromType, GetTypeRegistration, TypeData, TypeInfo, TypeRegistry, VariantInfo},
+	reflect::{
+		self, FromType, GetTypeRegistration, TypeData, TypeInfo, TypeRegistry, enums::VariantInfo,
+	},
 };
 use std::{any::Any, collections::VecDeque, fmt::Debug};
 
@@ -79,7 +81,7 @@ pub enum Target {
 	},
 }
 
-pub fn insert_options_struct<T: 'static + GetTypeRegistration + reflect::Struct>(
+pub fn insert_options_struct<T: 'static + GetTypeRegistration + reflect::structs::Struct>(
 	type_registry: &mut TypeRegistry,
 	fields: &[(&'static str, &dyn TypeData)],
 ) {
@@ -110,7 +112,7 @@ pub fn insert_options_struct<T: 'static + GetTypeRegistration + reflect::Struct>
 	}
 }
 
-pub fn insert_options_enum<T: 'static + GetTypeRegistration + reflect::Enum>(
+pub fn insert_options_enum<T: 'static + GetTypeRegistration + reflect::enums::Enum>(
 	type_registry: &mut TypeRegistry,
 	fields: &[((&'static str, &'static str), &dyn TypeData)],
 ) {

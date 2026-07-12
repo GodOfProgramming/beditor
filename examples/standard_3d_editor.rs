@@ -1,13 +1,14 @@
-use beditor::{brefabs::StaticPrefab, prelude::*};
-use bevy::{ecs::system::SystemParam, prelude::*};
-use brefabs::PrefabPlugin;
+use beditor::prelude::*;
+use bevy::prelude::*;
+use mimalloc::MiMalloc;
+use serde::{Deserialize, Serialize};
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
 	App::new()
-		.add_plugins((
-			EditorPlugin::new().register_game_camera::<GameCamera>(),
-			PrefabPlugin::default().with_static_prefab::<Cube>(),
-		))
+		.add_plugins(EditorPlugin::new().register_game_camera::<GameCamera>())
 		.add_systems(Startup, startup)
 		.run();
 }
@@ -36,7 +37,7 @@ fn startup(
 	commands.spawn((
 		Name::new("Light"),
 		PointLight {
-			shadows_enabled: true,
+			shadow_maps_enabled: true,
 			..default()
 		},
 		Transform::from_xyz(4.0, 8.0, 4.0),
@@ -49,52 +50,34 @@ fn startup(
 	));
 }
 
-#[derive(Bundle, Reflect)]
-struct Cube {
-	mesh: Mesh3d,
-	material: MeshMaterial3d<StandardMaterial>,
-	transform: Transform,
+#[derive(Reflect, Serialize, Deserialize, EditorAsset)]
+#[ns("example")]
+enum ExampleContent {
+	Cube {
+		mesh: AssetRef,
+		material: AssetRef,
+		name: String,
+	},
 }
 
-struct Spiral {
-	theta: f32,
-	r: f32,
-	h: f32,
-}
+impl ContentHandlers for ExampleContent {
+	fn insert(&self, entity: Entity, world: &mut World) {
+		match self {
+			ExampleContent::Cube {
+				mesh,
+				material,
+				name,
+			} => {
+				let mesh = mesh.get_handle::<Mesh>(world);
+				let material = material.get_handle::<StandardMaterial>(world);
 
-impl Default for Spiral {
-	fn default() -> Self {
-		Self {
-			theta: 0.0,
-			r: 2.0,
-			h: 0.0,
-		}
-	}
-}
-
-#[derive(SystemParam)]
-struct CubeParams<'w, 's> {
-	meshes: ResMut<'w, Assets<Mesh>>,
-	materials: ResMut<'w, Assets<StandardMaterial>>,
-	spiral: Local<'s, Spiral>,
-}
-
-impl StaticPrefab for Cube {
-	type Params<'w, 's> = CubeParams<'w, 's>;
-
-	fn spawn(_entity: Entity, _name: Option<Name>, mut params: Self::Params<'_, '_>) -> Self {
-		let offset = Vec2::new(
-			params.spiral.r * params.spiral.theta.cos(),
-			params.spiral.r * params.spiral.theta.sin(),
-		);
-
-		params.spiral.theta += 30.0f32.to_radians();
-		params.spiral.h += 0.5;
-
-		Self {
-			mesh: Mesh3d(params.meshes.add(Cuboid::new(1.0, 1.0, 1.0))),
-			material: MeshMaterial3d(params.materials.add(Color::srgb_u8(124, 144, 255))),
-			transform: Transform::from_xyz(offset.x, params.spiral.h, offset.y),
+				world.entity_mut(entity).insert((
+					Name::new(name.clone()),
+					Transform::IDENTITY,
+					Mesh3d(mesh),
+					MeshMaterial3d(material),
+				));
+			}
 		}
 	}
 }

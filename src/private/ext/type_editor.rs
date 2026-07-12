@@ -1,0 +1,463 @@
+use crate::{
+	EditorExtension, EditorUiWorld,
+	inspector::WorldExtensions as _,
+	private::{
+		EditorInternal, EditorInternalQuery, EditorInternalSingle,
+		reflection::ReflectDefaultCache,
+		ui::{
+			EditorEguiContext, EditorUiEguiContextPass, TabState, UiManager, misc::CenteredFileDialog,
+		},
+		util::WorldExtensions as _,
+	},
+	reg::serde::SerdeRegistry,
+};
+use bevy::{prelude::*, reflect::TypeInfo};
+use bevy_egui::EguiContext;
+use derive_new::new;
+use egui_file_dialog::DialogState;
+use parking_lot::Mutex;
+use std::{cell::RefCell, io::Write, path::PathBuf, sync::Arc};
+use uuid::{Uuid, uuid};
+use widgets::SingleSelect;
+
+#[derive(Default)]
+pub struct TypeEditorUiExtension;
+
+impl EditorExtension for TypeEditorUiExtension {
+	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
+		ctx.register_ui::<TypeEditorUi>();
+	}
+
+	fn build_app(&self, app: &mut App) {
+		app
+			.add_observer(on_editor_state_insert)
+			.add_message::<SaveFileMessage>()
+			.add_message::<OpenFileMessage>()
+			.add_systems(
+				FixedUpdate,
+				(SaveFileMessage::handle, OpenFileMessage::handle),
+			)
+			.add_systems(EditorUiEguiContextPass, show_dialogs);
+	}
+}
+
+#[derive(Bundle, Reflect, Default)]
+pub struct TypeEditorUi {
+	#[reflect(ignore)]
+	state: TypeEditorState,
+	marker: TypeEditorMarker,
+}
+
+#[derive(Component, Reflect, Default)]
+#[require(EditorInternal)]
+pub struct TypeEditorMarker;
+
+impl EditorUiWorld for TypeEditorUi {
+	type MarkerComponent = TypeEditorMarker;
+
+	const NAME: &str = stringify!(TypeEditor);
+
+	const ID: Uuid = uuid!("2b01d041-d8b3-4cbe-8ca7-f6ae8e8ef7dd");
+
+	const REOPEN_ON_STARTUP: bool = false;
+
+	fn spawn(_entity: Entity, _world: &mut World) -> Result<Self> {
+		Ok(default())
+	}
+
+	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) -> Result {
+		let mut entity_mut = world.entity_mut(entity);
+		let Some(mut state) = entity_mut.get_mut::<TypeEditorState>() else {
+			return Err(BevyError::error("Failed to get TypeEditorState"));
+		};
+
+		let can_open_file_dialog = matches!(
+			state.file_dialog.state(),
+			DialogState::Closed | DialogState::Cancelled
+		);
+
+		let Some(arc) = state.value.as_ref().map(Arc::clone) else {
+			if can_open_file_dialog {
+				if ui.button("Open File").clicked() {
+					state.file_dialog.pick_file();
+				}
+
+				if ui.button("Select...").clicked() {
+					state.type_selection_dialog.open = true;
+				}
+			}
+
+			ui.separator();
+
+			return Ok(());
+		};
+
+		let m = arc.lock();
+		let mut value = m.borrow_mut();
+
+		let label = value.reflect_type_info().type_path();
+
+		let mut message = None;
+
+		ui.horizontal(|ui| {
+			ui.heading(label);
+
+			if can_open_file_dialog {
+				ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+					if ui.button("Save As").clicked() {
+						state.file_dialog.save_file();
+					}
+
+					if let Some(opened_file) = &state.opened_file
+						&& ui.button("Save").clicked()
+					{
+						message = Some(SaveFileMessage {
+							entity,
+							file: opened_file.clone(),
+						});
+					}
+				});
+			}
+		});
+
+		ui.separator();
+
+		world.ui_for_value_mut(ui, &mut **value);
+
+		if let Some(msg) = message {
+			world.write_message(msg);
+		}
+
+		Ok(())
+	}
+}
+
+#[derive(Clone)]
+struct CachedType {
+	display: String,
+	type_info: &'static TypeInfo,
+}
+
+impl CachedType {
+	fn new(type_info: &'static TypeInfo) -> Self {
+		Self {
+			display: format!(
+				"{} ({})",
+				type_info.type_path_table().short_path(),
+				type_info.type_path()
+			),
+			type_info,
+		}
+	}
+}
+
+impl PartialEq for CachedType {
+	fn eq(&self, other: &Self) -> bool {
+		self.type_info.type_id() == other.type_info.type_id()
+	}
+}
+
+impl Eq for CachedType {}
+
+impl From<CachedType> for egui::WidgetText {
+	fn from(value: CachedType) -> Self {
+		egui::WidgetText::Text(value.display.clone())
+	}
+}
+
+impl From<&CachedType> for egui::WidgetText {
+	fn from(value: &CachedType) -> Self {
+		egui::WidgetText::Text(value.display.clone())
+	}
+}
+
+#[derive(Component)]
+#[require(EditorInternal)]
+struct TypeEditorState {
+	opened_file: Option<PathBuf>,
+
+	value: Option<Arc<Mutex<RefCell<Box<dyn Reflect>>>>>,
+
+	file_dialog: CenteredFileDialog,
+
+	type_list: widgets::SelectableList<SingleSelect<CachedType>>,
+	type_filter: String,
+	type_list_cache: Vec<CachedType>,
+
+	type_selection_dialog: widgets::Dialog,
+}
+
+impl Default for TypeEditorState {
+	fn default() -> Self {
+		Self {
+			opened_file: None,
+			value: None,
+			file_dialog: CenteredFileDialog::default(),
+			type_list: default(),
+			type_filter: default(),
+			type_list_cache: default(),
+			type_selection_dialog: widgets::Dialog::new(
+				egui::Id::new("type_editor_dialog"),
+				"Select a type",
+			),
+		}
+	}
+}
+
+impl TypeEditorState {
+	fn new(value: Box<dyn Reflect>) -> Self {
+		Self::default().with_value(value)
+	}
+
+	fn with_value(mut self, value: Box<dyn Reflect>) -> Self {
+		self.set_value(value);
+		self
+	}
+
+	fn set_value(&mut self, value: Box<dyn Reflect>) {
+		self.value = Some(Arc::new(Mutex::new(RefCell::new(value))));
+	}
+}
+
+#[derive(new)]
+pub struct OpenTypeEditor(Box<dyn Reflect>);
+
+impl Command for OpenTypeEditor {
+	type Out = ();
+	fn apply(self, world: &mut World) {
+		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
+			let Ok(tab) = world.notify_on_error(TabState::new::<TypeEditorUi>, |_, err| {
+				("Failed to open type editor", Some(err))
+			}) else {
+				return;
+			};
+			world
+				.entity_mut(tab.entity())
+				.insert(TypeEditorState::new(self.0));
+			ui_manager.add_tab_to_focused(tab);
+		});
+	}
+}
+
+fn on_editor_state_insert(
+	event: On<Add, TypeEditorState>,
+	mut q_states: EditorInternalQuery<&mut TypeEditorState>,
+	cache: Res<ReflectDefaultCache>,
+) {
+	let Ok(mut state) = q_states.get_mut(event.event_target()) else {
+		return;
+	};
+
+	state.type_list_cache = cache
+		.iter()
+		.map(|type_info| CachedType::new(type_info))
+		.collect();
+}
+
+// for future me, moving this to ui() is not worth it
+fn show_dialogs(
+	mut commands: Commands,
+	mut q_states: EditorInternalQuery<(Entity, &mut TypeEditorState)>,
+	mut context: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
+	cache: Res<ReflectDefaultCache>,
+	app_type_registry: Res<AppTypeRegistry>,
+) {
+	let ctx = context.get_mut();
+
+	for (entity, mut state) in &mut q_states {
+		let TypeEditorState {
+			ref mut file_dialog,
+			ref mut type_list,
+			ref mut type_filter,
+			ref mut type_list_cache,
+			ref mut type_selection_dialog,
+			..
+		} = *state;
+
+		file_dialog.update(ctx);
+		if let Some(file) = file_dialog.take_picked() {
+			match file_dialog.mode() {
+				egui_file_dialog::DialogMode::PickFile => {
+					commands.write_message(OpenFileMessage::new(entity, file.to_path_buf()));
+				}
+				egui_file_dialog::DialogMode::SaveFile => {
+					commands.write_message(SaveFileMessage::new(entity, file.to_path_buf()));
+				}
+				_ => (),
+			}
+		}
+
+		let response = type_selection_dialog.show(ctx, |ui, open| {
+			if ui.text_edit_singleline(type_filter).changed() || cache.is_changed() {
+				let filter = type_filter.to_lowercase();
+
+				*type_list_cache = cache
+					.iter()
+					.filter_map(|type_info| {
+						let full_path = type_info.type_path();
+						full_path
+							.contains(&filter)
+							.then(|| CachedType::new(type_info))
+					})
+					.collect();
+			}
+
+			let mut output = None;
+
+			ui.scope_builder(
+				egui::UiBuilder::new().max_rect(ui.clip_rect() / 2.0),
+				|ui| {
+					if let Some(inner_response) = type_list.ui(ui, type_list_cache) {
+						let Some(type_info) = type_list.selected().as_ref().and_then(|selected| {
+							cache
+								.iter()
+								.find(|t| selected.type_info.type_id() == t.type_id())
+						}) else {
+							warn!("Logic error indexing default cache");
+							return;
+						};
+
+						let type_registry = app_type_registry.read();
+
+						let Some(type_registration) = type_registry.get(type_info.type_id()) else {
+							warn!("Logic error indexing a type id that previously existed");
+							return;
+						};
+
+						let Some(reflect_default) = type_registration.data::<ReflectDefault>() else {
+							warn!("Logic error accessing reflect default for a type that had reflect default");
+							return;
+						};
+
+						if inner_response.response.clicked() {
+							*open = false;
+						}
+
+						output = Some(reflect_default.default());
+					}
+				},
+			);
+
+			ui.separator();
+
+			if ui.button("Close").clicked() {
+				*open = false;
+			}
+
+			output
+		});
+
+		// this might be the dumbest thing I ever wrote
+		if let Some(response) = response
+			&& let Some(value) = response.inner
+		{
+			state.set_value(value);
+		}
+	}
+}
+
+#[derive(new, Message)]
+struct OpenFileMessage {
+	entity: Entity,
+	file: PathBuf,
+}
+
+impl OpenFileMessage {
+	fn handle(
+		mut messages: MessageReader<Self>,
+		mut q_states: EditorInternalQuery<&mut TypeEditorState>,
+		loaders: Res<SerdeRegistry>,
+		app_type_registry: Res<AppTypeRegistry>,
+	) -> Result {
+		for msg in messages.read() {
+			let Some(de) = loaders.deserializer_for(&msg.file) else {
+				warn!(
+					path = msg.file.display().to_string(),
+					"No deserializer registered for file type"
+				);
+				continue;
+			};
+
+			let Ok(mut state) = q_states.get_mut(msg.entity) else {
+				warn!(
+					entity = msg.entity.to_string(),
+					"Failed to get type editor state for entity"
+				);
+
+				continue;
+			};
+
+			let type_registry = app_type_registry.read();
+
+			let bytes = std::fs::read(&msg.file)?;
+
+			let value = (de)(&bytes, &type_registry)?;
+
+			state.opened_file = Some(msg.file.clone());
+
+			state.set_value(value);
+		}
+
+		Ok(())
+	}
+}
+
+#[derive(new, Message)]
+struct SaveFileMessage {
+	entity: Entity,
+	file: PathBuf,
+}
+
+impl SaveFileMessage {
+	fn handle(
+		mut messages: MessageReader<Self>,
+		mut q_states: EditorInternalQuery<&mut TypeEditorState>,
+		registry: Res<SerdeRegistry>,
+		app_type_registry: Res<AppTypeRegistry>,
+	) -> Result {
+		for msg in messages.read() {
+			let Some(ser) = registry.serializer_for(&msg.file) else {
+				warn!(
+					path = msg.file.display().to_string(),
+					"No loader registered for file type"
+				);
+				continue;
+			};
+
+			let Ok(mut state) = q_states.get_mut(msg.entity) else {
+				warn!(
+					entity = msg.entity.to_string(),
+					"Failed to get type editor state for entity"
+				);
+
+				continue;
+			};
+
+			state.opened_file = Some(msg.file.clone());
+
+			let Some(value) = &state.value else {
+				warn!("Tried to save None value");
+				continue;
+			};
+
+			let type_registry = app_type_registry.read();
+
+			let value = value.lock();
+			let value = value.borrow();
+			let value = &**value;
+
+			let bytes = (ser)(value, &type_registry)?;
+			let path = msg.file.clone();
+
+			let mut file = std::fs::OpenOptions::new()
+				.write(true)
+				.create(true)
+				.truncate(true)
+				.open(path)?;
+
+			file.write_all(&bytes)?;
+		}
+
+		Ok(())
+	}
+}

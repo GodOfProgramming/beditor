@@ -1,0 +1,21 @@
+[config]
+skip_core_tasks = true
+skip_crate_env_info = true
+skip_git_env_info = true
+skip_rust_env_info = true
+
+[tasks.run-dev]
+command = "cargo"
+args = ["run", "--features", "editor-dev"]
+
+[tasks.run-dev-example]
+command = "cargo"
+args = ["run", "--features", "editor-dev", "--example", "${@}"]
+
+[tasks.run-user]
+command = "cargo"
+args = ["run"]
+
+[tasks.run-user-example]
+command = "cargo"
+args = ["run", "--example", "${@}"]

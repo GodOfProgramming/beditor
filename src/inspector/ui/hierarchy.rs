@@ -1,13 +1,13 @@
-use super::{EntityFilter, Filter};
-use crate::util::egui::{CollapsingResponseExtensions, ResponseConditions};
-use crate::util::entity;
-use bevy::ecs::entity::EntityHashSet;
-use bevy::{ecs::query::QueryFilter, prelude::*};
+use super::{EntityFilter, Filter, Selected};
+use bevy::{
+	ecs::{entity::EntityHashSet, query::QueryFilter},
+	prelude::*,
+};
+use common::extensions::egui::{CollapsingResponseExtensions, ResponseConditions};
 use derive_new::new;
 use egui::{CollapsingHeader, CollapsingResponse, RichText};
 use smallvec::SmallVec;
-use std::collections::HashSet;
-use std::sync::Arc;
+use std::{cmp::Ordering, collections::HashSet, sync::Arc};
 
 pub struct UnusedPayload;
 
@@ -50,12 +50,13 @@ where
 
 		let mut entities: Vec<_> = root_query.iter(self.world).collect();
 		filter.filter_entities(self.world, &mut entities);
-		entities.sort();
+		sort_entities(&mut entities, self.world);
 
 		let mut selected = None;
 
 		for &entity in &entities {
-			selected.maybe_take(self.entity_ui(ui, entity, &always_open, &entities, &filter));
+			let response = self.entity_ui(ui, entity, &always_open, &entities, &filter);
+			selected.maybe_take(response);
 		}
 
 		selected
@@ -75,7 +76,7 @@ where
 		let mut new_selection = None;
 		let selected = self.selected.contains(entity);
 
-		let entity_name = entity::guess_entity_name(self.world, entity);
+		let entity_name = common::ecs::guess_entity_name(self.world, entity);
 		let mut name = RichText::new(entity_name);
 		if selected {
 			name = name.strong();
@@ -112,6 +113,7 @@ where
 				if let Some(children) = children {
 					let mut children = children.to_vec();
 					filter.filter_entities(self.world, &mut children);
+					sort_entities(&mut children, self.world);
 					for &child in &children {
 						new_selection.maybe_take(self.entity_ui(ui, child, always_open, &children, filter));
 					}
@@ -368,5 +370,16 @@ impl SelectedEntitiesChangedEvent {
 	}
 }
 
-#[derive(Component)]
-pub struct Selected;
+fn sort_entities(entities: &mut [Entity], world: &World) {
+	entities.sort_by(|&a, &b| {
+		let a_name = world.get::<Name>(a);
+		let b_name = world.get::<Name>(b);
+
+		match (a_name, b_name) {
+			(None, None) => a.cmp(&b),
+			(None, Some(_)) => Ordering::Greater,
+			(Some(_), None) => Ordering::Less,
+			(Some(a_name), Some(b_name)) => a_name.cmp(b_name),
+		}
+	});
+}

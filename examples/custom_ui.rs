@@ -1,14 +1,24 @@
-use beditor::{
-	prelude::*,
-	uuid::{Uuid, uuid},
-};
+use beditor::prelude::*;
 use bevy::prelude::*;
 use egui_demo_lib::{View, WidgetGallery};
+use uuid::{Uuid, uuid};
 
 fn main() {
 	App::new()
-		.add_plugins(EditorPlugin::new().register_ui::<CustomPanel>())
+		.add_plugins((
+			EditorPlugin::new(),
+			EditorExtensionPlugin::<EditorUiPlugin>::default(),
+		))
 		.run();
+}
+
+#[derive(Default)]
+struct EditorUiPlugin;
+
+impl EditorExtension for EditorUiPlugin {
+	fn build_editor(&self, ctx: &mut EditorExtensionContext) {
+		ctx.register_ui::<CustomPanel>();
+	}
 }
 
 #[derive(Reflect, Component, Default)]
@@ -25,7 +35,7 @@ impl EditorUi for CustomPanel {
 		Self::default()
 	}
 
-	fn ui(&mut self, ui: &mut bevy_egui::egui::Ui, _params: Self::Params<'_, '_>) {
+	fn ui(&mut self, ui: &mut egui::Ui, _params: Self::Params<'_, '_>) {
 		self.0.ui(ui);
 	}
 }

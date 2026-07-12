@@ -1,19 +1,17 @@
 use crate::{
 	inspector::{
 		errors,
-		ui::{Context, InspectorUi},
+		ui::{ImmutableContext, InspectorUi, MutableContext},
+		world_view::{MutableWorldView, ReflectBorrow, RestrictedWorldView},
 	},
-	util::{
-		self,
-		egui::{CollapsingResponseExtensions, ResponseConditions, set_highlight_style},
-		world::{ReflectBorrow, RestrictedWorldView},
-	},
+	private::util,
 };
-use bevy::{
-	ecs::{component::ComponentId, world::CommandQueue},
-	prelude::*,
-	reflect::TypeRegistry,
+use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
+use common::extensions::{
+	bevy::WorldMutExtensions as _,
+	egui::{CollapsingResponseExtensions, ResponseConditions},
 };
+use itertools::Itertools;
 use std::any::TypeId;
 
 pub struct ComponentInfo {
@@ -79,14 +77,15 @@ impl ComponentInfo {
 }
 
 pub fn ui_for_entity_components(
-	ctx: &mut Context<'_>,
+	ctx: &mut MutableContext<'_>,
 	entity: Entity,
 	ui: &mut egui::Ui,
 	id: egui::Id,
 	type_registry: &TypeRegistry,
 	highlight_changes: bool,
 ) -> Option<egui::CollapsingResponse<ComponentInfo>> {
-	let Ok(components) = components_of_entity(&ctx.world, entity) else {
+	let world = ctx.world_view.world();
+	let Ok(components) = components_of_entity(world, entity) else {
 		errors::entity_does_not_exist(ui, entity);
 		return None;
 	};
@@ -117,31 +116,36 @@ pub fn ui_for_entity_components(
 		}
 
 		// create a context with access to the world except for the currently viewed component
-		let (mut component_view, world) = ctx.world.split_off_component((entity, type_id));
-
-		let mut cx = Context {
-			world,
-			queue: ctx.queue,
+		let Some((mut component_view, world_view)) =
+			ctx.world_view.split_off_component((entity, type_id))
+		else {
+			let name = type_registry
+				.get(type_id)
+				.map(|tr| tr.type_info().type_path().to_string())
+				.unwrap_or_else(|| format!("{type_id:?}"));
+			errors::no_access_component(ui, entity, name);
+			continue;
 		};
 
-		let value = match component_view.get_entity_component_reflect(entity, type_id, type_registry) {
-			Ok(value) => value,
-			Err(_) => {
-				let response = ui.indent(id, |ui| {
-					ui.label(egui::RichText::new(&name).underline())
-						.on_hover_ui(|ui| errors::no_access_component(ui, entity, &name))
-				});
+		let component_result =
+			component_view.entity_component_reflect_mut(entity, type_id, type_registry);
+		let value = common::match_else!(component_result; else err => {
+			let response = ui.indent(id, |ui| {
+				ui.label(egui::RichText::new(&name).underline())
+					.on_hover_ui(|ui| {
+						err.ui(ui, name);
+					})
+			});
 
-				clicked_header.maybe_take(ComponentInfo::from_response(
-					response.inner,
-					false,
-					type_id,
-					component_id,
-				));
+			clicked_header.maybe_take(ComponentInfo::from_response(
+				response.inner,
+				false,
+				type_id,
+				component_id,
+			));
 
-				continue;
-			}
-		};
+			continue;
+		});
 
 		if highlight_changes && value.is_changed() {
 			set_highlight_style(ui);
@@ -150,13 +154,17 @@ pub fn ui_for_entity_components(
 		let response = header.show(ui, |ui| {
 			ui.reset_style();
 
-			let mut env = InspectorUi::new(type_registry, Some(&mut cx));
-			let id = id.with(component_id);
-			let options = &();
-
 			match value {
 				ReflectBorrow::Mutable(mut value) => {
-					let changed = env.ui_for_reflect_with_options(
+					let mut ctx = MutableContext {
+						world_view,
+						queue: ctx.queue,
+					};
+
+					let mut env = InspectorUi::new(type_registry, &mut ctx);
+					let id = id.with(component_id);
+					let options = &();
+					let changed = env.ui_for_reflect_mut_with_options(
 						value.bypass_change_detection().as_partial_reflect_mut(),
 						ui,
 						id,
@@ -170,7 +178,13 @@ pub fn ui_for_entity_components(
 					changed
 				}
 				ReflectBorrow::Immutable(value) => {
-					env.ui_for_reflect_readonly_with_options(value.as_partial_reflect(), ui, id, options);
+					let world_view = RestrictedWorldView::to_immutable(&world_view);
+					let ctx = ImmutableContext::from_world_view(world_view, ctx.queue);
+					let env = InspectorUi::new(type_registry, &ctx);
+					let id = id.with(component_id);
+					let options = &();
+
+					env.ui_for_reflect_with_options(value.as_partial_reflect(), ui, id, options);
 					false
 				}
 			}
@@ -195,140 +209,161 @@ pub fn ui_for_entities_with_shared_components(
 	entities: &[Entity],
 	ui: &mut egui::Ui,
 ) -> Option<egui::CollapsingResponse<ComponentInfo>> {
-	let type_registry = world.resource::<AppTypeRegistry>().0.clone();
-	let type_registry = type_registry.read();
+	world.queue(|world, queue| {
+		let type_registry = world.resource::<AppTypeRegistry>().0.clone();
+		let type_registry = type_registry.read();
 
-	let &first = entities.first()?;
+		let &first = entities.first()?;
 
-	let Ok(mut components) = components_of_entity(&world.into(), first) else {
-		errors::entity_does_not_exist(ui, first);
-		return None;
-	};
-
-	for &entity in entities.iter().skip(1) {
-		components.retain(|(_, id, _, _)| {
-			world
-				.get_entity(entity)
-				.map_or(true, |entity| entity.contains_id(*id))
-		})
-	}
-
-	let mut queue = CommandQueue::default();
-
-	let mut clicked_header = None;
-
-	let id = egui::Id::NULL;
-	for (name, component_id, component_type_id, size) in components {
-		let id = id.with(component_id);
-
-		let header = egui::CollapsingHeader::new(&name).id_salt(id);
-
-		let Some(type_id) = component_type_id else {
-			header.show(ui, |ui| errors::no_type_id(ui, &name));
-			continue;
+		let Ok(mut components) = components_of_entity(world, first) else {
+			errors::entity_does_not_exist(ui, first);
+			return None;
 		};
 
-		let type_docs = type_registry
-			.get_type_info(type_id)
-			.and_then(|info| info.docs());
-
-		if size == 0 {
-			ui.indent(id, |ui| {
-				let _response = ui.label(&name);
-				util::egui::show_docs(_response, type_docs);
-			});
-			continue;
+		for &entity in entities.iter().skip(1) {
+			components.retain(|(_, id, _, _)| {
+				world
+					.get_entity(entity)
+					.map_or(true, |entity| entity.contains_id(*id))
+			})
 		}
 
-		let (resources_view, components_view) = RestrictedWorldView::resources_components(world);
-		let mut cx = Context {
-			world: resources_view,
-			queue: &mut queue,
-		};
+		let mut clicked_header = None;
 
-		let mut values = Vec::with_capacity(entities.len());
-		for (i, &entity) in entities.iter().enumerate() {
-			// skip duplicate entities
-			if entities[0..i].contains(&entity) {
+		let id = egui::Id::NULL;
+		for (name, component_id, component_type_id, size) in components {
+			let id = id.with(component_id);
+
+			let header = egui::CollapsingHeader::new(&name).id_salt(id);
+
+			let Some(type_id) = component_type_id else {
+				header.show(ui, |ui| errors::no_type_id(ui, &name));
 				continue;
 			};
 
-			// SAFETY: entities are distinct, env has a context with just resources
-			match unsafe {
-				components_view.get_entity_component_reflect_unchecked(entity, type_id, &type_registry)
-			} {
-				Ok(value) => {
-					values.push(value);
-				}
-				Err(error) => {
-					error.ui(ui, &name);
+			if size == 0 {
+				ui.indent(id, |ui| {
+					let response = ui.label(&name);
+					util::egui::show_docs(&type_registry, type_id, response);
+				});
+				continue;
+			}
+
+			let world_view = RestrictedWorldView::<MutableWorldView>::from(&mut *world); // TODO how is world "moved" when it's a reference?
+			let (resources_view, components_view) = world_view.resources_components();
+
+			let mut values = Vec::with_capacity(entities.len());
+			for (i, &entity) in entities.iter().enumerate() {
+				// skip duplicate entities
+				if entities[0..i].contains(&entity) {
 					continue;
+				};
+
+				// SAFETY: entities are distinct, env has a context with just resources
+				match unsafe {
+					components_view.get_entity_component_reflect_unchecked(entity, type_id, &type_registry)
+				} {
+					Ok(value) => {
+						values.push(value);
+					}
+					Err(error) => {
+						error.ui(ui, &name);
+						continue;
+					}
 				}
 			}
+
+			let response = header.show(ui, |ui| {
+				ui.reset_style();
+
+				let mut ctx = MutableContext::from_world_view(resources_view, queue);
+				let mut env = InspectorUi::new(&type_registry, &mut ctx);
+				let id = id.with(component_id);
+				let options = &();
+
+				let mut values_reflect: Vec<_> = values
+					.iter_mut()
+					.map(|value| value.bypass_change_detection().as_partial_reflect_mut())
+					.collect();
+
+				let changed = env.ui_for_reflect_mut_multiedit_with_options(
+					type_id,
+					&name,
+					ui,
+					id,
+					options,
+					values_reflect.as_mut_slice(),
+					&|a| a,
+				);
+
+				if changed {
+					for value in values.iter_mut() {
+						value.set_changed();
+					}
+				}
+
+				changed
+			});
+
+			let changed = response.body_returned.unwrap_or_default();
+			clicked_header.maybe_take(ComponentInfo::from_collapsing(
+				response,
+				changed,
+				type_id,
+				component_id,
+			));
 		}
 
-		let response = header.show(ui, |ui| {
-			ui.reset_style();
-
-			let mut env = InspectorUi::new(&type_registry, Some(&mut cx));
-			let id = id.with(component_id);
-			let options = &();
-
-			let mut values_reflect: Vec<_> = values
-				.iter_mut()
-				.map(|value| value.bypass_change_detection().as_partial_reflect_mut())
-				.collect();
-
-			let changed = env.ui_for_reflect_many_with_options(
-				type_id,
-				&name,
-				ui,
-				id,
-				options,
-				values_reflect.as_mut_slice(),
-				&|a| a,
-			);
-
-			if changed {
-				for value in values.iter_mut() {
-					value.set_changed();
-				}
-			}
-
-			changed
-		});
-
-		let changed = response.body_returned.unwrap_or_default();
-		clicked_header.maybe_take(ComponentInfo::from_collapsing(
-			response,
-			changed,
-			type_id,
-			component_id,
-		));
-	}
-
-	queue.apply(world);
-
-	clicked_header
+		clicked_header
+	})
 }
 
 fn components_of_entity(
-	world: &RestrictedWorldView<'_>,
+	world: &World,
 	entity: Entity,
 ) -> Result<Vec<(String, ComponentId, Option<TypeId>, usize)>> {
-	let entity_ref = world.world().get_entity(entity)?;
+	let entity_ref = world.get_entity(entity)?;
 
 	let archetype = entity_ref.archetype();
-	let mut components: Vec<_> = archetype
+	let entity_components: Vec<_> = archetype
 		.components()
 		.iter()
 		.map(|component_id| {
-			let info = world.world().components().get_info(*component_id).unwrap();
-			let name = util::pretty_type_name_str(&info.name().to_string());
+			let info = world.components().get_info(*component_id).unwrap();
+			let name = common::types::pretty_name_of_str(&info.name().to_string());
 
 			(name, *component_id, info.type_id(), info.layout().size())
 		})
+		.sorted_by(|(name_a, ..), (name_b, ..)| name_a.cmp(name_b))
 		.collect();
-	components.sort_by(|(name_a, ..), (name_b, ..)| name_a.cmp(name_b));
-	Ok(components)
+
+	Ok(entity_components)
+}
+
+fn set_highlight_style(ui: &mut egui::Ui) {
+	let highlight_color = egui::Color32::GOLD;
+
+	let visuals = &mut ui.style_mut().visuals;
+
+	visuals.collapsing_header_frame = true;
+
+	visuals.widgets.inactive.bg_stroke = egui::Stroke {
+		width: 1.0,
+		color: highlight_color,
+	};
+
+	visuals.widgets.active.bg_stroke = egui::Stroke {
+		width: 1.0,
+		color: highlight_color,
+	};
+
+	visuals.widgets.hovered.bg_stroke = egui::Stroke {
+		width: 1.0,
+		color: highlight_color,
+	};
+
+	visuals.widgets.noninteractive.bg_stroke = egui::Stroke {
+		width: 1.0,
+		color: highlight_color,
+	};
 }

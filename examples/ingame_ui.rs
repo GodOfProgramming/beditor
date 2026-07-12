@@ -32,7 +32,7 @@ fn startup(
 	commands.spawn((
 		Name::new("Light"),
 		PointLight {
-			shadows_enabled: true,
+			shadow_maps_enabled: true,
 			..default()
 		},
 		Transform::from_xyz(4.0, 8.0, 4.0),
@@ -62,8 +62,6 @@ fn startup(
 			commands
 				.spawn((
 					Button,
-					Text::new("Click Me"),
-					TextColor(Color::linear_rgb(0.03, 0.20, 0.00)),
 					BackgroundColor(Color::linear_rgb(0.12, 0.00, 0.76)),
 					BorderColor::all(Color::linear_rgb(0.36, 0.09, 0.00)),
 					Node {
@@ -71,6 +69,10 @@ fn startup(
 						height: vh(10),
 						..default()
 					},
+					Children::spawn(Spawn((
+						Text::new("Click Me"),
+						TextColor(Color::linear_rgb(0.03, 0.20, 0.00)),
+					))),
 				))
 				.observe(|_: On<Pointer<Click>>| {
 					info!("Clicked");

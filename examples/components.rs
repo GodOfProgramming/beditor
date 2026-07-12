@@ -3,27 +3,37 @@ use bevy::prelude::*;
 
 fn main() {
 	App::new()
-		.add_plugins(
-			EditorPlugin::new()
-				.register_components::<(SpinComponent, GrowthComponent)>()
-				.register_components::<(
-					ExampleComponent<i8>,
-					ExampleComponent<i16>,
-					ExampleComponent<i32>,
-					ExampleComponent<i64>,
-				)>()
-				.register_components::<(
-					ExampleComponent<u8>,
-					ExampleComponent<u16>,
-					ExampleComponent<u32>,
-					ExampleComponent<u64>,
-				)>()
-				.register_components::<(ExampleComponent<f32>, ExampleComponent<f64>)>()
-				.register_components::<(ExampleComponent<isize>, ExampleComponent<usize>)>(),
-		)
+		.add_plugins((
+			EditorPlugin::new(),
+			EditorExtensionPlugin::<GameComponentsExtension>::default(),
+		))
 		.add_systems(Startup, startup)
-		.add_systems(Update, (spin, grow))
+		.add_systems(Update, (spin, grow).in_set(AppSystems))
 		.run();
+}
+
+#[derive(Default)]
+struct GameComponentsExtension;
+
+impl EditorExtension for GameComponentsExtension {
+	fn build_editor(&self, ctx: &mut EditorExtensionContext) {
+		ctx
+			.register_components::<(SpinComponent, GrowthComponent)>()
+			.register_components::<(
+				ExampleComponent<i8>,
+				ExampleComponent<i16>,
+				ExampleComponent<i32>,
+				ExampleComponent<i64>,
+			)>()
+			.register_components::<(
+				ExampleComponent<u8>,
+				ExampleComponent<u16>,
+				ExampleComponent<u32>,
+				ExampleComponent<u64>,
+			)>()
+			.register_components::<(ExampleComponent<f32>, ExampleComponent<f64>)>()
+			.register_components::<(ExampleComponent<isize>, ExampleComponent<usize>)>();
+	}
 }
 
 fn startup(
@@ -49,7 +59,7 @@ fn startup(
 	commands.spawn((
 		Name::new("Light"),
 		PointLight {
-			shadows_enabled: true,
+			shadow_maps_enabled: true,
 			..default()
 		},
 		Transform::from_xyz(4.0, 8.0, 4.0),
@@ -73,18 +83,21 @@ fn grow(mut q_growths: Query<(&mut Transform, &GrowthComponent)>) {
 }
 
 #[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 struct SpinComponent {
 	velocity: f32,
 	angle: Vec3,
 }
 
 #[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 struct GrowthComponent {
 	rate: f32,
 	dims: Vec3,
 }
 
 #[derive(Component, Reflect, Default)]
+#[reflect(Component, Default)]
 struct ExampleComponent<T>(T)
 where
-	T: Reflect;
+	T: Reflect + Default;

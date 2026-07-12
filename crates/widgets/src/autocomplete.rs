@@ -1,0 +1,457 @@
+//! Copied from https://github.com/JakeHandsome/egui_autocomplete
+
+use egui::text::CharIndex;
+use egui::{
+	Context, FontId, Id, Key, Modifiers, Popup, PopupCloseBehavior, TextBuffer, TextEdit, Widget,
+	text::LayoutJob,
+};
+use fuzzy_matcher::FuzzyMatcher;
+use fuzzy_matcher::skim::SkimMatcherV2;
+use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
+
+/// Trait that can be used to modify the TextEdit
+type SetTextEditProperties = dyn FnOnce(TextEdit) -> TextEdit;
+
+/// An extension to the [`egui::TextEdit`] that allows for a dropdown box with autocomplete to popup while typing.
+pub struct AutoCompleteTextEdit<'a, T> {
+	/// Contents of text edit passed into [`egui::TextEdit`]
+	text_field: &'a mut String,
+	/// Data to use as the search term
+	search: T,
+	/// A limit that can be placed on the maximum number of autocomplete suggestions shown
+	max_suggestions: usize,
+	/// If true, highlights the matching indices in the dropdown
+	highlight: bool,
+	/// If true, provide completions when entering multiple space-delimited words
+	multiple_words: bool,
+	/// Used to set properties on the internal TextEdit
+	set_properties: Option<Box<SetTextEditProperties>>,
+	/// If set to true, the popup will show up when focused instead of waiting for a character to
+	/// be typed
+	popup_on_focus: bool,
+	/// Width of the autocomplete list
+	/// Defaults to all available space
+	width: f32,
+}
+
+impl<'a, T, S> AutoCompleteTextEdit<'a, T>
+where
+	T: IntoIterator<Item = S>,
+	S: AsRef<str>,
+{
+	/// Creates a new [`AutoCompleteTextEdit`].
+	///
+	/// `text_field` - Contents of the text edit passed into [`egui::TextEdit`]
+	/// `search` - Data use as the search term
+	pub fn new(text_field: &'a mut String, search: T) -> Self {
+		Self {
+			text_field,
+			search,
+			max_suggestions: 10,
+			highlight: false,
+			multiple_words: false,
+			set_properties: None,
+			popup_on_focus: false,
+			width: f32::INFINITY,
+		}
+	}
+}
+
+impl<T, S> AutoCompleteTextEdit<'_, T>
+where
+	T: IntoIterator<Item = S>,
+	S: AsRef<str>,
+{
+	/// This determines the number of options appear in the dropdown menu
+	pub fn max_suggestions(mut self, max_suggestions: usize) -> Self {
+		self.max_suggestions = max_suggestions;
+		self
+	}
+
+	/// If set to true, characters will be highlighted in the dropdown to show the match
+	pub fn highlight_matches(mut self, highlight: bool) -> Self {
+		self.highlight = highlight;
+		self
+	}
+
+	/// If set to true, completions will be provided when entering multiple words.
+	pub fn multiple_words(mut self, multiple_words: bool) -> Self {
+		self.multiple_words = multiple_words;
+		self
+	}
+
+	/// If set to true, the popup will show up when focused instead of waiting for a character to
+	/// be typed
+	pub fn popup_on_focus(mut self, popup_on_focus: bool) -> Self {
+		self.popup_on_focus = popup_on_focus;
+		self
+	}
+
+	/// This determines the width of the popup autocomplete list
+	/// defaults to all available space
+	pub fn width(mut self, width: f32) -> Self {
+		self.width = width;
+		self
+	}
+
+	/// Can be used to set the properties of the internal [`egui::TextEdit`]
+	/// # Example
+	/// ```rust
+	/// # use egui_autocomplete::AutoCompleteTextEdit;
+	/// # fn make_text_edit(mut search_field: String, inputs: Vec<String>) {
+	/// AutoCompleteTextEdit::new(&mut search_field, &inputs)
+	///     .set_text_edit_properties(|text_edit: egui::TextEdit<'_>| {
+	///         text_edit
+	///             .hint_text("Hint Text")
+	///             .text_color(egui::Color32::RED)
+	///     });
+	/// # }
+	/// ```
+	pub fn set_text_edit_properties(
+		mut self,
+		set_properties: impl FnOnce(TextEdit) -> TextEdit + 'static,
+	) -> Self {
+		self.set_properties = Some(Box::new(set_properties));
+		self
+	}
+}
+
+impl<T, S> Widget for AutoCompleteTextEdit<'_, T>
+where
+	T: IntoIterator<Item = S>,
+	S: AsRef<str>,
+{
+	/// The response returned is the response from the internal text_edit
+	fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+		let Self {
+			text_field,
+			search,
+			max_suggestions,
+			highlight,
+			multiple_words,
+			set_properties,
+			popup_on_focus,
+			width,
+		} = self;
+
+		let id = ui.next_auto_id();
+		ui.skip_ahead_auto_ids(1);
+		let mut state = AutoCompleteTextEditState::load(ui.ctx(), id).unwrap_or_default();
+
+		// only consume up/down presses if the text box is focused. This overwrites default behavior
+		// to move to start/end of the string
+		let up_pressed =
+			state.focused && ui.input_mut(|input| input.consume_key(Modifiers::default(), Key::ArrowUp));
+		let down_pressed = state.focused
+			&& ui.input_mut(|input| input.consume_key(Modifiers::default(), Key::ArrowDown));
+
+		let mut text_edit = TextEdit::singleline(text_field);
+		if let Some(set_properties) = set_properties {
+			text_edit = set_properties(text_edit);
+		}
+		let text_edit_output = text_edit.show(ui);
+
+		let completion_input = if multiple_words {
+			if let Some(cursor_range) = text_edit_output.cursor_range {
+				let index = cursor_range.primary.index;
+				// Get the word located at the current index
+				let mut start = index;
+				let mut end = index;
+				while start > CharIndex::ZERO
+					&& !text_field[(start - 1).0..(start).0]
+						.chars()
+						.next()
+						.map(|c| c.is_whitespace())
+						.unwrap_or(false)
+				{
+					start -= 1;
+				}
+				while end.0 < text_field.len()
+					&& !text_field[end.0..(end + 1).0]
+						.chars()
+						.next()
+						.map(|c| c.is_whitespace())
+						.unwrap_or(false)
+				{
+					end += 1;
+				}
+				state.start = start;
+				state.end = end;
+				text_field[start.0..end.0].trim()
+			} else {
+				text_field.as_str()
+			}
+		} else {
+			text_field.as_str()
+		};
+
+		let mut text_response = text_edit_output.response;
+		state.focused = text_response.has_focus();
+
+		let matcher = SkimMatcherV2::default().ignore_case();
+
+		let match_results = {
+			let mut match_results = search
+				.into_iter()
+				.filter_map(|s| {
+					let score = matcher.fuzzy_indices(s.as_ref(), completion_input);
+					score.map(|(score, indices)| (s, score, indices))
+				})
+				.collect::<Vec<_>>();
+			match_results.sort_by_key(|k| Reverse(k.1));
+			match_results
+		};
+
+		if text_response.changed()
+			|| (state.selected_index.is_some() && state.selected_index.unwrap().0 >= match_results.len())
+		{
+			state.selected_index = None;
+		}
+
+		state.update_index(
+			down_pressed,
+			up_pressed,
+			match_results.len(),
+			max_suggestions,
+		);
+
+		// create the popup object
+		let popup = Popup::from_response(&text_response)
+			.layout(egui::Layout::top_down_justified(egui::Align::LEFT))
+			.close_behavior(PopupCloseBehavior::IgnoreClicks)
+			.id(id)
+			.align(egui::RectAlign::BOTTOM_START)
+			.width(width)
+			.open(
+				state.focused && (!text_field.is_empty() || popup_on_focus) && !match_results.is_empty(),
+			);
+
+		// act on accepting key presses
+		let accepted_by_keyboard = ui.input(|input| input.key_pressed(Key::Enter))
+			|| ui.input(|input| input.key_pressed(Key::Tab));
+		if let (Some(index), true) = (
+			state.selected_index,
+			// If accepted by keyboard, close the popup. If the popup is closed with a selected index, take that text
+			accepted_by_keyboard || !popup.is_open(),
+		) {
+			let match_result = match_results[index.0].0.as_ref();
+			if multiple_words {
+				text_field.replace_range(state.start.0..state.end.0, match_result);
+				// Move the cursor to the end of the line.
+				let text_edit_id = text_response.id;
+				if let Some(mut state) = TextEdit::load_state(ui.ctx(), text_edit_id) {
+					let ccursor = egui::text::CCursor::new(text_field.chars().count());
+					state
+						.cursor
+						.set_char_range(Some(egui::text::CCursorRange::one(ccursor)));
+					state.store(ui.ctx(), text_edit_id);
+					// Give focus back to the text edit.
+					text_response.request_focus();
+				}
+			} else {
+				text_field.replace_with(match_result);
+			}
+			state.selected_index = None;
+			text_response.mark_changed();
+		}
+
+		// show the popup
+		popup.show(|ui| {
+			for (i, (output, _, match_indices)) in match_results.iter().take(max_suggestions).enumerate()
+			{
+				let mut selected = if let Some(x) = state.selected_index {
+					x == CharIndex(i)
+				} else {
+					false
+				};
+
+				let text = if highlight {
+					highlight_matches(
+						output.as_ref(),
+						match_indices,
+						ui.style().visuals.widgets.active.text_color(),
+					)
+				} else {
+					let mut job = LayoutJob::default();
+					job.append(output.as_ref(), 0.0, egui::TextFormat::default());
+					job
+				};
+				//  Update selected index based on hover
+				if ui.toggle_value(&mut selected, text).hovered() {
+					state.selected_index = Some(CharIndex(i));
+				}
+			}
+		});
+
+		state.store(ui.ctx(), id);
+
+		text_response.response
+	}
+}
+
+/// Highlights all the match indices in the provided text
+fn highlight_matches(text: &str, match_indices: &[usize], color: egui::Color32) -> LayoutJob {
+	let mut formatted = LayoutJob::default();
+	let mut it = text.char_indices().enumerate().peekable();
+	// Iterate through all indices in the string
+	while let Some((char_idx, (byte_idx, c))) = it.next() {
+		let start = byte_idx;
+		let mut end = byte_idx + (c.len_utf8() - 1);
+		let match_state = match_indices.contains(&char_idx);
+		// Find all consecutive characters that have the same state
+		while let Some((peek_char_idx, (_, k))) = it.peek() {
+			if match_state == match_indices.contains(peek_char_idx) {
+				end += k.len_utf8();
+				// Advance the iterator, we already peeked the value so it is fine to ignore
+				_ = it.next();
+			} else {
+				break;
+			}
+		}
+		// Format current slice based on the state
+		let format = if match_state {
+			egui::TextFormat::simple(FontId::default(), color)
+		} else {
+			egui::TextFormat::default()
+		};
+		let slice = &text[start..=end];
+		formatted.append(slice, 0.0, format);
+	}
+	formatted
+}
+
+/// Stores the currently selected index in egui state
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(default)]
+struct AutoCompleteTextEditState {
+	/// Currently selected index, is `None` if nothing is selected
+	selected_index: Option<CharIndex>,
+	/// Whether or not the text edit was focused last frame
+	focused: bool,
+	/// The start of the current word being replaced
+	start: CharIndex,
+	/// The end of the current word being replaced
+	end: CharIndex,
+}
+
+impl AutoCompleteTextEditState {
+	/// Store the state with egui
+	fn store(self, ctx: &Context, id: Id) {
+		ctx.data_mut(|d| d.insert_persisted(id, self));
+	}
+
+	/// Get the state from egui if it exists
+	fn load(ctx: &Context, id: Id) -> Option<Self> {
+		ctx.data_mut(|d| d.get_persisted(id))
+	}
+
+	/// Updates in selected index, checks to make sure nothing goes out of bounds
+	fn update_index(
+		&mut self,
+		down_pressed: bool,
+		up_pressed: bool,
+		match_results_count: usize,
+		max_suggestions: usize,
+	) {
+		self.selected_index = match self.selected_index {
+			_ if match_results_count == 0 || max_suggestions == 0 => None,
+			// Increment selected index when down is pressed, limit it to the number of matches and max_suggestions
+			// Deselect if at last index
+			Some(index) if down_pressed => {
+				if index.0 + 1 < match_results_count.min(max_suggestions) {
+					Some(index + 1)
+				} else {
+					None
+				}
+			}
+			// Decrement selected index if up is pressed. Deselect if at first index
+			Some(index) if up_pressed => {
+				if index == CharIndex(0) {
+					None
+				} else {
+					Some(index - 1)
+				}
+			}
+			// If nothing is selected and down is pressed, select first item
+			None if down_pressed => Some(CharIndex(0)),
+			// If nothing is selected and up is pressed, select last item
+			None if up_pressed => Some(CharIndex(match_results_count.min(max_suggestions) - 1)),
+			// Do nothing if no keys are pressed
+			Some(index) => Some(index),
+			None => None,
+		}
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn increment_index() {
+		let mut state = AutoCompleteTextEditState::default();
+		assert_eq!(None, state.selected_index);
+		state.update_index(false, false, 10, 10);
+		assert_eq!(None, state.selected_index);
+		state.update_index(true, false, 10, 10);
+		assert_eq!(Some(CharIndex(0)), state.selected_index);
+		state.update_index(true, false, 2, 3);
+		assert_eq!(Some(CharIndex(1)), state.selected_index);
+		state.update_index(true, false, 2, 3);
+		assert_eq!(None, state.selected_index);
+		state.update_index(true, false, 10, 3);
+		assert_eq!(Some(CharIndex(0)), state.selected_index);
+		state.update_index(true, false, 10, 3);
+		state.update_index(true, false, 10, 3);
+		assert_eq!(Some(CharIndex(2)), state.selected_index);
+		state.update_index(true, false, 10, 3);
+		assert_eq!(None, state.selected_index);
+		state.update_index(false, true, 10, 3);
+		assert_eq!(Some(CharIndex(2)), state.selected_index);
+	}
+	#[test]
+	fn decrement_index() {
+		let mut state = AutoCompleteTextEditState {
+			selected_index: Some(CharIndex(1)),
+			..Default::default()
+		};
+		state.selected_index = Some(CharIndex(1));
+		state.update_index(false, false, 10, 10);
+		assert_eq!(Some(CharIndex(1)), state.selected_index);
+		state.update_index(false, true, 10, 10);
+		assert_eq!(Some(CharIndex(0)), state.selected_index);
+		state.update_index(false, true, 10, 10);
+		assert_eq!(None, state.selected_index);
+	}
+	#[test]
+	fn highlight() {
+		let text = String::from("Test123áéíó");
+		let match_indices = vec![1, 5, 6, 8, 9, 10];
+		let layout = highlight_matches(&text, &match_indices, egui::Color32::RED);
+		assert_eq!(6, layout.sections.len());
+		let sec1 = layout.sections.first().unwrap();
+		assert_eq!(&text[sec1.byte_range.start.0..sec1.byte_range.end.0], "T");
+		assert_ne!(sec1.format.color, egui::Color32::RED);
+
+		let sec2 = layout.sections.get(1).unwrap();
+		assert_eq!(&text[sec2.byte_range.start.0..sec2.byte_range.end.0], "e");
+		assert_eq!(sec2.format.color, egui::Color32::RED);
+
+		let sec3 = layout.sections.get(2).unwrap();
+		assert_eq!(&text[sec3.byte_range.start.0..sec3.byte_range.end.0], "st1");
+		assert_ne!(sec3.format.color, egui::Color32::RED);
+
+		let sec4 = layout.sections.get(3).unwrap();
+		assert_eq!(&text[sec4.byte_range.start.0..sec4.byte_range.end.0], "23");
+		assert_eq!(sec4.format.color, egui::Color32::RED);
+
+		let sec5 = layout.sections.get(4).unwrap();
+		assert_eq!(&text[sec5.byte_range.start.0..sec5.byte_range.end.0], "á");
+		assert_ne!(sec5.format.color, egui::Color32::RED);
+
+		let sec6 = layout.sections.get(5).unwrap();
+		assert_eq!(&text[sec6.byte_range.start.0..sec6.byte_range.end.0], "éíó");
+		assert_eq!(sec6.format.color, egui::Color32::RED);
+	}
+}

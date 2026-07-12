@@ -1,0 +1,13 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy.workspace = true
+egui.workspace = true
+ron.workspace = true
+serde.workspace = true
+variadics_please.workspace = true
+
+disqualified = "1.0.0"

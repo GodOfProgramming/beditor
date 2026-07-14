@@ -57,6 +57,12 @@ where
 		Self(default())
 	}
 
+	fn init(&mut self, this_entity: Entity, mut params: Self::Params<'_, '_>) {
+		params
+			.camera_view
+			.init(this_entity, params.camera_view_params);
+	}
+
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
 			target_camera,
@@ -68,7 +74,7 @@ where
 			return;
 		};
 
-		camera_view.entity = *target_cam;
+		camera_view.target_entity = Some(*target_cam);
 
 		camera_view.ui(ui, camera_view_params);
 	}
@@ -77,5 +83,5 @@ where
 fn take_ownership_of_cameras<C: Component>(event: On<Add, C>, mut commands: Commands) {
 	commands
 		.entity(event.event_target())
-		.insert(EditorManagedCamera::default());
+		.insert(EditorManagedCamera);
 }

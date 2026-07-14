@@ -1,15 +1,20 @@
 use super::image_viewer::ImageViewerUi;
 use crate::{
 	EditorExtension, EditorUi,
-	private::{EditorInternal, EditorInternalQuery, cam::EditorManagedCamera},
+	private::{EditorInternal, EditorInternalQuery},
 };
 use bevy::{
-	camera::RenderTarget, ecs::system::SystemParam, prelude::*, render::render_resource::Extent3d,
+	camera::RenderTarget,
+	ecs::system::SystemParam,
+	picking::pointer::{Location, PointerAction, PointerId, PointerInput, PointerLocation},
+	prelude::*,
+	render::render_resource::Extent3d,
+	window::PrimaryWindow,
 };
 use bevy_egui::EguiUserTextures;
 use common::extensions::egui::ContextExtensions;
-use derive_new::new;
-use uuid::uuid;
+use derive_more::derive::Deref;
+use uuid::{Uuid, uuid};
 
 #[derive(Default)]
 pub(crate) struct CameraViewUiExtension;
@@ -20,27 +25,57 @@ impl EditorExtension for CameraViewUiExtension {
 	}
 }
 
-#[derive(new, Component)]
+#[derive(Component, Reflect)]
 #[require(EditorInternal)]
 pub(crate) struct CameraViewUi {
-	pub(crate) entity: Entity,
+	this_entity: Entity,
+	pub(crate) target_entity: Option<Entity>,
+	ignore_size_mismatch: bool,
 }
 
 impl Default for CameraViewUi {
 	fn default() -> Self {
 		Self {
-			entity: Entity::PLACEHOLDER,
+			this_entity: Entity::PLACEHOLDER,
+			target_entity: None,
+			ignore_size_mismatch: false,
 		}
 	}
 }
 
+impl CameraViewUi {
+	pub fn new(target_entity: Entity) -> Self {
+		Self {
+			this_entity: Entity::PLACEHOLDER,
+			target_entity: Some(target_entity),
+			ignore_size_mismatch: false,
+		}
+	}
+}
+
+#[derive(Component, Deref, Reflect)]
+#[relationship_target(relationship = CameraViewPointer, linked_spawn)]
+pub struct CameraViewPointers(Vec<Entity>);
+
+#[derive(Component, Reflect)]
+#[relationship(relationship_target = CameraViewPointers)]
+pub struct CameraViewPointer(Entity);
+
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
+	commands: Commands<'w, 's>,
 	image_viewer: Local<'s, ImageViewerUi>,
-	q_targets:
-		EditorInternalQuery<'w, 's, (&'static mut RenderTarget, &'static mut EditorManagedCamera)>,
+	q_targets: EditorInternalQuery<'w, 's, &'static mut RenderTarget>,
 	user_textures: ResMut<'w, EguiUserTextures>,
 	images: ResMut<'w, Assets<Image>>,
+
+	q_pointers: Query<'w, 's, &'static PointerId>,
+	q_view_pointers: Query<'w, 's, &'static CameraViewPointers>,
+	pointer_inputs: MessageWriter<'w, PointerInput>,
+
+	primary_window: Single<'w, 's, (Entity, &'static Window), With<PrimaryWindow>>,
+
+	last_coord: Local<'s, Vec2>,
 }
 
 impl EditorUi for CameraViewUi {
@@ -58,18 +93,33 @@ impl EditorUi for CameraViewUi {
 	type Params<'w, 's> = Params<'w, 's>;
 
 	fn spawn(_params: Self::Params<'_, '_>) -> Self {
-		default()
+		Self::default()
+	}
+
+	fn init(&mut self, this_entity: Entity, mut params: Self::Params<'_, '_>) {
+		params.commands.spawn((
+			PointerId::Custom(Uuid::new_v4()),
+			PointerLocation::default(),
+			CameraViewPointer(this_entity),
+		));
+		self.this_entity = this_entity;
 	}
 
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
+			commands: _,
 			mut image_viewer,
 			mut q_targets,
 			mut user_textures,
 			mut images,
+			q_pointers,
+			q_view_pointers,
+			primary_window,
+			mut pointer_inputs,
+			mut last_coord,
 		} = params;
 
-		let Ok((target, mut managed_camera)) = q_targets.get_mut(self.entity) else {
+		let Some(target) = self.target_entity.and_then(|e| q_targets.get_mut(e).ok()) else {
 			ui.label("No camera selected");
 			return;
 		};
@@ -101,22 +151,69 @@ impl EditorUi for CameraViewUi {
 
 		image_viewer.image_id = handle.id();
 
-		let response = image_viewer
-			.show(ui, texture_rect, &mut user_textures)
-			.response;
+		let inner_response = image_viewer.show(ui, texture_rect, &mut user_textures);
 
-		managed_camera.set_hovered(response.contains_pointer());
+		let egui::InnerResponse {
+			inner: image_response,
+			..
+		} = inner_response;
 
-		let [min, max] = ui
-			.ctx()
-			.to_pixels_many([texture_rect.min, texture_rect.max])
-			.map(|v| Vec2::new(v.x, v.y));
+		let texture_coords = image_response.hover_pos().map(|hp| {
+			let sf = primary_window.1.scale_factor();
 
-		let image_viewport_rect = Rect::from_corners(min, max);
+			let local_x = hp.x * sf - image_response.rect.min.x;
+			let local_y = hp.y * sf - image_response.rect.min.y;
 
-		managed_camera.set_viewport(image_viewport_rect);
+			let scale_x = image_size.x as f32 / image_response.rect.width();
+			let scale_y = image_size.y as f32 / image_response.rect.height();
 
-		if managed_camera.should_sync_to_viewport() {
+			Vec2::new(local_x * scale_x, local_y * scale_y)
+		});
+
+		if let Some(tx_coords) = texture_coords
+			&& let Ok(view_pointers) = q_view_pointers.get(self.this_entity)
+		{
+			for id in view_pointers.iter().filter_map(|e| q_pointers.get(e).ok()) {
+				let Some(location) = target.normalize(Some(primary_window.0)).map(|rt| Location {
+					target: rt,
+					position: tx_coords,
+				}) else {
+					continue;
+				};
+
+				pointer_inputs.write(PointerInput::new(
+					*id,
+					location.clone(),
+					PointerAction::Move {
+						delta: tx_coords - *last_coord,
+					},
+				));
+				*last_coord = tx_coords;
+
+				let Some(action) = image_response.ctx.input(|i| {
+					for (eb, bb) in [
+						(egui::PointerButton::Primary, PointerButton::Primary),
+						(egui::PointerButton::Secondary, PointerButton::Secondary),
+						(egui::PointerButton::Middle, PointerButton::Middle),
+					] {
+						if i.pointer.button_pressed(eb) {
+							return Some(PointerAction::Press(bb));
+						}
+
+						if i.pointer.button_released(eb) {
+							return Some(PointerAction::Release(bb));
+						}
+					}
+					None
+				}) else {
+					continue;
+				};
+
+				pointer_inputs.write(PointerInput::new(*id, location, action));
+			}
+		}
+
+		if !self.ignore_size_mismatch {
 			let ui_viewport_size = ui.ctx().to_pixels(ui_area.size());
 			let ui_viewport_size = Vec2::new(ui_viewport_size.x, ui_viewport_size.y).as_uvec2();
 
@@ -150,18 +247,16 @@ impl EditorUi for CameraViewUi {
 			..
 		} = params;
 
-		let Ok((target, mut managed_camera)) = q_targets.get_mut(self.entity) else {
+		let Some(target) = self.target_entity.and_then(|e| q_targets.get_mut(e).ok()) else {
 			return;
 		};
-
-		managed_camera.set_ctx_menu_open(true);
 
 		ui.menu_button("Aspect Ratio Overrides", |ui| {
 			if ui.button("480p").clicked()
 				&& let Some(image_handle) = target.as_image()
 				&& let Some(mut image) = images.get_mut(image_handle.id())
 			{
-				managed_camera.ignore_viewport_size();
+				self.ignore_size_mismatch = true;
 				image.resize(Extent3d {
 					width: 640,
 					height: 480,
@@ -170,7 +265,7 @@ impl EditorUi for CameraViewUi {
 			}
 
 			if ui.button("Clear aspect override").clicked() {
-				managed_camera.sync_viewport_size();
+				self.ignore_size_mismatch = false;
 			}
 		});
 	}

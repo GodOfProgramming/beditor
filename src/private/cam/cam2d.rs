@@ -300,17 +300,12 @@ fn pan_system(
 		.unwrap_or_default()
 		.as_vec2();
 
-	let ui_viewport = managed_camera
-		.viewport()
-		.map(|vp| vp.size())
-		.unwrap_or(texture_size);
-
 	let delta = mouse_motion
 		.read()
 		.map(|motion| motion.delta)
 		.reduce(|c, n| c + n)
 		.unwrap_or_default()
-		* (texture_size / ui_viewport)
+		* texture_size
 		* settings.pan_sensitivity
 		* ortho.scale
 		* window.scale_factor();

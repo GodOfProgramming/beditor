@@ -104,6 +104,11 @@ pub trait EditorUi: EditorUiWorld + Component {
 
 	fn spawn(params: Self::Params<'_, '_>) -> Self;
 
+	fn init(&mut self, this_entity: Entity, params: Self::Params<'_, '_>) {
+		let _ = this_entity;
+		let _ = params;
+	}
+
 	fn title(&mut self, params: Self::Params<'_, '_>) -> egui::WidgetText {
 		let _ = params;
 		<Self as EditorUi>::NAME.into()
@@ -163,7 +168,11 @@ where
 
 	fn spawn(entity: Entity, world: &mut World) -> Result<Self> {
 		Self::register_params(entity, world);
-		Self::with_params(entity, world, EditorUi::spawn)
+		let mut ui = Self::with_params(entity, world, EditorUi::spawn)?;
+		Self::with_params(entity, world, |params| {
+			EditorUi::init(&mut ui, entity, params)
+		})?;
+		Ok(ui)
 	}
 
 	fn title(entity: Entity, world: &mut World) -> Result<egui::WidgetText> {
@@ -223,7 +232,7 @@ impl OpenUi {
 		})
 	}
 
-	pub fn open_with<T: EditorUiWorld>(mode: OpenMode, value: T) -> Self {
+	pub fn open_with_value<T: EditorUiWorld>(mode: OpenMode, value: T) -> Self {
 		Self::new(move |world| {
 			let Ok(tab) = world.notify_on_error(
 				|world| TabState::new::<T>(world),

@@ -17,18 +17,13 @@ use crate::{
 use axes::AxesGizmoPlugin;
 use bevy::{
 	camera::{
-		NormalizedRenderTarget, RenderTarget,
+		RenderTarget,
 		visibility::{Layer, RenderLayers},
 	},
 	color::palettes::tailwind,
 	ecs::system::SystemState,
-	picking::{
-		PickingSystems,
-		pointer::{Location, PointerId, PointerInput},
-	},
 	prelude::*,
 	render::render_resource::TextureFormat,
-	window::PrimaryWindow,
 };
 use bevy_egui::{EguiTextureHandle, EguiUserTextures};
 use cam2d::EditorCam2dPlugin;
@@ -38,8 +33,6 @@ use derive_new::new;
 use notify::Notification;
 use serde::{Deserialize, Serialize};
 use singleton::{SingletonBehavior, SingletonPlugin};
-use smallvec::SmallVec;
-use uuid::Uuid;
 
 pub const EDITOR_UI_RENDER_LAYER: Layer = 31;
 pub const EDITOR_VIEW_RENDER_LAYER: Layer = 30;
@@ -90,14 +83,6 @@ impl Plugin for EditorCamPlugin {
 			.add_observer(on_new_editor_scene)
 			.add_systems(Startup, retrieve_show_cameras_value)
 			.add_systems(PostStartup, init_camera)
-			.add_systems(
-				First,
-				(
-					(editor_picking_forwarding.in_set(PickingSystems::PostInput),),
-					EditorManagedCamera::on_frame_end,
-				)
-					.chain(),
-			)
 			.add_systems(
 				FixedUpdate,
 				on_active_camera_change.run_if(resource_changed::<ActiveEditorCamera>),
@@ -235,62 +220,14 @@ pub struct EditorCameraScene;
   Camera2d,
   Camera,
   RenderLayers = RenderLayers::layer(EDITOR_UI_RENDER_LAYER),
-  PointerId = PointerId::Custom(Uuid::new_v4()),
   Name = Name::new("Editor Window Camera"),
   InheritedVisibility,
 )]
 pub struct EditorWindowCamera;
 
 #[derive(Component, Default, Reflect)]
-#[require(
-  Camera,
-  PointerId = PointerId::Custom(Uuid::new_v4()),
-)]
-pub struct EditorManagedCamera {
-	context_menu_opened: bool,
-	hovered: bool,
-	viewport_rect: Option<Rect>,
-	last_viewport: Option<Rect>,
-	ignore_size_mismatch: bool,
-}
-
-impl EditorManagedCamera {
-	pub fn set_ctx_menu_open(&mut self, open: bool) {
-		self.context_menu_opened = open;
-	}
-
-	pub fn set_hovered(&mut self, hovered: bool) {
-		self.hovered = hovered;
-	}
-
-	pub fn viewport(&self) -> Option<Rect> {
-		self.last_viewport
-	}
-
-	pub fn set_viewport(&mut self, rect: Rect) {
-		self.viewport_rect = Some(rect);
-	}
-
-	pub fn should_sync_to_viewport(&self) -> bool {
-		!self.ignore_size_mismatch
-	}
-
-	pub fn ignore_viewport_size(&mut self) {
-		self.ignore_size_mismatch = true;
-	}
-
-	pub fn sync_viewport_size(&mut self) {
-		self.ignore_size_mismatch = false;
-	}
-
-	fn on_frame_end(mut q_managed_cameras: EditorInternalQuery<&mut Self>) {
-		for mut mcam in &mut q_managed_cameras {
-			mcam.last_viewport = mcam.viewport_rect.take();
-			mcam.set_ctx_menu_open(false);
-			mcam.hovered = false;
-		}
-	}
-}
+#[require(Camera)]
+pub struct EditorManagedCamera;
 
 #[derive(Resource, Reflect, Default, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ActiveEditorCamera {
@@ -359,58 +296,7 @@ fn manage_camera(
 		return;
 	}
 
-	commands
-		.entity(entity)
-		.insert(EditorManagedCamera::default());
-}
-
-fn editor_picking_forwarding(
-	mut commands: Commands,
-	q_managed_cameras: EditorInternalQuery<(&RenderTarget, &PointerId, &EditorManagedCamera)>,
-	mut pointer_inputs: MessageReader<PointerInput>,
-	window: Single<&Window, With<PrimaryWindow>>,
-) {
-	let inputs = pointer_inputs.read().collect::<SmallVec<[_; 4]>>();
-
-	let editor_camera_inputs = inputs
-		.iter()
-		.filter(move |input| matches!(input.pointer_id, PointerId::Mouse | PointerId::Touch(_)))
-		.collect::<SmallVec<[_; 2]>>();
-
-	let iter = q_managed_cameras
-		.iter()
-		.filter_map(|(target, managed_camera_pointer_id, managed_camera)| {
-			if managed_camera.hovered && !managed_camera.context_menu_opened {
-				managed_camera
-					.viewport_rect
-					.zip(target.as_image())
-					.map(|(viewport_rect, target)| (target, viewport_rect, managed_camera_pointer_id))
-			} else {
-				None
-			}
-		})
-		.flat_map(|(target, viewport_rect, &managed_camera_pointer_id)| {
-			editor_camera_inputs
-				.iter()
-				.map(move |input| (target, viewport_rect, managed_camera_pointer_id, input))
-		});
-
-	let sf = window.scale_factor();
-
-	for (image_target, viewport_rect, managed_camera_pointer_id, pointer_input) in iter {
-		let location = Location {
-			position: pointer_input.location.position * sf - viewport_rect.min,
-			target: NormalizedRenderTarget::Image(image_target.clone().into()),
-		};
-
-		let msg = PointerInput {
-			pointer_id: managed_camera_pointer_id,
-			location,
-			action: pointer_input.action,
-		};
-
-		commands.write_message(msg);
-	}
+	commands.entity(entity).insert(EditorManagedCamera);
 }
 
 /* Camera Settings */

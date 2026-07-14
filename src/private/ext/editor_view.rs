@@ -98,6 +98,12 @@ impl EditorUi for EditorViewUi {
 		default()
 	}
 
+	fn init(&mut self, this_entity: Entity, mut params: Self::Params<'_, '_>) {
+		params
+			.camera_view
+			.init(this_entity, params.camera_view_params);
+	}
+
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
 			mut commands,
@@ -116,7 +122,7 @@ impl EditorUi for EditorViewUi {
 
 		let (entity, is_2d, is_3d) = *editor_camera;
 
-		camera_view.entity = entity;
+		camera_view.target_entity = Some(entity);
 
 		let window_rect = ui.clip_rect();
 

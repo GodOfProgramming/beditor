@@ -10,10 +10,12 @@ use crate::{
 	private::{
 		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorOwned, EditorScene,
 		UserHidden,
-		cam::{EDITOR_VIEW_RENDER_LAYER, EditorCamera},
+		cam::EDITOR_VIEW_RENDER_LAYER,
 		ext::{
-			assets, components, content, diagnostics,
-			editor_view::{self, GizmoOptions},
+			assets,
+			camera_view::CameraViewPointers,
+			components, content, diagnostics,
+			editor_view::{self, EditorViewUi, GizmoOptions},
 			hierarchy, inspector, menu_bar, resources,
 		},
 		util::{WorldExtensions, entity::insert_bundle_from_world},
@@ -726,22 +728,38 @@ impl FromWorld for Highlight {
 fn handle_click_events(
 	mut event: On<Pointer<Click>>,
 	mut commands: Commands,
-	editor_camera_pointer_id: EditorInternalSingle<&PointerId, With<EditorCamera>>,
+	editor_pointers: Option<Single<&CameraViewPointers, With<EditorViewUi>>>,
+	q_pointer_ids: Query<&PointerId>,
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
 ) {
-	event.propagate(false);
-
-	if event.pointer_id != **editor_camera_pointer_id || event.button != PointerButton::Primary {
+	let Some(editor_pointers) = editor_pointers else {
 		return;
+	};
+
+	let mut pointer_ids = editor_pointers
+		.iter()
+		.filter_map(|e| q_pointer_ids.get(e).ok());
+
+	match event.button {
+		PointerButton::Primary => {
+			if !pointer_ids.contains(&event.pointer_id) {
+				return;
+			}
+
+			event.propagate(false);
+
+			let target = event.event_target();
+
+			let maybe_add =
+				keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
+
+			let event = selection.add_selected(target, maybe_add);
+			commands.trigger(event);
+		}
+		PointerButton::Secondary => (),
+		PointerButton::Middle => (),
 	}
-
-	let target = event.event_target();
-
-	let maybe_add = keyboard.pressed(KeyCode::ControlLeft) || keyboard.pressed(KeyCode::ControlRight);
-
-	let event = selection.add_selected(target, maybe_add);
-	commands.trigger(event);
 }
 
 fn handle_selected(

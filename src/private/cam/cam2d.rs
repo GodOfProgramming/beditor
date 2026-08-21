@@ -1,6 +1,6 @@
 use super::{
-	ActiveEditorCamera, CameraInputSystems, CameraSettingsGroup, EditorCamera, EditorManagedCamera,
-	GameCameraColor, PanState, PanSystems, should_show_cameras,
+	ActiveEditorCamera, CameraInputSystems, CameraSettingsGroup, EditorCamera, GameCameraColor,
+	PanState, PanSystems, should_show_cameras,
 };
 use crate::{
 	EditorState,
@@ -8,7 +8,6 @@ use crate::{
 	storage::{ProjectSettings, settings::Setting},
 };
 use bevy::{
-	camera::RenderTarget,
 	input::mouse::MouseMotion,
 	prelude::*,
 	window::{PrimaryWindow, SystemCursorIcon},
@@ -274,38 +273,23 @@ fn zoom_system(
 
 fn pan_system(
 	mut camera: EditorInternalSingle<
-		(
-			&RenderTarget,
-			&EditorManagedCamera,
-			&Projection,
-			&mut Transform,
-			&CameraSettings,
-		),
+		(&Projection, &mut Transform, &CameraSettings),
 		With<EditorCamera2d>,
 	>,
 	mut mouse_motion: MessageReader<MouseMotion>,
-	images: Res<Assets<Image>>,
 	window: Single<&Window, With<PrimaryWindow>>,
 ) {
-	let (target, managed_camera, projection, ref mut transform, settings) = *camera;
+	let (projection, ref mut transform, settings) = *camera;
 
 	let Projection::Orthographic(ortho) = projection else {
 		return;
 	};
-
-	let texture_size = target
-		.as_image()
-		.and_then(|handle| images.get(handle.id()))
-		.map(|image| image.size())
-		.unwrap_or_default()
-		.as_vec2();
 
 	let delta = mouse_motion
 		.read()
 		.map(|motion| motion.delta)
 		.reduce(|c, n| c + n)
 		.unwrap_or_default()
-		* texture_size
 		* settings.pan_sensitivity
 		* ortho.scale
 		* window.scale_factor();

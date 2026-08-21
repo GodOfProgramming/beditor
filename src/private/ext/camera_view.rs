@@ -4,7 +4,7 @@ use crate::{
 	private::{EditorInternal, EditorInternalQuery},
 };
 use bevy::{
-	camera::RenderTarget,
+	camera::{RenderTarget, visibility::RenderLayers},
 	ecs::system::SystemParam,
 	picking::pointer::{Location, PointerAction, PointerId, PointerInput, PointerLocation},
 	prelude::*,
@@ -76,6 +76,9 @@ pub struct Params<'w, 's> {
 	primary_window: Single<'w, 's, (Entity, &'static Window), With<PrimaryWindow>>,
 
 	last_coord: Local<'s, Vec2>,
+
+	q_render_layers: Query<'w, 's, &'static mut RenderLayers>,
+	new_render_layer: Local<'s, String>,
 }
 
 impl EditorUi for CameraViewUi {
@@ -117,6 +120,7 @@ impl EditorUi for CameraViewUi {
 			primary_window,
 			mut pointer_inputs,
 			mut last_coord,
+			..
 		} = params;
 
 		let Some(target) = self.target_entity.and_then(|e| q_targets.get_mut(e).ok()) else {
@@ -244,29 +248,61 @@ impl EditorUi for CameraViewUi {
 		let Params {
 			mut q_targets,
 			mut images,
+			mut q_render_layers,
+			mut new_render_layer,
 			..
 		} = params;
 
-		let Some(target) = self.target_entity.and_then(|e| q_targets.get_mut(e).ok()) else {
+		let Some(target_entity) = self.target_entity else {
 			return;
 		};
 
-		ui.menu_button("Aspect Ratio Overrides", |ui| {
-			if ui.button("480p").clicked()
-				&& let Some(image_handle) = target.as_image()
-				&& let Some(mut image) = images.get_mut(image_handle.id())
-			{
-				self.ignore_size_mismatch = true;
-				image.resize(Extent3d {
-					width: 640,
-					height: 480,
-					depth_or_array_layers: 1,
-				});
-			}
+		if let Ok(target) = q_targets.get_mut(target_entity) {
+			ui.menu_button("Aspect Ratio Overrides", |ui| {
+				if ui.button("480p").clicked()
+					&& let Some(image_handle) = target.as_image()
+					&& let Some(mut image) = images.get_mut(image_handle.id())
+				{
+					self.ignore_size_mismatch = true;
+					image.resize(Extent3d {
+						width: 640,
+						height: 480,
+						depth_or_array_layers: 1,
+					});
+				}
 
-			if ui.button("Clear aspect override").clicked() {
-				self.ignore_size_mismatch = false;
-			}
-		});
+				if ui.button("Clear aspect override").clicked() {
+					self.ignore_size_mismatch = false;
+				}
+			});
+		};
+
+		if let Ok(mut render_layers) = q_render_layers.get_mut(target_entity) {
+			ui.menu_button("Render Layers", |ui| {
+				ui.text_edit_singleline(&mut *new_render_layer);
+				if ui.button("Add Render Layer").clicked()
+					&& let Ok(layer) = new_render_layer.parse()
+				{
+					*render_layers = render_layers.clone().with(layer)
+				}
+
+				let mut layers_to_remove = RenderLayers::none();
+				for layer in render_layers.iter() {
+					ui.horizontal(|ui| {
+						ui.label(layer.to_string());
+						if ui.button(egui_phosphor_icons::icons::X).clicked() {
+							layers_to_remove = layers_to_remove.clone().with(layer);
+						}
+					});
+				}
+
+				if layers_to_remove != RenderLayers::none() {
+					*render_layers = render_layers
+						.clone()
+						.union(&layers_to_remove)
+						.symmetric_difference(&layers_to_remove);
+				}
+			});
+		}
 	}
 }

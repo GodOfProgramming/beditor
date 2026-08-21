@@ -62,6 +62,7 @@ bevy = { workspace = true, features = [
   "bevy_remote",
   "reflect_documentation",
   "serialize",
+  "track_location",
 ] }
 bevy_egui = { workspace = true, features = [
   "bevy_ui",
@@ -124,7 +125,7 @@ xml-rs = "1.0.0"
 
 [features]
 default = ["dev", "watch"]
-dev = ["bevy/track_location", "bevy/asset_processor"]
+dev = ["bevy/asset_processor"]
 profiling = ["bevy/trace_tracy", "dep:tracing-tracy"]
 watch = ["bevy/file_watcher"]
 editor-dev = []

@@ -5,7 +5,11 @@ use crate::{
 		WorldExtensions as _,
 		ui::{InspectorSelection, components::ComponentInfo},
 	},
-	private::{EditorInternal, util::egui::show_docs},
+	private::{
+		EditorInternal,
+		ext::change_viewer::{OpenChangeViewer, OpenChangeViewerKind},
+		util::egui::show_docs,
+	},
 	ui::EditorUiWorld,
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};
@@ -129,7 +133,7 @@ pub struct InspectorSettings {
 pub fn entity_context_menu(
 	response: &egui::CollapsingResponse<ComponentInfo>,
 	queue: &mut CommandQueue,
-	entities: impl 'static + Send + Sync + Iterator<Item = Entity>,
+	entities: impl 'static + Send + Sync + Iterator<Item = Entity> + Clone,
 ) {
 	let Some(info) = &response.body_returned else {
 		return;
@@ -138,11 +142,19 @@ pub fn entity_context_menu(
 	response.header_response.context_menu(|ui| {
 		if ui.button("Remove").clicked() {
 			let component_id = info.component_id;
+			let entities = entities.clone();
 			queue.push(move |world: &mut World| {
 				for entity in entities {
 					world.entity_mut(entity).remove_by_id(component_id);
 				}
 			});
+		}
+
+		if ui.button("Track Changes").clicked() {
+			queue.push(OpenChangeViewer::new(OpenChangeViewerKind::Component {
+				entities: Vec::from_iter(entities),
+				component_id: info.component_id,
+			}));
 		}
 	});
 }

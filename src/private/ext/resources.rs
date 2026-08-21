@@ -1,9 +1,17 @@
 use crate::{
-	EditorExtension, inspector::ui::InspectorSelection, private::EditorInternal, ui::EditorUi,
+	EditorExtension,
+	inspector::ui::InspectorSelection,
+	private::{
+		EditorInternal,
+		ext::change_viewer::{OpenChangeViewer, OpenChangeViewerKind},
+	},
+	ui::EditorUi,
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use std::marker::PhantomData;
 use uuid::uuid;
+
+use super::change_viewer::OpenResourceKind;
 
 #[derive(Default)]
 pub struct ResourcesUiExtension;
@@ -20,6 +28,7 @@ pub struct ResourcesUi;
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
+	commands: Commands<'w, 's>,
 	type_registry: Res<'w, AppTypeRegistry>,
 	selection: ResMut<'w, InspectorSelection>,
 
@@ -42,6 +51,7 @@ impl EditorUi for ResourcesUi {
 
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
+			mut commands,
 			type_registry,
 			mut selection,
 			mut filter,
@@ -69,9 +79,18 @@ impl EditorUi for ResourcesUi {
 				_ => false,
 			};
 
-			if ui.selectable_label(selected, resource_name).clicked() {
+			let response = ui.selectable_label(selected, resource_name);
+			if response.clicked() {
 				*selection = InspectorSelection::Resource(type_id, resource_name.to_string());
 			}
+
+			response.context_menu(|ui| {
+				if ui.button("Track Changes").clicked() {
+					commands.queue(OpenChangeViewer::new(OpenChangeViewerKind::Resource(
+						OpenResourceKind::TypeId(type_id),
+					)));
+				}
+			});
 		}
 	}
 }

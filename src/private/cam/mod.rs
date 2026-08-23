@@ -195,12 +195,14 @@ enum PanState {
 	Inactive,
 }
 
+/// Camera for the editor panel view
 #[derive(Default, Component, Reflect)]
 #[require(
   UserHidden,
   MeshPickingCamera,
   EditorManagedCamera,
   RenderLayers = RenderLayers::from_layers(&[0, EDITOR_VIEW_RENDER_LAYER]),
+  transform_gizmo_bevy::GizmoCamera = transform_gizmo_bevy::GizmoCamera,
 )]
 pub struct EditorCamera;
 
@@ -213,6 +215,7 @@ pub struct EditorCamera;
 )]
 pub struct EditorCameraScene;
 
+/// Camera for the entire editor window, including all egui views
 #[derive(Default, Component, Reflect)]
 #[require(
   UserHidden,

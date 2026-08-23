@@ -5,6 +5,8 @@ pub mod types;
 
 use bevy::ecs::system::SystemParam;
 
+pub use extensions::bevy::AppSystems;
+
 #[derive(SystemParam)]
 pub struct NoParams;
 

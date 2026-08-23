@@ -15,7 +15,7 @@ use crate::{
 			assets,
 			camera_view::CameraViewPointers,
 			components, content, diagnostics,
-			editor_view::{self, EditorViewUi, GizmoOptions},
+			editor_view::{self, EditorViewUi},
 			hierarchy, inspector, menu_bar, resources,
 		},
 		util::{WorldExtensions, entity::insert_bundle_from_world},
@@ -767,15 +767,12 @@ fn handle_selected(
 	mut commands: Commands,
 	q_3d_meshes: Query<(), With<Mesh3d>>,
 	q_transforms: Query<(), With<Transform>>,
-	gizmo_options: Res<GizmoOptions>,
 ) {
 	let entity = event.event_target();
 	if q_transforms.contains(entity)
 		&& let Ok(mut entity_commands) = commands.get_entity(entity)
 	{
-		if gizmo_options.enabled() {
-			entity_commands.insert(TransformGizmoFocus);
-		}
+		entity_commands.insert(transform_gizmo_bevy::GizmoTarget::default());
 
 		if q_3d_meshes.contains(entity_commands.id()) {
 			entity_commands.queue_handled(insert_bundle_from_world::<Highlight>(), |err, ctx| {
@@ -787,7 +784,10 @@ fn handle_selected(
 
 fn handle_deselected(event: On<Remove, Selected>, mut commands: Commands) {
 	if let Ok(mut entity) = commands.get_entity(event.event_target()) {
-		entity.queue_silenced(entity_command::remove::<(TransformGizmoFocus, Highlight)>());
+		entity.queue_silenced(entity_command::remove::<(
+			transform_gizmo_bevy::GizmoTarget,
+			Highlight,
+		)>());
 	}
 }
 

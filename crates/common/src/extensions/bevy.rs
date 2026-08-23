@@ -1,5 +1,12 @@
-use bevy::{ecs::world::CommandQueue, prelude::*};
+use bevy::{
+	ecs::{schedule::ScheduleLabel, system::ScheduleSystem, world::CommandQueue},
+	prelude::*,
+};
 use std::borrow::{Borrow, BorrowMut};
+
+/// All application systems that need to be editor controlled should be a part of this set
+#[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct AppSystems;
 
 pub trait AppExtensions: BorrowMut<App> {
 	fn try_add_plugin<P: Plugin>(&mut self, plugin: P) -> &mut Self {
@@ -7,6 +14,16 @@ pub trait AppExtensions: BorrowMut<App> {
 		if !app.is_plugin_added::<P>() {
 			app.add_plugins(plugin);
 		}
+		self
+	}
+
+	fn add_app_systems<M>(
+		&mut self,
+		schedule: impl ScheduleLabel,
+		systems: impl IntoScheduleConfigs<ScheduleSystem, M>,
+	) -> &mut Self {
+		let app = self.borrow_mut();
+		app.add_systems(schedule, systems.in_set(AppSystems));
 		self
 	}
 }

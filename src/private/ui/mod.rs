@@ -729,8 +729,8 @@ impl FromWorld for Highlight {
 fn handle_click_events(
 	mut event: On<Pointer<Click>>,
 	mut commands: Commands,
-	editor_pointers: Option<Single<&CameraViewPointers, With<EditorViewUi>>>,
-	q_pointer_ids: Query<&PointerId>,
+	editor_pointers: Option<EditorInternalSingle<&CameraViewPointers, With<EditorViewUi>>>,
+	q_pointer_ids: EditorInternalQuery<&PointerId>,
 	mut selection: ResMut<InspectorSelection>,
 	keyboard: Res<ButtonInput<KeyCode>>,
 ) {

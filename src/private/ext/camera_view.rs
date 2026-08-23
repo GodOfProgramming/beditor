@@ -1,7 +1,7 @@
 use super::image_viewer::ImageViewerUi;
 use crate::{
 	EditorExtension, EditorUi,
-	private::{EditorInternal, EditorInternalQuery},
+	private::{EditorInternal, EditorInternalQuery, UserHidden},
 };
 use bevy::{
 	camera::{RenderTarget, visibility::RenderLayers},
@@ -59,6 +59,7 @@ pub struct CameraViewPointers(Vec<Entity>);
 
 #[derive(Component, Reflect)]
 #[relationship(relationship_target = CameraViewPointers)]
+#[require(UserHidden)]
 pub struct CameraViewPointer(Entity);
 
 #[derive(SystemParam)]
@@ -69,8 +70,8 @@ pub struct Params<'w, 's> {
 	user_textures: ResMut<'w, EguiUserTextures>,
 	images: ResMut<'w, Assets<Image>>,
 
-	q_pointers: Query<'w, 's, &'static PointerId>,
-	q_view_pointers: Query<'w, 's, &'static CameraViewPointers>,
+	q_pointers: EditorInternalQuery<'w, 's, &'static PointerId>,
+	q_view_pointers: EditorInternalQuery<'w, 's, &'static CameraViewPointers>,
 	pointer_inputs: MessageWriter<'w, PointerInput>,
 
 	primary_window: Single<'w, 's, (Entity, &'static Window), With<PrimaryWindow>>,

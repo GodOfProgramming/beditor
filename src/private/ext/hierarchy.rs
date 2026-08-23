@@ -15,7 +15,12 @@ use crate::{
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
 };
-use bevy::{camera::RenderTarget, prelude::*};
+use bevy::{
+	camera::RenderTarget,
+	ecs::{resource::IsResource, system::SystemIdMarker},
+	gizmos_render::LineGizmoEntities,
+	prelude::*,
+};
 use common::extensions::bevy::WorldMutExtensions as _;
 use notify::Notification;
 use std::sync::Arc;
@@ -36,7 +41,11 @@ impl EditorExtension for HierarchyExtension {
 			.add_observer(SelectedEntitiesChangedEvent::on_event)
 			.add_systems(
 				FixedUpdate,
-				(ReparentMessage::handle, ClearSelectedMessage::handle),
+				(
+					ReparentMessage::handle,
+					ClearSelectedMessage::handle,
+					hide_bevy_gizmo_render_entities.run_if(resource_changed::<LineGizmoEntities>),
+				),
 			);
 	}
 }
@@ -106,15 +115,29 @@ impl EditorUiWorld for HierarchyUi {
 	}
 }
 
+type HierarchyFilter = (
+	Without<SystemIdMarker>,
+	Without<Observer>,
+	Without<IsResource>,
+);
+
 impl HierarchyUi {
 	fn show(ui: &mut egui::Ui, world: &mut World, selected: &mut SelectedEntities) -> bool {
 		let bg_fill = ui.style().visuals.window_fill();
 		ui.style_mut().visuals.widgets.inactive.bg_fill = bg_fill;
 
 		let Some(response) = (if cfg!(feature = "editor-dev") {
-			world.hierarchy_ui::<EditorInternalFilter, EntityDnd>(ui, selected, dnd_handler)
+			world.hierarchy_ui::<(EditorInternalFilter, HierarchyFilter), EntityDnd>(
+				ui,
+				selected,
+				dnd_handler,
+			)
 		} else {
-			world.hierarchy_ui::<Without<UserHidden>, EntityDnd>(ui, selected, dnd_handler)
+			world.hierarchy_ui::<(Without<UserHidden>, HierarchyFilter), EntityDnd>(
+				ui,
+				selected,
+				dnd_handler,
+			)
 		}) else {
 			return false;
 		};
@@ -266,5 +289,16 @@ fn dnd_handler(_: &mut egui::Ui, entity: Entity, world: &mut World, payload: Arc
 	world.entity_mut(entity).add_child(new_entity);
 	if !payload.insert(std::iter::once(new_entity), world) {
 		world.trigger(Notification::error("Failed to spawn"));
+	}
+}
+
+/// These entities are just names and clutter the hierarchy
+fn hide_bevy_gizmo_render_entities(mut commands: Commands, entities: Res<LineGizmoEntities>) {
+	for entity in [
+		entities.line_gizmo_renderer,
+		entities.line_strip_gizmo_renderer,
+		entities.line_joint_gizmo_renderer,
+	] {
+		commands.entity(entity.entity()).insert(UserHidden);
 	}
 }

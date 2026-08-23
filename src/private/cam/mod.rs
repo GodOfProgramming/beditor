@@ -202,7 +202,6 @@ enum PanState {
   MeshPickingCamera,
   EditorManagedCamera,
   RenderLayers = RenderLayers::from_layers(&[0, EDITOR_VIEW_RENDER_LAYER]),
-  transform_gizmo_bevy::GizmoCamera = transform_gizmo_bevy::GizmoCamera,
 )]
 pub struct EditorCamera;
 

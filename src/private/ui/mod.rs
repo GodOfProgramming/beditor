@@ -95,6 +95,7 @@ impl Plugin for EditorUiPlugin {
 					AppendUiMessage::handle,
 					handle_open_ui_requests,
 					reparent_editor_ui,
+					auto_register_sprites,
 				),
 			)
 			.add_systems(
@@ -940,5 +941,14 @@ fn forward_interactions(
 		if *entity_interaction != interaction {
 			*entity_interaction = interaction;
 		}
+	}
+}
+
+fn auto_register_sprites(
+	mut commands: Commands,
+	q_sprites: Query<Entity, (With<Sprite>, Without<Pickable>)>,
+) {
+	for entity in q_sprites {
+		commands.entity(entity).insert(Pickable::default());
 	}
 }

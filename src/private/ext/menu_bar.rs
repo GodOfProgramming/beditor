@@ -2,7 +2,10 @@ use crate::{
 	EditorState, SimulationState,
 	private::{
 		EditorInternalQuery, EditorScene,
-		ext::settings::{ProjectSettingsUi, ShowEditorSettings},
+		ext::{
+			change_viewer::ChangeViewerUi,
+			settings::{ProjectSettingsUi, ShowEditorSettings},
+		},
 		ui::misc::CenteredFileDialog,
 	},
 	ui::{OpenMode, OpenUi},
@@ -35,7 +38,7 @@ pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 	egui::MenuBar::new().ui(ui, |ui| {
 		file_menu(ui, &mut params);
 		edit_menu(ui, &mut params);
-		tools_menu(ui);
+		tools_menu(ui, &mut params);
 		view_menu(ui);
 		game_control(ui, &mut params);
 	});
@@ -69,7 +72,7 @@ fn edit_menu(ui: &mut egui::Ui, params: &mut Params<'_, '_>) {
 	});
 }
 
-fn tools_menu(ui: &mut egui::Ui) {
+fn tools_menu(ui: &mut egui::Ui, params: &mut Params<'_, '_>) {
 	ui.menu_button("Tools", |ui| {
 		if ui.button("Copy New UUID").clicked() {
 			ui.output_mut(|output| {
@@ -77,6 +80,12 @@ fn tools_menu(ui: &mut egui::Ui) {
 					.commands
 					.push(egui::OutputCommand::CopyText(Uuid::new_v4().to_string()));
 			});
+		}
+
+		if ui.button("Open Change Viewer").clicked() {
+			params
+				.commands
+				.queue(OpenUi::open::<ChangeViewerUi>(OpenMode::Window));
 		}
 	});
 }

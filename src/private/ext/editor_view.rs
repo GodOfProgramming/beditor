@@ -15,9 +15,9 @@ use crate::{
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
 use bevy_egui::EguiContext;
-// use bevy_transform_tools::{AxisSnap, TransformGizmoMode, TransformGizmoSnap, TransformGizmoState};
 use egui_phosphor_icons::icons;
 use singleton::{SingletonBehavior, SingletonPlugin};
+use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
 use uuid::uuid;
 
 #[derive(Default)]
@@ -48,18 +48,6 @@ impl EditorExtension for EditorViewUiExtension {
 	}
 }
 
-#[derive(Resource, Default)]
-pub struct GizmoOptions {
-	snap: bool,
-	disabled: bool,
-}
-
-impl GizmoOptions {
-	pub fn enabled(&self) -> bool {
-		!self.disabled
-	}
-}
-
 #[derive(Component, Reflect, Default)]
 #[require(EditorInternal)]
 pub struct EditorViewUi;
@@ -70,7 +58,6 @@ pub struct Params<'w, 's> {
 	camera_view_params: camera_view::Params<'w, 's>,
 	camera_view: Local<'s, CameraViewUi>,
 	gizmo_options: ResMut<'w, GizmoOptions>,
-	settings: ResMut<'w, TransformGizmoSettings>,
 
 	temporary_dnd_entity: Option<
 		EditorInternalSingle<'w, 's, (Entity, Option<&'static Transform>), With<TemporaryEntity>>,
@@ -98,6 +85,12 @@ impl EditorUi for EditorViewUi {
 		default()
 	}
 
+	fn init(&mut self, this_entity: Entity, mut params: Self::Params<'_, '_>) {
+		params
+			.camera_view
+			.init(this_entity, params.camera_view_params);
+	}
+
 	fn ui(&mut self, ui: &mut egui::Ui, params: Self::Params<'_, '_>) {
 		let Params {
 			mut commands,
@@ -106,7 +99,6 @@ impl EditorUi for EditorViewUi {
 			temporary_dnd_entity,
 			editor_camera,
 			mut gizmo_options,
-			settings: mut snap,
 		} = params;
 
 		let Some(editor_camera) = editor_camera else {
@@ -116,7 +108,7 @@ impl EditorUi for EditorViewUi {
 
 		let (entity, is_2d, is_3d) = *editor_camera;
 
-		camera_view.entity = entity;
+		camera_view.target_entity = Some(entity);
 
 		let window_rect = ui.clip_rect();
 
@@ -129,13 +121,20 @@ impl EditorUi for EditorViewUi {
 				window_rect.max - egui::vec2(margin.rightf(), margin.bottomf()),
 			);
 
+			gizmo_options.viewport_rect = Some(Rect::new(
+				outer_ui.min.x,
+				outer_ui.min.y,
+				outer_ui.max.x,
+				outer_ui.max.y,
+			));
+
 			ui.scope_builder(egui::UiBuilder::new().max_rect(outer_ui), |ui| {
 				match (is_2d, is_3d) {
 					(true, false) => {
 						overlay2d();
 					}
 					(false, true) => {
-						overlay3d(ui, &mut gizmo_options, &mut snap);
+						overlay3d(ui, &mut gizmo_options);
 					}
 					(false, false) => {
 						ui.label("No camera kind");
@@ -265,45 +264,30 @@ fn despawn_temporaries(
 
 fn overlay2d() {}
 
-fn overlay3d(
-	ui: &mut egui::Ui,
-	gizmo_options: &mut GizmoOptions,
-	settings: &mut TransformGizmoSettings,
-) {
+fn overlay3d(ui: &mut egui::Ui, gizmo_options: &mut GizmoOptions) {
 	let style = ui.style_mut();
 	style.spacing.window_margin = egui::Margin::same(6);
 	style.spacing.item_spacing.x = 6.0;
 
 	ui.horizontal(|ui| {
 		if ui
-			.selectable_label(gizmo_options.snap, icons::MAGNET)
+			.selectable_label(gizmo_options.snapping, icons::MAGNET)
 			.clicked()
 		{
-			gizmo_options.snap ^= true;
-			if !gizmo_options.snap {
-				settings.snap_translate = None;
-				settings.snap_rotate = None;
-				settings.snap_scale = None;
-			}
+			gizmo_options.snapping ^= true;
 		}
 
-		if gizmo_options.snap {
+		if gizmo_options.snapping {
 			ui.scope(|ui| {
 				ui.style_mut().spacing.item_spacing.x = 0.0;
 				ui.add_enabled(false, egui::Button::selectable(false, icons::GRID_NINE));
-
-				let mut snap_val = settings.snap_translate.unwrap_or_default();
-				ui.add(egui::DragValue::new(&mut snap_val));
-				settings.snap_translate = Some(snap_val);
+				ui.add(egui::DragValue::new(&mut gizmo_options.snap_distance));
 			});
 
 			ui.scope(|ui| {
 				ui.style_mut().spacing.item_spacing.x = 0.0;
 				ui.add_enabled(false, egui::Button::selectable(false, icons::ANGLE));
-
-				let mut snap_val = settings.snap_rotate.unwrap_or_default();
-				ui.drag_angle(&mut snap_val);
-				settings.snap_rotate = Some(snap_val);
+				ui.drag_angle(&mut gizmo_options.snap_angle);
 			});
 
 			ui.scope(|ui| {
@@ -312,35 +296,130 @@ fn overlay3d(
 					false,
 					egui::Button::selectable(false, icons::ARROWS_OUT_SIMPLE),
 				);
-
-				let mut snap_val = settings.snap_scale.unwrap_or_default();
-				ui.add(egui::DragValue::new(&mut snap_val));
-				settings.snap_scale = Some(snap_val);
+				ui.add(egui::DragValue::new(&mut gizmo_options.snap_scale));
 			});
 		}
 
 		ui.scope(|ui| {
 			ui.style_mut().spacing.item_spacing.x = 0.0;
 
-			let only_selecting = gizmo_options.disabled;
+			let only_selecting = gizmo_options.gizmo_modes.is_empty();
 			if ui.selectable_label(only_selecting, icons::CURSOR).clicked() {
-				gizmo_options.disabled = true;
+				gizmo_options.gizmo_modes.clear();
 			}
 
-			for (mode, icon) in [
-				(TransformGizmoMode::Translate, icons::ARROWS_OUT_CARDINAL),
-				(TransformGizmoMode::Rotate, icons::ARROWS_CLOCKWISE),
-				(TransformGizmoMode::Scale, icons::ARROW_SQUARE_OUT),
+			for (set, icon) in [
+				(GizmoMode::all_translate(), icons::ARROWS_OUT_CARDINAL),
+				(GizmoMode::all_rotate(), icons::ARROWS_CLOCKWISE),
+				(GizmoMode::all_scale(), icons::ARROW_SQUARE_OUT),
 			] {
-				gizmo_options.disabled = false;
-
-				if ui
-					.selectable_label(!gizmo_options.disabled && settings.mode == mode, icon)
-					.clicked()
-				{
-					settings.mode = mode;
+				let enabled = set.is_subset(gizmo_options.gizmo_modes);
+				if ui.selectable_label(enabled, icon).clicked() {
+					if enabled {
+						gizmo_options.gizmo_modes.remove_all(set);
+					} else {
+						gizmo_options.gizmo_modes.insert_all(set);
+					}
 				}
 			}
 		});
 	});
+}
+
+#[allow(unused)]
+mod unused {
+	use bevy::prelude::*;
+	use egui_phosphor_icons::icons;
+
+	#[derive(Resource, Default)]
+	pub struct GizmoOptions {
+		snap: bool,
+		disabled: bool,
+	}
+
+	impl GizmoOptions {
+		pub fn enabled(&self) -> bool {
+			!self.disabled
+		}
+	}
+
+	fn overlay3d(
+		ui: &mut egui::Ui,
+		gizmo_options: &mut GizmoOptions,
+		settings: &mut TransformGizmoSettings,
+	) {
+		let style = ui.style_mut();
+		style.spacing.window_margin = egui::Margin::same(6);
+		style.spacing.item_spacing.x = 6.0;
+
+		ui.horizontal(|ui| {
+			if ui
+				.selectable_label(gizmo_options.snap, icons::MAGNET)
+				.clicked()
+			{
+				gizmo_options.snap ^= true;
+				if !gizmo_options.snap {
+					settings.snap_translate = None;
+					settings.snap_rotate = None;
+					settings.snap_scale = None;
+				}
+			}
+
+			if gizmo_options.snap {
+				ui.scope(|ui| {
+					ui.style_mut().spacing.item_spacing.x = 0.0;
+					ui.add_enabled(false, egui::Button::selectable(false, icons::GRID_NINE));
+
+					let mut snap_val = settings.snap_translate.unwrap_or_default();
+					ui.add(egui::DragValue::new(&mut snap_val));
+					settings.snap_translate = Some(snap_val);
+				});
+
+				ui.scope(|ui| {
+					ui.style_mut().spacing.item_spacing.x = 0.0;
+					ui.add_enabled(false, egui::Button::selectable(false, icons::ANGLE));
+
+					let mut snap_val = settings.snap_rotate.unwrap_or_default();
+					ui.drag_angle(&mut snap_val);
+					settings.snap_rotate = Some(snap_val);
+				});
+
+				ui.scope(|ui| {
+					ui.style_mut().spacing.item_spacing.x = 0.0;
+					ui.add_enabled(
+						false,
+						egui::Button::selectable(false, icons::ARROWS_OUT_SIMPLE),
+					);
+
+					let mut snap_val = settings.snap_scale.unwrap_or_default();
+					ui.add(egui::DragValue::new(&mut snap_val));
+					settings.snap_scale = Some(snap_val);
+				});
+			}
+
+			ui.scope(|ui| {
+				ui.style_mut().spacing.item_spacing.x = 0.0;
+
+				let only_selecting = gizmo_options.disabled;
+				if ui.selectable_label(only_selecting, icons::CURSOR).clicked() {
+					gizmo_options.disabled = true;
+				}
+
+				for (mode, icon) in [
+					(TransformGizmoMode::Translate, icons::ARROWS_OUT_CARDINAL),
+					(TransformGizmoMode::Rotate, icons::ARROWS_CLOCKWISE),
+					(TransformGizmoMode::Scale, icons::ARROW_SQUARE_OUT),
+				] {
+					gizmo_options.disabled = false;
+
+					if ui
+						.selectable_label(!gizmo_options.disabled && settings.mode == mode, icon)
+						.clicked()
+					{
+						settings.mode = mode;
+					}
+				}
+			});
+		});
+	}
 }

@@ -48,13 +48,15 @@ pub use prelude::*;
 
 pub mod prelude {
 	pub use crate::{
-		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
-		EditorState,
+		EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin, EditorState,
 		content::{AssetRef, ContentDef, ContentHandlers},
 		ui::{EditorUi, EditorUiWorld},
 	};
 	pub use bevy_egui;
-	pub use common::NoParams;
+	pub use common::{
+		AppSystems, NoParams,
+		extensions::bevy::{AppExtensions as _, WorldExtensions as _},
+	};
 	pub use egui;
 	pub use macros::{self, EditorAsset, Identifiable};
 	pub use persistent_id::{self, Identifiable};
@@ -62,10 +64,6 @@ pub mod prelude {
 	pub use uuid;
 	pub use widgets;
 }
-
-/// All application systems that need to be editor controlled should be a part of this set
-#[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct AppSystems;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States)]
 pub enum EditorState {
@@ -185,9 +183,9 @@ impl Plugin for EditorPlugin {
 				NotificationPlugin::<EditorInternalFilter>::default().in_schedule(EditorUiEguiContextPass),
 			)
 			// crates
+			.try_add_plugin(transform_gizmo_bevy::TransformGizmoPlugin)
 			.try_add_plugin(InfiniteGridPlugin)
 			.try_add_plugin(OutlinePlugin::EXTRUDE_VERTEX)
-			.try_add_plugin(TransformGizmoPlugin)
 			// internal
 			.add_plugins(private::InternalPlugin);
 	}

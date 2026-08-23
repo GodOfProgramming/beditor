@@ -145,24 +145,22 @@ impl HierarchyUi {
 					if let Some(target) = entity_ref.get::<RenderTarget>() {
 						ui.menu_button("Camera", |ui| {
 							if entity_ref.contains::<EditorManagedCamera>() {
-								if ui.button("Open Live").clicked() {
-									queue.push(OpenUi::open_with(
+								if ui.button("Open View").clicked() {
+									queue.push(OpenUi::open_with_value(
 										OpenMode::Window,
 										CameraViewUi::new(entity),
 									));
 								}
 							} else if ui.button("Add To Editor").clicked() {
 								queue.push(move |world: &mut World| {
-									world
-										.entity_mut(entity)
-										.insert(EditorManagedCamera::default());
+									world.entity_mut(entity).insert(EditorManagedCamera);
 								});
 							}
 
 							if let Some(image) = target.as_image()
 								&& ui.button("Observe").clicked()
 							{
-								queue.push(OpenUi::open_with(
+								queue.push(OpenUi::open_with_value(
 									OpenMode::Window,
 									ImageViewerUi::new(image.id()),
 								));

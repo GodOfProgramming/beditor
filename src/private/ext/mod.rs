@@ -1,5 +1,6 @@
 pub mod assets;
 pub mod camera_view;
+pub mod change_viewer;
 pub mod components;
 pub mod content;
 pub mod diagnostics;
@@ -41,6 +42,7 @@ impl EditorExtension for InternalEditorExtensions {
 		app.add_plugins((
 			EditorExtensionPlugin::<assets::AssetsUiExtension>::default(),
 			EditorExtensionPlugin::<camera_view::CameraViewUiExtension>::default(),
+			EditorExtensionPlugin::<change_viewer::ChangeViewerUiExtension>::default(),
 			EditorExtensionPlugin::<components::ComponentsUiExtension>::default(),
 			EditorExtensionPlugin::<content::ContentUiExtension>::default(),
 			EditorExtensionPlugin::<diagnostics::DiagnosticsUiExtension>::default(),

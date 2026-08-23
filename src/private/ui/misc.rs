@@ -242,46 +242,57 @@ pub(crate) trait DockExtensions:
 		vtables: &HashMap<PersistentId, &'static VTable>,
 		world: &mut World,
 	) -> Self {
-		dock
-			.filter_map_tabs(|layout_info| {
-				let Some(vtable) = vtables.get(&layout_info.id()) else {
-					let name = layout_info.name();
-					let state = SystemState::<<MissingUi as EditorUi>::Params<'_, '_>>::new(world);
+		let mut dock = dock.filter_map_tabs(|layout_info| {
+			let Some(vtable) = vtables.get(&layout_info.id()) else {
+				let name = layout_info.name();
+				let state = SystemState::<<MissingUi as EditorUi>::Params<'_, '_>>::new(world);
 
-					warn!(
-						"Failed to find ui component {name} with uuid {}",
-						*layout_info.id()
-					);
+				warn!(
+					"Failed to find ui component {name} with uuid {}",
+					*layout_info.id()
+				);
 
-					let entity = world
-						.spawn((
-							Name::new(<MissingUi as EditorUiWorld>::NAME),
-							MissingUi::new(name, layout_info.id()),
-							PersistentId(<MissingUi as EditorUiWorld>::ID),
-							UiState::default(),
-							UiComponentState(state),
-						))
-						.id();
+				let entity = world
+					.spawn((
+						Name::new(<MissingUi as EditorUiWorld>::NAME),
+						MissingUi::new(name, layout_info.id()),
+						PersistentId(<MissingUi as EditorUiWorld>::ID),
+						UiState::default(),
+						UiComponentState(state),
+					))
+					.id();
 
-					return Some(TabState {
-						entity,
-						vtable: &MissingUi::VTABLE,
-					});
-				};
+				return Some(TabState {
+					entity,
+					vtable: &MissingUi::VTABLE,
+				});
+			};
 
-				if vtable.reopen_on_startup {
-					let entity = world
-						.notify_on_error(
-							|world| (vtable.spawn)(world),
-							|_, err| (format!("Failed to reopen {}", vtable.name), Some(err)),
-						)
-						.ok()?;
-					Some(TabState { entity, vtable })
-				} else {
-					None
-				}
-			})
-			.into()
+			if vtable.reopen_on_startup {
+				let entity = world
+					.notify_on_error(
+						|world| (vtable.spawn)(world),
+						|_, err| (format!("Failed to reopen {}", vtable.name), Some(err)),
+					)
+					.ok()?;
+				Some(TabState { entity, vtable })
+			} else {
+				None
+			}
+		});
+
+		let mut surfaces_to_remove = Vec::new();
+		for (index, surface) in dock.iter_surfaces_indexed() {
+			if surface.is_empty() || surface.iter_all_tabs().next().is_none() {
+				surfaces_to_remove.push(index);
+			}
+		}
+
+		for index in surfaces_to_remove {
+			dock.remove_surface(index);
+		}
+
+		dock.into()
 	}
 }
 

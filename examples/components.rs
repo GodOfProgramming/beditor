@@ -8,7 +8,7 @@ fn main() {
 			EditorExtensionPlugin::<GameComponentsExtension>::default(),
 		))
 		.add_systems(Startup, startup)
-		.add_systems(Update, (spin, grow).in_set(AppSystems))
+		.add_app_systems(Update, (spin, grow))
 		.run();
 }
 

@@ -49,7 +49,13 @@ impl Plugin for EditorCam3dPlugin {
 }
 
 #[derive(Component, Default)]
-#[require(Camera3d, EditorCamera, UserHidden, CameraSettings)]
+#[require(
+  Camera3d,
+  EditorCamera,
+  UserHidden,
+  CameraSettings,
+  transform_gizmo_bevy::GizmoCamera = transform_gizmo_bevy::GizmoCamera,
+)]
 struct EditorCamera3d;
 
 #[derive(Actionlike, PartialEq, Eq, Hash, Clone, Copy, Debug, Reflect)]

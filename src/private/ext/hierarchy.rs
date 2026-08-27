@@ -11,7 +11,7 @@ use crate::{
 	private::{
 		EditorInternal, EditorInternalFilter, UserHidden,
 		cam::{ActiveEditorCamera, EditorCamera, EditorManagedCamera, MoveTo, cam3d::LookAt},
-		util::WorldExtensions as _,
+		util::extensions::WorldMutExtensions as _,
 	},
 	ui::{EditorUiWorld, OpenMode, OpenUi},
 };
@@ -21,7 +21,6 @@ use bevy::{
 	gizmos_render::LineGizmoEntities,
 	prelude::*,
 };
-use common::extensions::bevy::WorldMutExtensions as _;
 use notify::Notification;
 use std::sync::Arc;
 use uuid::{Uuid, uuid};

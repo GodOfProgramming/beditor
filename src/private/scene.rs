@@ -1,5 +1,6 @@
-use crate::{EditorState, private::UserHidden};
+use crate::{AssetRef, EditorState, private::UserHidden};
 use bevy::{dev_tools::infinite_grid::InfiniteGrid, ecs::entity_disabling::Disabled, prelude::*};
+use serde::{Deserialize, Serialize};
 
 pub struct EditorScenePlugin;
 
@@ -38,3 +39,22 @@ fn remove_infinite_grid(
 	Name::new("New Scene")
 )]
 pub struct GameScene;
+
+#[derive(Reflect, Serialize, Deserialize)]
+pub struct Map {
+	camera: CameraMode,
+	resources: Vec<AssetRef>,
+	hierarchy: SceneComponent,
+}
+
+#[derive(Reflect, Serialize, Deserialize)]
+enum CameraMode {
+	Camera3D,
+	Camera2D,
+}
+
+#[derive(Reflect, Serialize, Deserialize)]
+struct SceneComponent {
+	value: AssetRef,
+	children: Vec<SceneComponent>,
+}

@@ -43,7 +43,12 @@ pub struct ContentDefAsset {
 pub trait ContentDef: 'static + Send + Sync + ContentHandlers {}
 
 pub trait ContentHandlers {
-	fn insert(&self, entity: Entity, world: &mut World);
+	fn insert(&self, world: &mut World) {
+		let entity = world.spawn_empty().id();
+		self.apply(entity, world);
+	}
+
+	fn apply(&self, entity: Entity, world: &mut World);
 }
 
 pub trait ContentUtils {
@@ -56,7 +61,7 @@ where
 {
 	fn spawn(&self, world: &mut World) -> Entity {
 		let ent = world.spawn_empty().id();
-		self.insert(ent, world);
+		self.apply(ent, world);
 		ent
 	}
 }
@@ -79,15 +84,20 @@ impl AssetRef {
 }
 
 #[derive(Reflect, Serialize, Deserialize, EditorAsset)]
-#[ns("editor")]
+#[ns("beditor")]
 pub enum EditorAssetDefs {
 	Audio { source: PathBuf },
 }
 
 impl ContentHandlers for EditorAssetDefs {
-	fn insert(&self, entity: Entity, world: &mut World) {
+	fn insert(&self, world: &mut World) {
+		let entity = world.spawn_empty().id();
+		self.apply(entity, world);
+	}
+
+	fn apply(&self, entity: Entity, world: &mut World) {
 		match self {
-			EditorAssetDefs::Audio { source } => {
+			Self::Audio { source } => {
 				let source_handle = world.load_asset(AssetPath::from_path(source));
 				world
 					.entity_mut(entity)

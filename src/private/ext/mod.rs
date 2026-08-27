@@ -3,8 +3,8 @@ pub mod camera_view;
 pub mod change_viewer;
 pub mod components;
 pub mod content;
+pub mod debug;
 pub mod diagnostics;
-pub mod editor_view;
 pub mod game_camera_view;
 pub mod hierarchy;
 pub mod image_viewer;
@@ -13,6 +13,7 @@ pub mod logs;
 pub mod menu_bar;
 pub mod resources;
 pub mod scene_inspector;
+pub mod scene_view;
 pub mod settings;
 pub mod type_editor;
 
@@ -20,7 +21,7 @@ use crate::{
 	EditorExtension, EditorExtensionContext, EditorExtensionPlugin, content::ContentDefAsset,
 	reg::components::ComponentRegistry,
 };
-use bevy::prelude::*;
+use bevy::{app::PluginGroupBuilder, prelude::*};
 use itertools::Itertools;
 use std::{
 	any::{Any, TypeId},
@@ -39,23 +40,49 @@ impl EditorExtension for InternalEditorExtensions {
 	}
 
 	fn build_app(&self, app: &mut App) {
-		app.add_plugins((
-			EditorExtensionPlugin::<assets::AssetsUiExtension>::default(),
-			EditorExtensionPlugin::<camera_view::CameraViewUiExtension>::default(),
-			EditorExtensionPlugin::<change_viewer::ChangeViewerUiExtension>::default(),
-			EditorExtensionPlugin::<components::ComponentsUiExtension>::default(),
-			EditorExtensionPlugin::<content::ContentUiExtension>::default(),
-			EditorExtensionPlugin::<diagnostics::DiagnosticsUiExtension>::default(),
-			EditorExtensionPlugin::<editor_view::EditorViewUiExtension>::default(),
-			EditorExtensionPlugin::<hierarchy::HierarchyExtension>::default(),
-			EditorExtensionPlugin::<image_viewer::ImageViewerUiExtension>::default(),
-			EditorExtensionPlugin::<inspector::InspectorUiExtension>::default(),
-			EditorExtensionPlugin::<logs::LogsUiExtension>::default(),
-			EditorExtensionPlugin::<resources::ResourcesUiExtension>::default(),
-			EditorExtensionPlugin::<scene_inspector::SceneInspectorUiExtension>::default(),
-			EditorExtensionPlugin::<settings::SettingsUiExtension>::default(),
-			EditorExtensionPlugin::<type_editor::TypeEditorUiExtension>::default(),
-		));
+		app.add_plugins(EditorExtensions);
+	}
+}
+
+struct EditorExtensions;
+
+impl PluginGroup for EditorExtensions {
+	fn build(self) -> PluginGroupBuilder {
+		let mut group = PluginGroupBuilder::start::<Self>();
+
+		macro_rules! add {
+			($plugin:path) => {
+				group = group.add(<$plugin>::default());
+			};
+		}
+
+		macro_rules! foreach {
+      ($target_macro:ident, $($ty:path),+ $(,)?) => {
+        $($target_macro!($ty);)+
+      };
+    }
+
+		foreach!(
+			add,
+			EditorExtensionPlugin::<assets::AssetsUiExtension>,
+			EditorExtensionPlugin::<camera_view::CameraViewUiExtension>,
+			EditorExtensionPlugin::<change_viewer::ChangeViewerUiExtension>,
+			EditorExtensionPlugin::<components::ComponentsUiExtension>,
+			EditorExtensionPlugin::<content::ContentUiExtension>,
+			EditorExtensionPlugin::<debug::DebugUiExtension>,
+			EditorExtensionPlugin::<diagnostics::DiagnosticsUiExtension>,
+			EditorExtensionPlugin::<hierarchy::HierarchyExtension>,
+			EditorExtensionPlugin::<image_viewer::ImageViewerUiExtension>,
+			EditorExtensionPlugin::<inspector::InspectorUiExtension>,
+			EditorExtensionPlugin::<logs::LogsUiExtension>,
+			EditorExtensionPlugin::<resources::ResourcesUiExtension>,
+			EditorExtensionPlugin::<scene_inspector::SceneInspectorUiExtension>,
+			EditorExtensionPlugin::<scene_view::SceneViewUiExtension>,
+			EditorExtensionPlugin::<settings::SettingsUiExtension>,
+			EditorExtensionPlugin::<type_editor::TypeEditorUiExtension>,
+		);
+
+		group
 	}
 }
 
@@ -72,7 +99,7 @@ impl EntityDnd {
 				world.resource_scope(|world, assets: Mut<Assets<ContentDefAsset>>| {
 					if let Some(asset_def) = assets.get(asset_def_handle.id()) {
 						for entity in entities {
-							asset_def.insert(entity, world);
+							asset_def.apply(entity, world);
 						}
 						true
 					} else {

@@ -1,18 +1,20 @@
-use super::{LayoutInfo, TabState, VTable};
+use super::{TabState, VTable, persistence::LayoutInfo};
 use crate::{
-	EditorUi, EditorUiWorld, UiManager,
+	EditorUi, EditorUiWorld,
 	inspector::{
 		InspectorPrimitive,
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 	},
-	private::{EditorInternal, EditorInternalFilter, EditorInternalQuery, util::WorldExtensions},
+	private::{
+		EditorInternal, EditorInternalFilter, ui::UiVTables, util::extensions::WorldMutExtensions,
+	},
 };
 use bevy::{
 	ecs::{
 		component::Mutable,
+		query::QueryFilter,
 		system::{SystemParam, SystemState},
 	},
-	platform::collections::HashMap,
 	prelude::*,
 };
 use derive_more::derive::Deref;
@@ -210,11 +212,11 @@ impl EditorUi for MissingUi {
 pub(crate) trait DockExtensions:
 	Borrow<DockState<TabState>> + From<DockState<TabState>>
 {
-	fn decouple(
+	fn decouple<F1: QueryFilter, F2: QueryFilter>(
 		&self,
-		ui_manager: &UiManager,
-		q_persistent_ids: &EditorInternalQuery<&PersistentId, Without<MissingUi>>,
-		q_missing: &EditorInternalQuery<&MissingUi>,
+		vtables: &UiVTables,
+		q_persistent_ids: &Query<&PersistentId, F1>,
+		q_missing: &Query<&MissingUi, F2>,
 	) -> DockState<LayoutInfo> {
 		self.borrow().map_tabs(|tab| {
 			let id;
@@ -225,8 +227,7 @@ pub(crate) trait DockExtensions:
 				name = missing_uuid.name.clone();
 			} else {
 				id = *q_persistent_ids.get(tab.entity).unwrap();
-				name = ui_manager
-					.vtables
+				name = vtables
 					.get(&id)
 					.cloned()
 					.map(|vt| vt.name.to_string())
@@ -237,48 +238,46 @@ pub(crate) trait DockExtensions:
 		})
 	}
 
-	fn restore(
-		dock: DockState<LayoutInfo>,
-		vtables: &HashMap<PersistentId, &'static VTable>,
-		world: &mut World,
-	) -> Self {
-		let mut dock = dock.filter_map_tabs(|layout_info| {
-			let Some(vtable) = vtables.get(&layout_info.id()) else {
-				let name = layout_info.name();
-				let state = SystemState::<<MissingUi as EditorUi>::Params<'_, '_>>::new(world);
+	fn restore(dock: DockState<LayoutInfo>, world: &mut World) -> Self {
+		let mut dock = world.resource_scope(|world, vtables: Mut<UiVTables>| {
+			dock.filter_map_tabs(|layout_info| {
+				let Some(vtable) = vtables.get(&layout_info.id()) else {
+					let name = layout_info.name();
+					let state = SystemState::<<MissingUi as EditorUi>::Params<'_, '_>>::new(world);
 
-				warn!(
-					"Failed to find ui component {name} with uuid {}",
-					*layout_info.id()
-				);
+					warn!(
+						"Failed to find ui component {name} with uuid {}",
+						*layout_info.id()
+					);
 
-				let entity = world
-					.spawn((
-						Name::new(<MissingUi as EditorUiWorld>::NAME),
-						MissingUi::new(name, layout_info.id()),
-						PersistentId(<MissingUi as EditorUiWorld>::ID),
-						UiState::default(),
-						UiComponentState(state),
-					))
-					.id();
+					let entity = world
+						.spawn((
+							Name::new(<MissingUi as EditorUiWorld>::NAME),
+							MissingUi::new(name, layout_info.id()),
+							PersistentId(<MissingUi as EditorUiWorld>::ID),
+							UiState::default(),
+							UiComponentState(state),
+						))
+						.id();
 
-				return Some(TabState {
-					entity,
-					vtable: &MissingUi::VTABLE,
-				});
-			};
+					return Some(TabState {
+						entity,
+						vtable: &MissingUi::VTABLE,
+					});
+				};
 
-			if vtable.reopen_on_startup {
-				let entity = world
-					.notify_on_error(
-						|world| (vtable.spawn)(world),
-						|_, err| (format!("Failed to reopen {}", vtable.name), Some(err)),
-					)
-					.ok()?;
-				Some(TabState { entity, vtable })
-			} else {
-				None
-			}
+				if vtable.reopen_on_startup {
+					let entity = world
+						.notify_on_error(
+							|world| (vtable.spawn)(world),
+							|_, err| (format!("Failed to reopen {}", vtable.name), Some(err)),
+						)
+						.ok()?;
+					Some(TabState { entity, vtable })
+				} else {
+					None
+				}
+			})
 		});
 
 		let mut surfaces_to_remove = Vec::new();

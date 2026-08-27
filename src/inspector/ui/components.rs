@@ -4,13 +4,10 @@ use crate::{
 		ui::{ImmutableContext, InspectorUi, MutableContext},
 		world_view::{MutableWorldView, ReflectBorrow, RestrictedWorldView},
 	},
-	private::util,
+	private::util::{self, extensions::WorldMutExtensions as _},
 };
 use bevy::{ecs::component::ComponentId, prelude::*, reflect::TypeRegistry};
-use common::extensions::{
-	bevy::WorldMutExtensions as _,
-	egui::{CollapsingResponseExtensions, ResponseConditions},
-};
+use common::extensions::egui::{CollapsingResponseExtensions, ResponseConditions};
 use itertools::Itertools;
 use std::any::TypeId;
 

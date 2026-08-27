@@ -16,8 +16,10 @@ pub mod ui;
 
 use crate::{
 	private::{
-		EditorInternalFilter, ext::game_camera_view::GameCameraViewExtension,
-		ui::EditorUiEguiContextPass,
+		EditorInternalFilter,
+		ext::game_camera_view::GameCameraViewExtension,
+		ui::{EditorUiEguiContextPass, UiVTables},
+		util::extensions::WorldMutExtensions as _,
 	},
 	reg::components::{ComponentRegistry, RegisterableComponent, RegisterableComponents},
 	storage::{Global, Project, Settings, settings::SimulateOnLaunch},
@@ -37,26 +39,23 @@ use bevy::{
 	window::WindowMode,
 };
 use bevy_mod_outline::OutlinePlugin;
-use common::extensions::bevy::{AppExtensions as _, WorldMutExtensions as _};
 use derive_new::new;
 use notify::NotificationPlugin;
 use platform_dirs::AppDirs;
-use private::ui::UiManager;
 use std::{path::PathBuf, sync::LazyLock};
 
 pub use prelude::*;
 
 pub mod prelude {
 	pub use crate::{
-		EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin, EditorState,
+		AppSystems, EditorExtension, EditorExtensionContext, EditorExtensionPlugin, EditorPlugin,
+		EditorState, SimulationState,
 		content::{AssetRef, ContentDef, ContentHandlers},
+		private::util::extensions::{AppExtensions as _, WorldExtensions as _},
 		ui::{EditorUi, EditorUiWorld},
 	};
 	pub use bevy_egui;
-	pub use common::{
-		AppSystems, NoParams,
-		extensions::bevy::{AppExtensions as _, WorldExtensions as _},
-	};
+	pub use common::NoParams;
 	pub use egui;
 	pub use macros::{self, EditorAsset, Identifiable};
 	pub use persistent_id::{self, Identifiable};
@@ -65,10 +64,13 @@ pub mod prelude {
 	pub use widgets;
 }
 
+/// All application systems that need to be editor controlled should be a part of this set
+#[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
+pub struct AppSystems;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, States)]
 pub enum EditorState {
 	Editing,
-	SimulationPrep,
 	Simulating(SimulationState),
 	Exiting,
 }
@@ -163,7 +165,7 @@ impl Plugin for EditorPlugin {
 		}
 
 		let starting_state = if start_in_simulation {
-			EditorState::SimulationPrep
+			EditorState::Simulating(SimulationState::Live)
 		} else {
 			EditorState::Editing
 		};
@@ -197,6 +199,10 @@ pub trait EditorExtension {
 	fn build_app(&self, app: &mut App) {
 		let _ = app;
 	}
+
+	fn finalize(&self, app: &mut App) {
+		let _ = app;
+	}
 }
 
 #[derive(new, Deref)]
@@ -226,11 +232,14 @@ where
 
 		app
 			.world_mut()
-			.resources_scope::<(UiManager, ComponentRegistry)>(|world, resources| {
-				let (ui_manager, components) = resources;
-				let mut ctx = EditorExtensionContext::new(world, components, ui_manager);
+			.resources_scope::<(ComponentRegistry, UiVTables)>(|world, (components, vtables)| {
+				let mut ctx = EditorExtensionContext::new(world, components, vtables);
 				self.0.build_editor(&mut ctx);
 			});
+	}
+
+	fn cleanup(&self, app: &mut App) {
+		self.finalize(app);
 	}
 }
 
@@ -246,8 +255,8 @@ where
 #[derive(new)]
 pub struct EditorExtensionContext<'w> {
 	world: &'w mut World,
-	components: &'w mut ComponentRegistry,
-	ui_manager: &'w mut UiManager,
+	components: Mut<'w, ComponentRegistry>,
+	vtables: Mut<'w, UiVTables>,
 }
 
 impl<'w> EditorExtensionContext<'w> {
@@ -266,7 +275,7 @@ impl<'w> EditorExtensionContext<'w> {
 	}
 
 	pub fn register_ui<U: EditorUiWorld>(&mut self) -> &mut Self {
-		self.ui_manager.register::<U>();
+		self.vtables.register::<U>();
 		self
 	}
 }

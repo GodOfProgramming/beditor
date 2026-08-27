@@ -1,12 +1,15 @@
+use crate::{
+	AppSystems, EditorState, SimulationState,
+	private::{EditorOwned, SimulationOwned},
+};
 use bevy::{
-	ecs::{schedule::ScheduleLabel, system::ScheduleSystem, world::CommandQueue},
+	ecs::{
+		observer::IntoObserver, schedule::ScheduleLabel, system::ScheduleSystem, world::CommandQueue,
+	},
 	prelude::*,
 };
+use notify::Notification;
 use std::borrow::{Borrow, BorrowMut};
-
-/// All application systems that need to be editor controlled should be a part of this set
-#[derive(SystemSet, Hash, Debug, PartialEq, Eq, Clone)]
-pub struct AppSystems;
 
 pub trait AppExtensions: BorrowMut<App> {
 	fn try_add_plugin<P: Plugin>(&mut self, plugin: P) -> &mut Self {
@@ -14,6 +17,16 @@ pub trait AppExtensions: BorrowMut<App> {
 		if !app.is_plugin_added::<P>() {
 			app.add_plugins(plugin);
 		}
+		self
+	}
+
+	fn add_app_observer<M>(&mut self, observer: impl IntoObserver<M>) -> &mut Self {
+		let app = self.borrow_mut();
+		app.add_observer(
+			observer
+				.into_observer()
+				.run_if(in_state(EditorState::Simulating(SimulationState::Live))),
+		);
 		self
 	}
 
@@ -53,6 +66,46 @@ pub trait WorldMutExtensions: WorldExtensions + BorrowMut<World> {
 	{
 		let world = self.borrow_mut();
 		R::resources_scope(world, f);
+	}
+
+	fn spawn_stateful_entity(&mut self) -> Option<Entity> {
+		self.spawn_stateful_entity_bundle(())
+	}
+
+	fn spawn_stateful_entity_bundle(&mut self, bundle: impl Bundle) -> Option<Entity> {
+		let world = self.borrow_mut();
+
+		match world.state::<EditorState>() {
+			EditorState::Editing => Some(world.spawn((EditorOwned, bundle)).id()),
+			EditorState::Simulating(_) => Some(world.spawn((SimulationOwned, bundle)).id()),
+			_ => None,
+		}
+	}
+
+	fn notify_on_error<R, E, M, C>(
+		&mut self,
+		f: impl FnOnce(&mut World) -> Result<R, E>,
+		errfn: impl FnOnce(&mut World, E) -> (M, Option<C>),
+	) -> Result<R, ()>
+	where
+		M: ToString,
+		C: ToString + Send + Sync + 'static,
+	{
+		let world = self.borrow_mut();
+		match (f)(world) {
+			Ok(r) => Ok(r),
+			Err(err) => {
+				let (msg, ctx) = (errfn)(world, err);
+				let mut n = Notification::error(msg.to_string());
+
+				if let Some(ctx) = ctx {
+					n.add_context(ctx);
+				}
+
+				self.borrow_mut().trigger(n);
+				Err(())
+			}
+		}
 	}
 }
 
@@ -112,7 +165,7 @@ macro_rules! chained_resource_scope {
     $world:ident, $f:ident;
     ($($name:ident),*);
   ) => {
-    ($f)($world, ($(&mut $name,)*));
+    ($f)($world, ($($name,)*));
   };
 
   (
@@ -147,7 +200,7 @@ macro_rules! impl_resources_mut {
     where
       $($name: Resource),*
     {
-      type Output<'o> = ($(&'o mut $name,)*);
+      type Output<'o> = ($(Mut<'o, $name>,)*);
 
       fn resources_scope(world: &mut World, f: impl for<'a> FnOnce(&mut World, Self::Output<'a>)) {
         chained_resource_scope!(world, f, $($name),*);

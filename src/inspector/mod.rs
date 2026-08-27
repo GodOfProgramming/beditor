@@ -5,13 +5,13 @@ pub mod options;
 pub mod ui;
 pub mod world_view;
 
+use crate::private::util::extensions::WorldMutExtensions as _;
 use bevy::{
 	asset::{ReflectAsset, UntypedAssetId},
 	ecs::{component::Mutable, query::QueryFilter},
 	prelude::*,
 	reflect::TypeRegistry,
 };
-use common::extensions::bevy::WorldMutExtensions as _;
 use std::{
 	any::{Any, TypeId},
 	borrow::BorrowMut,

@@ -7,4 +7,4 @@ edition = "2024"
 bevy.workspace = true
 bevy_egui.workspace = true
 egui.workspace = true
-egui-toast = "0.21.0"
+egui-toast = "0.22.0"

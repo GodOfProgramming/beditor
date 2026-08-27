@@ -1,6 +1,6 @@
 use crate::private::{
-	ui::{NewTabs, TabState, UiManager, misc::UiExtensions},
-	util::WorldExtensions,
+	ui::{NewTabs, TabState, UiDockState, misc::UiExtensions},
+	util::extensions::WorldMutExtensions,
 };
 use bevy::{
 	ecs::{component::Mutable, system::SystemParam},
@@ -269,16 +269,16 @@ pub enum OpenMode {
 
 impl OpenMode {
 	fn open(self, world: &mut World, tab: TabState) {
-		let mut ui_manager = world.resource_mut::<UiManager>();
+		let mut state = world.resource_mut::<UiDockState>();
 
 		let success = match self {
-			Self::AppendToFocused => ui_manager.add_tab_to_focused(tab),
+			Self::AppendToFocused => state.add_tab_to_focused(tab),
 			Self::Window => {
-				ui_manager.add_detached(vec![tab]);
+				state.add_detached(vec![tab]);
 				return;
 			}
 			Self::FocusAt(surface, node, neighbor) => {
-				ui_manager.insert_and_focus(surface, node, neighbor, tab)
+				state.insert_and_focus(surface, node, neighbor, tab)
 			}
 		};
 

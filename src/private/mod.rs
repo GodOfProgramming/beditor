@@ -92,14 +92,19 @@ pub type EditorInternalQuery<'w, 's, Q, F = ()> = Query<'w, 's, Q, EditorInterna
 
 pub type EditorInternalSingle<'w, 's, Q, F = ()> = Single<'w, 's, Q, EditorInternalFilter<F>>;
 
-#[derive(Component)]
+#[derive(Component, Deref)]
 #[require(
   UserHidden,
   Name = Name::new("Editor Scene"),
   InheritedVisibility,
   Transform,
 )]
-pub struct EditorScene;
+pub struct EditorScene(pub SceneMode);
+
+pub enum SceneMode {
+	World,
+	Ui,
+}
 
 /// Entities that are owned by the editor
 #[derive(Component, Reflect, Default)]
@@ -138,7 +143,7 @@ fn show_window_cursor(mut q_cursors: Query<&mut CursorOptions>) {
 
 fn spawn_scene(mut commands: Commands) {
 	commands.spawn((
-		EditorScene,
+		EditorScene(SceneMode::World),
 		Children::spawn(Spawn((
 			UserHidden,
 			Name::new("Infinite Grid"),

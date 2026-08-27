@@ -4,10 +4,11 @@ use crate::{
 		EditorInternal, EditorInternalQuery,
 		cam::ActiveEditorCamera,
 		ui::{
-			LayoutManager, LoadLayout, SavedLayout, UiManager,
+			LayoutManager, UiDockState, UiVTables,
 			misc::{DockExtensions as _, MissingUi},
+			persistence::{LoadLayout, SavedLayout},
 		},
-		util::WorldExtensions,
+		util::extensions::WorldMutExtensions as _,
 	},
 	storage::{
 		ProjectSettings,
@@ -268,16 +269,15 @@ struct SaveLayoutMessage(String);
 impl SaveLayoutMessage {
 	fn handle(
 		mut reader: MessageReader<Self>,
-		ui_manager: Res<UiManager>,
+		state: Res<UiDockState>,
+		vtables: Res<UiVTables>,
 		mut layout_manager: ResMut<LayoutManager>,
 		q_uuids: EditorInternalQuery<&PersistentId, Without<MissingUi>>,
 		q_missing: EditorInternalQuery<&MissingUi>,
 		mut settings: ProjectSettings,
 	) {
 		for msg in reader.read() {
-			let dock = ui_manager
-				.state()
-				.decouple(&ui_manager, &q_uuids, &q_missing);
+			let dock = state.decouple(&vtables, &q_uuids, &q_missing);
 			if settings.set(SavedLayout::new(msg.0.clone()), dock).is_ok() {
 				layout_manager.insert(msg.0.clone());
 			}
@@ -316,12 +316,12 @@ impl ResetLayoutMessage {
 		reader.clear();
 
 		commands.queue(|world: &mut World| {
-			world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
+			world.resource_scope(|world, mut state: Mut<UiDockState>| {
 				world
 					.notify_on_error(
 						|world| {
-							let default_state = ui_manager.default_dock_state(world)?;
-							ui_manager.switch_state(default_state, world)?;
+							let default_state = UiDockState::try_make_default(world)?;
+							state.switch(default_state, world)?;
 							Ok(())
 						},
 						|_, err: BevyError| ("Failed to restore default dock", Some(err)),

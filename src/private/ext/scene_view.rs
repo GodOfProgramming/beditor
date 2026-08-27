@@ -10,7 +10,7 @@ use crate::{
 		cam::EditorCamera,
 		scene::GameScene,
 		ui::{EditorEguiContext, misc::UiState},
-		util::WorldExtensions as _,
+		util::extensions::WorldMutExtensions as _,
 	},
 };
 use bevy::{ecs::system::SystemParam, prelude::*};
@@ -21,11 +21,11 @@ use transform_gizmo_bevy::{GizmoMode, GizmoOptions};
 use uuid::uuid;
 
 #[derive(Default)]
-pub struct EditorViewUiExtension;
+pub struct SceneViewUiExtension;
 
-impl EditorExtension for EditorViewUiExtension {
+impl EditorExtension for SceneViewUiExtension {
 	fn build_editor(&self, ctx: &mut crate::EditorExtensionContext) {
-		ctx.register_ui::<EditorViewUi>();
+		ctx.register_ui::<SceneViewUi>();
 	}
 
 	fn build_app(&self, app: &mut App) {
@@ -50,7 +50,7 @@ impl EditorExtension for EditorViewUiExtension {
 
 #[derive(Component, Reflect, Default)]
 #[require(EditorInternal)]
-pub struct EditorViewUi;
+pub struct SceneViewUi;
 
 #[derive(SystemParam)]
 pub struct Params<'w, 's> {
@@ -68,8 +68,8 @@ pub struct Params<'w, 's> {
 	>,
 }
 
-impl EditorUi for EditorViewUi {
-	const NAME: &str = "Editor View";
+impl EditorUi for SceneViewUi {
+	const NAME: &str = "Scene View";
 
 	const ID: uuid::Uuid = uuid!("c910a397-a017-4a29-99bc-6282b4b1a214");
 
@@ -121,19 +121,19 @@ impl EditorUi for EditorViewUi {
 				window_rect.max - egui::vec2(margin.rightf(), margin.bottomf()),
 			);
 
-			gizmo_options.viewport_rect = Some(Rect::new(
-				outer_ui.min.x,
-				outer_ui.min.y,
-				outer_ui.max.x,
-				outer_ui.max.y,
-			));
-
 			ui.scope_builder(egui::UiBuilder::new().max_rect(outer_ui), |ui| {
 				match (is_2d, is_3d) {
 					(true, false) => {
 						overlay2d();
 					}
 					(false, true) => {
+						gizmo_options.viewport_rect = Some(Rect::new(
+							outer_ui.min.x,
+							outer_ui.min.y,
+							outer_ui.max.x,
+							outer_ui.max.y,
+						));
+
 						overlay3d(ui, &mut gizmo_options);
 					}
 					(false, false) => {
@@ -224,7 +224,7 @@ fn move_temporaries(
 fn detect_enter(
 	mut commands: Commands,
 	temporary: Option<EditorInternalSingle<Entity, With<TemporaryEntity>>>,
-	editor_view_state: EditorInternalSingle<&UiState, With<EditorViewUi>>,
+	editor_view_state: EditorInternalSingle<&UiState, With<SceneViewUi>>,
 	mut hovered: Local<bool>,
 	mut context: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
 ) {

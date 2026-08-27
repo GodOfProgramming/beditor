@@ -5,9 +5,9 @@ use crate::{
 		EditorInternal, EditorInternalQuery, EditorInternalSingle,
 		reflection::ReflectDefaultCache,
 		ui::{
-			EditorEguiContext, EditorUiEguiContextPass, TabState, UiManager, misc::CenteredFileDialog,
+			EditorEguiContext, EditorUiEguiContextPass, TabState, UiDockState, misc::CenteredFileDialog,
 		},
-		util::WorldExtensions as _,
+		util::extensions::WorldMutExtensions as _,
 	},
 	reg::serde::SerdeRegistry,
 };
@@ -225,7 +225,7 @@ pub struct OpenTypeEditor(Box<dyn Reflect>);
 impl Command for OpenTypeEditor {
 	type Out = ();
 	fn apply(self, world: &mut World) {
-		world.resource_scope(|world, mut ui_manager: Mut<UiManager>| {
+		world.resource_scope(|world, mut state: Mut<UiDockState>| {
 			let Ok(tab) = world.notify_on_error(TabState::new::<TypeEditorUi>, |_, err| {
 				("Failed to open type editor", Some(err))
 			}) else {
@@ -234,7 +234,7 @@ impl Command for OpenTypeEditor {
 			world
 				.entity_mut(tab.entity())
 				.insert(TypeEditorState::new(self.0));
-			ui_manager.add_tab_to_focused(tab);
+			state.add_tab_to_focused(tab);
 		});
 	}
 }

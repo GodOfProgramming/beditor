@@ -1,7 +1,7 @@
 use crate::{
 	EditorState, SimulationState,
 	private::{
-		EditorInternalQuery, EditorScene,
+		EditorInternalQuery, EditorScene, SceneMode,
 		ext::{
 			change_viewer::ChangeViewerUi,
 			settings::{ProjectSettingsUi, ShowEditorSettings},
@@ -46,11 +46,17 @@ pub fn render(ui: &mut egui::Ui, mut params: Params<'_, '_>) {
 
 fn file_menu(ui: &mut egui::Ui, params: &mut Params) {
 	ui.menu_button("File", |ui| {
-		if ui.button("New Scene").clicked() {
-			params.commands.spawn(EditorScene);
-		}
+		ui.menu_button("New", |ui| {
+			if ui.button("Scene").clicked() {
+				params.commands.spawn(EditorScene(SceneMode::World));
+			}
 
-		if ui.button("Open Scene").clicked() {
+			if ui.button("Ui").clicked() {
+				params.commands.spawn(EditorScene(SceneMode::Ui));
+			}
+		});
+
+		if ui.button("Open").clicked() {
 			params.file_dialog.pick_file();
 		}
 	});
@@ -108,7 +114,7 @@ fn view_menu(ui: &mut egui::Ui) {
 fn game_control(ui: &mut egui::Ui, params: &mut Params) {
 	match **params.editor_state {
 		EditorState::Editing => {
-			play_button(ui, params, EditorState::SimulationPrep);
+			play_button(ui, params, EditorState::Simulating(SimulationState::Live));
 		}
 		EditorState::Simulating(SimulationState::Idle) => {
 			play_button(ui, params, EditorState::Simulating(SimulationState::Live));

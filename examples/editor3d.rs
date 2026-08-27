@@ -61,7 +61,7 @@ enum ExampleContent {
 }
 
 impl ContentHandlers for ExampleContent {
-	fn insert(&self, entity: Entity, world: &mut World) {
+	fn apply(&self, entity: Entity, world: &mut World) {
 		match self {
 			ExampleContent::Cube {
 				mesh,

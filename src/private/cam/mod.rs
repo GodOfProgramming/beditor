@@ -5,9 +5,9 @@ pub mod cam3d;
 use crate::{
 	private::{
 		EditorInternalFilter, EditorInternalQuery, EditorInternalSingle, EditorScene, UserHidden,
-		ext::editor_view::EditorViewUi,
+		ext::scene_view::SceneViewUi,
 		input,
-		ui::{EditorEguiContext, misc::UiState},
+		ui::{input::KeyboardFocus, misc::UiState, view::EditorWindowCamera},
 	},
 	storage::{
 		ProjectSettings,
@@ -34,7 +34,6 @@ use notify::Notification;
 use serde::{Deserialize, Serialize};
 use singleton::{SingletonBehavior, SingletonPlugin};
 
-pub const EDITOR_UI_RENDER_LAYER: Layer = 31;
 pub const EDITOR_VIEW_RENDER_LAYER: Layer = 30;
 const EDITOR_AXIS_RENDER_LAYER: Layer = 29;
 
@@ -53,9 +52,6 @@ impl Plugin for EditorCamPlugin {
 				SingletonPlugin::<EditorCameraScene, EditorInternalFilter>::new(
 					SingletonBehavior::RemoveOther,
 				),
-				SingletonPlugin::<EditorWindowCamera, EditorInternalFilter>::new(
-					SingletonBehavior::RemoveOther,
-				),
 				EditorCam2dPlugin,
 				EditorCam3dPlugin,
 				AxesGizmoPlugin,
@@ -67,8 +63,7 @@ impl Plugin for EditorCamPlugin {
 					OrbitSystems.run_if(in_state(OrbitState::Active)),
 					PanSystems.run_if(in_state(PanState::Active)),
 					CameraInputSystems::Keyboard
-						.in_set(input::Unfocused)
-						.run_if(mouse_movement_active),
+						.run_if(in_state(KeyboardFocus::Unfocused).and_then(mouse_movement_active)),
 				),
 			)
 			.insert_state(OrbitState::Inactive)
@@ -80,7 +75,6 @@ impl Plugin for EditorCamPlugin {
 			.add_observer(manage_camera)
 			.add_observer(on_manage_camera)
 			.add_observer(on_unmanage_camera)
-			.add_observer(on_new_editor_scene)
 			.add_systems(Startup, retrieve_show_cameras_value)
 			.add_systems(PostStartup, init_camera)
 			.add_systems(
@@ -214,19 +208,6 @@ pub struct EditorCamera;
 )]
 pub struct EditorCameraScene;
 
-/// Camera for the entire editor window, including all egui views
-#[derive(Default, Component, Reflect)]
-#[require(
-  UserHidden,
-  EditorEguiContext,
-  Camera2d,
-  Camera,
-  RenderLayers = RenderLayers::layer(EDITOR_UI_RENDER_LAYER),
-  Name = Name::new("Editor Window Camera"),
-  InheritedVisibility,
-)]
-pub struct EditorWindowCamera;
-
 #[derive(Component, Default, Reflect)]
 #[require(Camera)]
 pub struct EditorManagedCamera;
@@ -262,12 +243,8 @@ fn on_active_camera_change(
 	commands.spawn((EditorCameraScene, ChildOf(*editor_scene)));
 }
 
-fn on_new_editor_scene(event: On<Add, EditorScene>, mut commands: Commands) {
-	commands.spawn((EditorWindowCamera, ChildOf(event.event_target())));
-}
-
 pub fn mouse_hovered_in_editor_view(
-	q_editor_view_ui_state: EditorInternalQuery<&UiState, With<EditorViewUi>>,
+	q_editor_view_ui_state: EditorInternalQuery<&UiState, With<SceneViewUi>>,
 ) -> bool {
 	q_editor_view_ui_state.iter().any(UiState::hovered)
 }
@@ -290,11 +267,11 @@ pub fn should_show_cameras(render_cameras: Res<RenderCameras>) -> bool {
 fn manage_camera(
 	event: On<Add, Camera>,
 	mut commands: Commands,
-	editor_ui_camera: EditorInternalSingle<Entity, Without<EditorWindowCamera>>,
+	q_editor_ui_cameras: EditorInternalQuery<(), With<EditorWindowCamera>>,
 ) {
 	let entity = event.event_target();
 
-	if entity == *editor_ui_camera {
+	if q_editor_ui_cameras.contains(entity) {
 		return;
 	}
 

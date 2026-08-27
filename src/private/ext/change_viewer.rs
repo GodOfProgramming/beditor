@@ -1,10 +1,13 @@
-use crate::{EditorExtension, EditorUiWorld, private::EditorInternal, ui::OpenUi};
+use crate::{
+	EditorExtension, EditorUiWorld,
+	private::{EditorInternal, util::extensions::WorldMutExtensions as _},
+	ui::OpenUi,
+};
 use bevy::{
 	ecs::{component::ComponentId, entity::EntityHashMap, world::unsafe_world_cell::UnsafeWorldCell},
 	platform::collections::HashMap,
 	prelude::*,
 };
-use common::extensions::bevy::WorldMutExtensions;
 use derive_new::new;
 use nameof::name_of_type;
 use std::{

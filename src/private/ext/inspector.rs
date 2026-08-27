@@ -8,12 +8,11 @@ use crate::{
 	private::{
 		EditorInternal,
 		ext::change_viewer::{OpenChangeViewer, OpenChangeViewerKind},
-		util::egui::show_docs,
+		util::{egui::show_docs, extensions::WorldMutExtensions as _},
 	},
 	ui::EditorUiWorld,
 };
 use bevy::{ecs::world::CommandQueue, prelude::*};
-use common::extensions::bevy::WorldMutExtensions as _;
 use uuid::{Uuid, uuid};
 
 #[derive(Default)]

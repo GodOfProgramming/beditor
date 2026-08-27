@@ -44,7 +44,7 @@ impl Default for AssetLoadModal {
 	fn default() -> Self {
 		Self(
 			widgets::MenuModal::new()
-				.closeable(false)
+				.closeable(true)
 				.with_proportion_to_window(0.3),
 		)
 	}
@@ -130,6 +130,8 @@ pub fn display_load_progress(
 				},
 			);
 		});
+
+		*loading_finished = !modal.open;
 	}
 }
 

@@ -1,4 +1,4 @@
 (
-  ns: "editor",
+  ns: "beditor",
   data: Audio(source: "tmp/omg.ogg")
 )

@@ -2,20 +2,13 @@ use crate::{
 	EditorExtension, EditorUiWorld,
 	private::{EditorInternalSingle, ui::EditorEguiContext, util::extensions::WorldMutExtensions},
 };
-use bevy::{
-	ecs::schedule::ScheduleLabel, platform::collections::HashMap, prelude::*,
-	time::common_conditions::on_timer, utils::TypeIdMap,
-};
+use bevy::{ecs::schedule::ScheduleLabel, prelude::*, utils::TypeIdMap};
 use bevy_egui::EguiContext;
 use common::match_else;
 use derive_more::derive::DerefMut;
 use derive_new::new;
 use notify::Notification;
-use std::{
-	any::{Any, TypeId},
-	sync::Arc,
-	time::Duration,
-};
+use std::{any::TypeId, num::NonZeroUsize, sync::Arc};
 
 #[derive(Default)]
 pub struct DebugUiExtension;
@@ -29,8 +22,57 @@ impl EditorExtension for DebugUiExtension {
 		app
 			.init_resource::<ScheduleNames>()
 			.init_resource::<ScheduleViews>()
+			.init_resource::<SvgOptions>()
 			.add_message::<LoadScheduleTexture>()
 			.add_systems(First, LoadScheduleTexture::handle);
+	}
+
+	fn finalize(&self, app: &mut App) {
+		app
+			.world_mut()
+			.resources_scope::<(Schedules, ScheduleNames)>(
+				|world, (mut schedules, mut schedule_names)| {
+					let settings = bevy_mod_debugdump::schedule_graph::settings::Settings::default();
+
+					let ignored_ambiguities = schedules.ignored_scheduling_ambiguities.clone();
+					for (label, schedule) in schedules.iter_mut() {
+						let label_name = format!("{label:?}");
+						schedule.graph_mut().initialize(world);
+						let _ = schedule
+							.graph_mut()
+							.build_schedule(world, &ignored_ambiguities);
+
+						let graph =
+							bevy_mod_debugdump::schedule_graph::schedule_graph_dot(schedule, world, &settings);
+
+						schedule_names.insert(label.type_id(), label_name.clone());
+
+						world.write_message(LoadScheduleTexture::new(label.type_id(), label_name, graph));
+					}
+				},
+			);
+	}
+}
+
+#[derive(Resource, Deref)]
+pub struct SvgOptions {
+	fontdb: Arc<resvg::usvg::fontdb::Database>,
+}
+
+impl Default for SvgOptions {
+	fn default() -> Self {
+		let mut fontdb = resvg::usvg::fontdb::Database::new();
+		fontdb.load_system_fonts();
+
+		if cfg!(not(windows)) {
+			fontdb.set_serif_family("DejaVu Serif");
+			fontdb.set_sans_serif_family("DejaVu Sans");
+			fontdb.set_monospace_family("DejaVu Sans Mono");
+		}
+
+		Self {
+			fontdb: Arc::new(fontdb),
+		}
 	}
 }
 
@@ -58,7 +100,13 @@ impl ScheduleNames {
 }
 
 #[derive(Resource, Default, Deref, DerefMut)]
-pub struct ScheduleViews(TypeIdMap<Option<egui::TextureHandle>>);
+struct ScheduleViews(TypeIdMap<Option<ScheduleView>>);
+
+struct ScheduleView {
+	cols: NonZeroUsize,
+	rows: NonZeroUsize,
+	textures: Vec<egui::TextureHandle>,
+}
 
 #[derive(Component, Default)]
 pub struct DebugUi {
@@ -76,55 +124,44 @@ impl EditorUiWorld for DebugUi {
 	}
 
 	fn ui(entity: Entity, ui: &mut egui::Ui, world: &mut World) -> Result<()> {
-		world.resources_scope::<(Schedules, ScheduleNames, ScheduleViews)>(
-			|world, (schedules, names, mut views)| {
-				let mut q_this = world.query::<&mut DebugUi>();
-				let Ok(mut this) = q_this.get_mut(world, entity) else {
-					ui.label("Debug ui has no component of itself (logic error)");
-					return;
-				};
+		world.resources_scope::<(ScheduleNames, ScheduleViews)>(|world, (names, views)| {
+			let mut q_this = world.query::<&mut DebugUi>();
+			let Ok(mut this) = q_this.get_mut(world, entity) else {
+				ui.label("Debug ui has no component of itself (logic error)");
+				return;
+			};
 
-				this.selected_label_ui(ui, &names);
+			this.selected_label_ui(ui, &names);
 
-				let view = this.selected_label.and_then(|label| views.get(&label));
+			let view = this.selected_label.and_then(|label| views.get(&label));
 
-				let Some(maybe_image) = view else {
-					if let Some(tid) = this.selected_label
-						&& let Some(schedule) = schedules.iter().find(|s| tid == s.0.type_id())
-						&& let Some(name) = names.get(&tid)
-					{
-						let dot = bevy_mod_debugdump::schedule_graph::schedule_graph_dot(
-							schedule.1,
-							world,
-							&bevy_mod_debugdump::schedule_graph::Settings::default(),
-						);
-						if world
-							.write_message(LoadScheduleTexture::new(tid, name.to_string(), dot))
-							.is_some()
-						{
-							views.insert(tid, None);
-						} else {
-							world.trigger(Notification::error(
-								"failed to start schedule graph render job",
-							));
-						}
-					}
+			let Some(maybe_image) = view else {
+				ui.label("No schedule for selected label");
+				return;
+			};
 
-					return;
-				};
+			let Some(image) = maybe_image else {
+				ui.label("Image processing...");
+				return;
+			};
 
-				let Some(image) = maybe_image else {
-					ui.label("Image processing...");
-					return;
-				};
-
-				egui::ScrollArea::both()
-					.auto_shrink([false; 2])
-					.show(ui, |ui| {
-						ui.image(image);
-					});
-			},
-		);
+			egui::ScrollArea::both()
+				.scroll_source(egui::scroll_area::ScrollSource::ALL)
+				.auto_shrink([false; 2])
+				.show(ui, |ui| {
+					ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+					egui::Grid::new(ui.id().with("schedule-grid"))
+						.spacing([0.0, 0.0])
+						.show(ui, |ui| {
+							for r in 0..image.rows.get() {
+								for c in 0..image.cols.get() {
+									ui.image(&image.textures[r * image.cols.get() + c]);
+								}
+								ui.end_row();
+							}
+						});
+				});
+		});
 
 		Ok(())
 	}
@@ -162,34 +199,43 @@ impl LoadScheduleTexture {
 		mut messages: MessageReader<Self>,
 		mut context: EditorInternalSingle<&mut EguiContext, With<EditorEguiContext>>,
 		mut views: ResMut<ScheduleViews>,
+		svg_opts: Res<SvgOptions>,
 	) {
 		let ctx = context.get_mut();
+		let max_tex_side = ctx.input(|i| i.max_texture_side);
 		for msg in messages.read() {
-			commands.trigger(Notification::info("Generating schedule graph..."));
-			let graph = match_else!(graphviz_rust::parse(&msg.dot_graph); else err => {
-				commands.trigger(Notification::error(format!("failed to parse dot graph for {:?}", msg.type_id)).with_context(serde_json::json!({
+			info!("Generating schedule graph {}", msg.name);
+			let mut parser = layout::gv::DotParser::new(&msg.dot_graph);
+
+			let graph = match_else!(parser.process(); else err => {
+				commands.trigger(Notification::error(format!("failed to parse dot graph for {}", msg.name)).with_context(serde_json::json!({
 					"err": err,
 				})));
-				return;
+				continue;
 			});
 
-			let svg = match_else!(graphviz_rust::exec(
-				graph,
-				&mut graphviz_rust::printer::PrinterContext::default(),
-				vec![graphviz_rust::cmd::CommandArg::Format(
-					graphviz_rust::cmd::Format::Svg,
-				)],
-			); else err => {
-				commands.trigger(Notification::error(format!("failed to render graph for {:?}", msg.type_id)).with_context(serde_json::json!({
+			let mut gb = layout::gv::GraphBuilder::new();
+
+			gb.visit_graph(&graph);
+
+			let mut writer = layout::backends::svg::SVGWriter::new();
+
+			let mut graph = gb.get();
+
+			graph.do_it(false, false, false, &mut writer);
+
+			let svg = Vec::from_iter(writer.finalize().bytes());
+
+			let options = resvg::usvg::Options {
+				fontdb: Arc::clone(&svg_opts.fontdb),
+				..default()
+			};
+			let tree = match_else!(resvg::usvg::Tree::from_data(&svg, &options); else err => {
+				commands.trigger(Notification::error(format!("failed to create svg tree for {}", msg.name)).with_context(serde_json::json!({
 					"err": err.to_string(),
 				})));
-				return;
+				continue;
 			});
-
-			let opts = resvg::usvg::Options::default();
-			let Ok(tree) = resvg::usvg::Tree::from_data(&svg, &opts) else {
-				return;
-			};
 
 			let size = tree.size();
 			let width = size.width();
@@ -197,10 +243,10 @@ impl LoadScheduleTexture {
 
 			let Some(mut pixmap) = resvg::tiny_skia::Pixmap::new(width as u32, height as u32) else {
 				commands.trigger(Notification::error(format!(
-					"failed to create pixmap for {:?}",
-					msg.type_id
+					"failed to create pixmap for {}",
+					msg.name
 				)));
-				return;
+				continue;
 			};
 
 			resvg::render(
@@ -209,12 +255,88 @@ impl LoadScheduleTexture {
 				&mut pixmap.as_mut(),
 			);
 
-			let color_image =
-				egui::ColorImage::from_rgba_unmultiplied([width as usize, height as usize], pixmap.data());
+			let (cols, rows, chunks) = match_else!(to_chunks(pixmap, max_tex_side); else err => {
+				commands.trigger(Notification::error(format!("failed to create textures for schedule {}", msg.name)).with_context(serde_json::json!({
+					"err": err.to_string(),
+				})));
+				continue;
+			});
 
-			let texture = ctx.load_texture(msg.name.clone(), color_image, egui::TextureOptions::LINEAR);
+			views.insert(
+				msg.type_id,
+				Some(ScheduleView {
+					cols: match_else!(NonZeroUsize::new(cols).ok_or("cols was not > 0"); else err => {
+            commands.trigger(Notification::error(format!("failed to create textures for schedule {}", msg.name)).with_context(serde_json::json!({
+              "err": err.to_string(),
+            })));
+            continue;
+          }),
+					rows: match_else!(NonZeroUsize::new(rows).ok_or("rows was not > 0"); else err => {
+            commands.trigger(Notification::error(format!("failed to create textures for schedule {}", msg.name)).with_context(serde_json::json!({
+              "err": err.to_string(),
+            })));
+            continue;
+          }),
+					textures: chunks
+						.into_iter()
+						.enumerate()
+						.map(|(i, chunk)| {
+							let color_image = egui::ColorImage::from_rgba_premultiplied(
+								[chunk.width() as usize, chunk.height() as usize],
+								chunk.data(),
+							);
 
-			views.insert(msg.type_id, Some(texture));
+							ctx.load_texture(
+								format!("beditor-bevy-schedule-{}-{i}", msg.name),
+								color_image,
+								egui::TextureOptions::LINEAR,
+							)
+						})
+						.collect(),
+				}),
+			);
 		}
 	}
+}
+
+fn to_chunks(
+	pixmap: resvg::tiny_skia::Pixmap,
+	max_len: usize,
+) -> Result<(usize, usize, Vec<resvg::tiny_skia::Pixmap>)> {
+	let width = pixmap.width() as usize;
+	let height = pixmap.height() as usize;
+	let cols = width / max_len;
+	let rows = height / max_len;
+
+	let mut chunks = Vec::with_capacity(rows * cols);
+
+	for r in 0..=rows {
+		for c in 0..=cols {
+			let xoffset = max_len * c;
+			let yoffset = max_len * r;
+
+			let xlen = max_len.min(width - xoffset);
+			let ylen = max_len.min(height - yoffset);
+
+			let rect = resvg::tiny_skia::IntRect::from_xywh(
+				xoffset.try_into()?,
+				yoffset.try_into()?,
+				xlen.try_into()?,
+				ylen.try_into()?,
+			)
+			.ok_or("Failed to create chunk rect")?;
+
+			let chunk = pixmap
+				.clone_rect(rect)
+				.ok_or("Failed to get subrect from pixmap")?;
+
+			chunks.push(chunk);
+		}
+	}
+
+	if chunks.is_empty() {
+		Err("size of schedule graph was zero")?;
+	}
+
+	Ok((cols + 1, rows + 1, chunks))
 }

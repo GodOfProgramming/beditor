@@ -88,11 +88,11 @@ egui_phosphor_icons = { workspace = true }
 egui_tracing = { path = "../egui_tracing/egui-tracing" }
 Inflector = "*"
 fuzzy-matcher = { workspace = true }
-graphviz-rust = "0.9.8"
 image = "0.25.9"
 include_dir = "0.7.4"
 inventory = "0.3.21"
 itertools = { workspace = true }
+layout-rs = "0.1.3"
 lazy_static = "1.5.0"
 leafwing-input-manager = "0.21.0"
 log = "0.4.28"

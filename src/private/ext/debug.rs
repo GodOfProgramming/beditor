@@ -7,6 +7,7 @@ use bevy_egui::EguiContext;
 use common::match_else;
 use derive_more::derive::DerefMut;
 use derive_new::new;
+use itertools::Itertools;
 use notify::Notification;
 use std::{any::TypeId, num::NonZeroUsize, sync::Arc};
 
@@ -35,8 +36,11 @@ impl EditorExtension for DebugUiExtension {
 					let settings = bevy_mod_debugdump::schedule_graph::settings::Settings::default();
 
 					let ignored_ambiguities = schedules.ignored_scheduling_ambiguities.clone();
-					for (label, schedule) in schedules.iter_mut() {
-						let label_name = format!("{label:?}");
+					for (label_name, label, schedule) in schedules
+						.iter_mut()
+						.map(|(label, schedule)| (format!("{label:?}"), label, schedule))
+						.sorted_by(|t1, t2| t1.0.cmp(&t2.0))
+					{
 						schedule.graph_mut().initialize(world);
 						let _ = schedule
 							.graph_mut()
@@ -76,28 +80,8 @@ impl Default for SvgOptions {
 	}
 }
 
-#[derive(Resource, Deref, DerefMut)]
+#[derive(Resource, Default, Deref, DerefMut)]
 pub struct ScheduleNames(TypeIdMap<String>);
-
-impl Default for ScheduleNames {
-	fn default() -> Self {
-		Self(default())
-			.with::<Startup>("Startup")
-			.with::<Update>("Update")
-	}
-}
-
-impl ScheduleNames {
-	fn with<S: ScheduleLabel>(mut self, name: impl Into<String>) -> Self {
-		self.register::<S>(name);
-		self
-	}
-
-	fn register<S: ScheduleLabel>(&mut self, name: impl Into<String>) -> &mut Self {
-		self.insert(TypeId::of::<S>(), name.into());
-		self
-	}
-}
 
 #[derive(Resource, Default, Deref, DerefMut)]
 struct ScheduleViews(TypeIdMap<Option<ScheduleView>>);
